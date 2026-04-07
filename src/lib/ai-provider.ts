@@ -1,0 +1,304 @@
+/**
+ * Centralized AI Provider Module
+ *
+ * Provides a single `callAI()` gateway for all LLM interactions.
+ * Uses z-ai-web-dev-sdk directly (no child process spawning).
+ *
+ * Usage:
+ *   import { callAI } from '@/lib/ai-provider';
+ *   const response = await callAI(messages, 'glm-4-plus');
+ */
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import ZAI from 'z-ai-web-dev-sdk';
+
+// ---- Singleton ZAI instance ----
+
+let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
+let _zaiInitPromise: Promise<Awaited<ReturnType<typeof ZAI.create>>> | null = null;
+
+async function getZAI() {
+  if (_zai) return _zai;
+  if (_zaiInitPromise) return _zaiInitPromise;
+  _zaiInitPromise = ZAI.create();
+  _zai = await _zaiInitPromise;
+  return _zai;
+}
+
+// ---- Type Exports ----
+
+export type AIProvider = 'glm' | 'openai' | 'anthropic' | 'google';
+
+export interface AIMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface AIResponse {
+  content: string;
+  model: string;
+  provider: AIProvider;
+}
+
+// ---- Utility Functions ----
+
+export function getProvider(modelId: string): AIProvider {
+  if (modelId.startsWith('glm-')) return 'glm';
+  if (modelId.startsWith('gpt-')) return 'openai';
+  if (modelId.startsWith('claude-')) return 'anthropic';
+  if (modelId.startsWith('gemini-')) return 'google';
+  return 'glm';
+}
+
+export function estimateComplexity(
+  cvLength: number,
+  jobLength: number,
+  totalBullets: number,
+  projectCount: number
+): 'simple' | 'standard' | 'complex' {
+  if (cvLength > 6000 || jobLength > 4000 || totalBullets > 30 || projectCount > 10) {
+    return 'complex';
+  }
+  if (cvLength < 2000 && jobLength < 1500 && totalBullets < 10) {
+    return 'simple';
+  }
+  return 'standard';
+}
+
+export function autoSelectModel(complexity: 'simple' | 'standard' | 'complex'): string {
+  switch (complexity) {
+    case 'complex': return 'glm-4-long';
+    case 'standard': return 'glm-4-plus';
+    case 'simple': return 'glm-4-flash';
+  }
+}
+
+// ---- Provider Implementations ----
+
+async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
+  try {
+    const zai = await getZAI();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    const completion = await zai.chat.completions.create({
+      model: modelId,
+      messages: messages.map(m => ({ role: m.role, content: m.content })),
+      thinking: { type: 'disabled' },
+    });
+
+    clearTimeout(timer);
+    const content = completion.choices?.[0]?.message?.content;
+    return content || null;
+  } catch (err) {
+    console.warn(`GLM model ${modelId} failed:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callGLMVision(messages: any[], modelId: string, timeoutMs = 35_000): Promise<string | null> {
+  try {
+    const zai = await getZAI();
+    const completion = await zai.chat.completions.createVision({
+      model: modelId,
+      messages,
+    });
+    const content = completion.choices?.[0]?.message?.content;
+    return content || null;
+  } catch (err) {
+    console.warn(`GLM Vision model ${modelId} failed:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ model: modelId, messages, temperature }),
+    });
+    if (!res.ok) {
+      console.warn(`OpenAI ${modelId} error:`, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (err) {
+    console.warn(`OpenAI model ${modelId} failed:`, err);
+    return null;
+  }
+}
+
+async function callAnthropic(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    let systemContent = '';
+    const anthropicMessages: { role: string; content: string }[] = [];
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        systemContent += (systemContent ? '\n' : '') + msg.content;
+      } else {
+        anthropicMessages.push({ role: msg.role, content: msg.content });
+      }
+    }
+    if (anthropicMessages.length > 0 && anthropicMessages[0].role !== 'user') {
+      anthropicMessages.unshift({ role: 'user', content: 'Please proceed.' });
+    }
+
+    const body: Record<string, unknown> = {
+      model: modelId,
+      messages: anthropicMessages,
+      max_tokens: 8192,
+      temperature,
+    };
+    if (systemContent) body.system = systemContent;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      console.warn(`Anthropic ${modelId} error:`, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    return data.content?.[0]?.text || null;
+  } catch (err) {
+    console.warn(`Anthropic model ${modelId} failed:`, err);
+    return null;
+  }
+}
+
+async function callGemini(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+  const apiKey = process.env.GOOGLE_AI_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    let systemInstruction: string | undefined;
+    const contents: { role: string; parts: { text: string }[] }[] = [];
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        systemInstruction = msg.content;
+      } else {
+        contents.push({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }],
+        });
+      }
+    }
+
+    const body: Record<string, unknown> = {
+      contents,
+      generationConfig: { temperature },
+    };
+    if (systemInstruction) {
+      body.systemInstruction = { parts: [{ text: systemInstruction }] };
+    }
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }
+    );
+    if (!res.ok) {
+      console.warn(`Gemini ${modelId} error:`, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch (err) {
+    console.warn(`Gemini model ${modelId} failed:`, err);
+    return null;
+  }
+}
+
+// ---- Public Gateway ----
+
+export async function callAI(
+  messages: AIMessage[],
+  modelId: string,
+  temperature?: number
+): Promise<string | null> {
+  const provider = getProvider(modelId);
+  switch (provider) {
+    case 'glm': return callGLM(messages, modelId);
+    case 'openai': return callOpenAI(messages, modelId, temperature);
+    case 'anthropic': return callAnthropic(messages, modelId, temperature);
+    case 'google': return callGemini(messages, modelId, temperature);
+    default: return callGLM(messages, modelId);
+  }
+}
+
+export async function callAIVision(
+  messages: unknown[],
+  modelId: string,
+  timeoutMs = 30_000
+): Promise<string | null> {
+  return callGLMVision(messages, modelId, timeoutMs);
+}
+
+const FALLBACK_MODEL_MAP: Record<string, string> = {
+  'glm-4-flash': 'glm-4-plus',
+  'glm-4-plus': 'glm-4-flash',
+  'glm-4-long': 'glm-4-plus',
+  'gpt-4o': 'glm-4-plus',
+  'gpt-4o-mini': 'glm-4-flash',
+  'claude-4-sonnet': 'glm-4-plus',
+  'claude-4-haiku': 'glm-4-flash',
+  'gemini-2.5-flash': 'glm-4-flash',
+  'gemini-2.5-pro': 'glm-4-plus',
+};
+
+export async function callAIWithFallback(
+  messages: AIMessage[],
+  modelId: string,
+  complexity?: 'simple' | 'standard' | 'complex'
+): Promise<AIResponse> {
+  let content = await callAI(messages, modelId);
+  let usedModel = modelId;
+  let provider = getProvider(modelId);
+
+  if (!content) {
+    const fallback = FALLBACK_MODEL_MAP[modelId] || 'glm-4-plus';
+    console.warn(`[AI] Primary model ${modelId} failed, falling back to ${fallback}`);
+    content = await callAI(messages, fallback);
+    if (content) {
+      usedModel = fallback;
+      provider = getProvider(fallback);
+    }
+  }
+
+  if (!content) {
+    throw new Error('AI model failed. Please try again.');
+  }
+
+  return { content, model: usedModel, provider };
+}
+
+export function getRequiredEnvKey(provider: AIProvider): string | null {
+  switch (provider) {
+    case 'glm': return null;
+    case 'openai': return 'OPENAI_API_KEY';
+    case 'anthropic': return 'ANTHROPIC_API_KEY';
+    case 'google': return 'GOOGLE_AI_API_KEY';
+    default: return null;
+  }
+}

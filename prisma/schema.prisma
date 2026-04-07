@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model CVSession {
+  id          String   @id @default(cuid())
+  step        Int      @default(1)
+  rawCvText   String?
+  parsedCv    String?  // JSON string of parsed CV data
+  jobDescText String?
+  analyzedJob String?  // JSON string of analyzed job data
+  tailoredCv  String?  // JSON string of tailored CV data
+  modelUsed   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

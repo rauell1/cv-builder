@@ -1,0 +1,230 @@
+import { NextResponse, type NextRequest } from 'next/server';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface RateLimitEntry {
+  timestamps: number[];
+}
+
+interface RateLimitConfig {
+  limit: number;
+  windowMs: number;
+}
+
+type RouteConfig = RateLimitConfig;
+
+// ---------------------------------------------------------------------------
+// Rate limit configurations per route category
+// ---------------------------------------------------------------------------
+
+const AI_ROUTES: RouteConfig = { limit: 10, windowMs: 60_000 };
+const FILE_UPLOAD_ROUTES: RouteConfig = { limit: 5, windowMs: 60_000 };
+const PDF_ROUTES: RouteConfig = { limit: 5, windowMs: 60_000 };
+const HEALTH_ROUTES: RouteConfig = { limit: 60, windowMs: 60_000 };
+const DEFAULT_ROUTES: RouteConfig = { limit: 30, windowMs: 60_000 };
+
+const AI_PATHS = [
+  '/api/parse-cv',
+  '/api/analyze-job',
+  '/api/restructure-cv',
+  '/api/generate-insights',
+  '/api/generate-cover-letter',
+  '/api/score-cv',
+  '/api/enhance-achievements',
+  '/api/ai-chat',
+];
+
+const FILE_UPLOAD_PATHS = ['/api/extract-file'];
+
+const PDF_PATHS = [
+  '/api/generate-pdf',
+  '/api/generate-script',
+  '/api/generate-cover-letter-pdf',
+];
+
+const HEALTH_PATHS = ['/api'];
+
+// ---------------------------------------------------------------------------
+// In-memory rate limit store  (IP → RouteCategory → timestamps)
+// ---------------------------------------------------------------------------
+
+const rateLimitStore: Map<string, Map<string, RateLimitEntry>> = new Map();
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function resolveClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const firstIp = forwarded.split(',')[0].trim();
+    if (firstIp) return firstIp;
+  }
+
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
+
+  // Fallback — use x-forwarded-for or x-real-ip headers
+  return 'unknown';
+}
+
+function getConfigForPath(pathname: string): { config: RateLimitConfig; category: string } {
+  if (AI_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
+    return { config: AI_ROUTES, category: 'ai' };
+  }
+  if (FILE_UPLOAD_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
+    return { config: FILE_UPLOAD_ROUTES, category: 'file-upload' };
+  }
+  if (PDF_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
+    return { config: PDF_ROUTES, category: 'pdf' };
+  }
+  if (HEALTH_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
+    return { config: HEALTH_ROUTES, category: 'health' };
+  }
+  return { config: DEFAULT_ROUTES, category: 'default' };
+}
+
+function getOrCreateEntry(ip: string, category: string): RateLimitEntry {
+  if (!rateLimitStore.has(ip)) {
+    rateLimitStore.set(ip, new Map());
+  }
+  const ipMap = rateLimitStore.get(ip)!;
+  if (!ipMap.has(category)) {
+    ipMap.set(category, { timestamps: [] });
+  }
+  return ipMap.get(category)!;
+}
+
+/**
+ * Sliding-window rate limiter.
+ * Returns `allowed` (boolean) and `retryAfter` (seconds until the oldest
+ * request in the window expires).  When allowed is `true`, retryAfter is 0.
+ */
+function checkRateLimit(
+  entry: RateLimitEntry,
+  config: RateLimitConfig,
+  now: number,
+): { allowed: boolean; retryAfter: number } {
+  const { limit, windowMs } = config;
+  const windowStart = now - windowMs;
+
+  // Prune timestamps outside the sliding window
+  entry.timestamps = entry.timestamps.filter((ts) => ts > windowStart);
+
+  if (entry.timestamps.length >= limit) {
+    // The oldest timestamp determines when the next slot opens
+    const oldestTs = entry.timestamps[0];
+    const retryAfterMs = oldestTs + windowMs - now;
+    const retryAfterSec = Math.ceil(retryAfterMs / 1000);
+    return { allowed: false, retryAfter: retryAfterSec };
+  }
+
+  // Record this request and allow it
+  entry.timestamps.push(now);
+  return { allowed: true, retryAfter: 0 };
+}
+
+// ---------------------------------------------------------------------------
+// Cleanup — purge stale entries every 60 s
+// ---------------------------------------------------------------------------
+
+const CLEANUP_INTERVAL_MS = 60_000;
+
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+function scheduleCleanup(): void {
+  if (cleanupTimer !== null) return; // already scheduled
+
+  cleanupTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, categories] of rateLimitStore.entries()) {
+      for (const [category, entry] of categories.entries()) {
+        entry.timestamps = entry.timestamps.filter((ts) => ts > now - CLEANUP_INTERVAL_MS);
+        if (entry.timestamps.length === 0) {
+          categories.delete(category);
+        }
+      }
+      if (categories.size === 0) {
+        rateLimitStore.delete(ip);
+      }
+    }
+
+    // Stop the timer when nothing is left
+    if (rateLimitStore.size === 0) {
+      clearInterval(cleanupTimer!);
+      cleanupTimer = null;
+    }
+  }, CLEANUP_INTERVAL_MS);
+
+  // Unref so it never keeps the process alive on its own (Node.js)
+  if (typeof cleanupTimer === 'object' && 'unref' in cleanupTimer) {
+    (cleanupTimer as unknown as { unref: () => void }).unref();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Security headers
+// ---------------------------------------------------------------------------
+
+const SECURITY_HEADERS: Record<string, string> = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'X-XSS-Protection': '1; mode=block',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
+
+function attachSecurityHeaders(response: NextResponse): void {
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    response.headers.set(key, value);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Middleware
+// ---------------------------------------------------------------------------
+
+export function middleware(request: NextRequest): NextResponse {
+  const ip = resolveClientIp(request);
+  const { pathname } = request.nextUrl;
+  const { config, category } = getConfigForPath(pathname);
+  const now = Date.now();
+
+  // Ensure periodic cleanup is scheduled
+  scheduleCleanup();
+
+  const entry = getOrCreateEntry(ip, category);
+  const { allowed, retryAfter } = checkRateLimit(entry, config, now);
+
+  if (!allowed) {
+    const body = JSON.stringify({
+      error: 'Too many requests',
+      retryAfter,
+    } as const);
+
+    const response = new NextResponse(body, {
+      status: 429,
+      statusText: 'Too Many Requests',
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': String(retryAfter),
+      },
+    });
+
+    attachSecurityHeaders(response);
+    return response;
+  }
+
+  const response = NextResponse.next();
+  attachSecurityHeaders(response);
+  return response;
+}
+
+// ---------------------------------------------------------------------------
+// Matcher — run only on /api/* routes
+// ---------------------------------------------------------------------------
+
+export const config = {
+  matcher: ['/api/:path*'],
+};
