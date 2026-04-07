@@ -7,7 +7,7 @@ A full-featured, AI-powered CV/Resume Builder that parses your CV, analyzes job 
 ## Features
 
 ### Multi-Step CV Building Workflow
-1. **Upload or Paste Your CV** — Upload a PDF, DOCX, image (PNG/JPG/WEBP), or plain text file. The app uses robust text extraction (`pdf-parse`) for PDFs, `mammoth` for DOCX files, and AI-powered OCR (GLM-4V-Flash) for images.
+1. **Upload or Paste Your CV** — Upload a DOCX or plain text file. The app uses `mammoth` for DOCX files. You can also paste your CV text directly.
 2. **Provide a Job Description** — Paste or upload a job description. The AI analyzes requirements, keywords, skills, and experience level.
 3. **Choose Your AI Model** — Select from 9 models across 4 providers. GLM models are built-in; others require API keys.
 4. **Review & Download** — Edit every section, generate per-section AI insights, score your CV against the job, enhance achievement bullets, download your tailored CV in 5 formats, and generate cover letters in 5 styles.
@@ -64,9 +64,7 @@ Use any of these AI models to power your CV generation:
 - **State Management**: Zustand
 - **Database**: Prisma ORM (SQLite)
 - **PDF Generation**: pdf-lib
-- **PDF Text Extraction**: pdf-parse
 - **DOCX Extraction**: mammoth
-- **Image OCR**: GLM-4V-Flash (via z-ai-web-dev-sdk)
 - **Animations**: Framer Motion
 - **Icons**: Lucide React
 
@@ -191,7 +189,7 @@ src/
 │       ├── generate-insights/route.ts # Per-section AI analysis
 │       ├── generate-cover-letter/route.ts      # Cover letter generation
 │       ├── generate-cover-letter-pdf/route.ts  # Cover letter PDF (5 formats)
-│       ├── extract-file/route.ts     # File upload extraction (PDF/DOCX/image/text)
+│       ├── extract-file/route.ts     # File upload extraction (DOCX/text)
 │       ├── ai-chat/route.ts          # Multi-provider AI chat endpoint
 │       └── health/route.ts           # App health — queue/cache/memory stats
 ├── components/
@@ -244,7 +242,7 @@ prisma/
 | `POST` | `/api/generate-insights` | Per-section AI analysis |
 | `POST` | `/api/generate-cover-letter` | Generate AI cover letter |
 | `POST` | `/api/generate-cover-letter-pdf` | Generate cover letter PDF |
-| `POST` | `/api/extract-file` | Extract text from uploaded files (PDF/DOCX/image/text) |
+| `POST` | `/api/extract-file` | Extract text from uploaded files (DOCX/text) |
 | `POST` | `/api/ai-chat` | Multi-provider AI chat endpoint |
 | `GET`  | `/api/health` | App health — queues, cache, memory stats |
 
@@ -253,11 +251,9 @@ prisma/
 ## How It Works
 
 ### CV Upload & Parsing
-1. User uploads a PDF, DOCX, image, or text file (or pastes text directly)
-2. **PDF files** are parsed using `pdf-parse` for robust text extraction
-3. **DOCX files** are processed via `mammoth` for Word document extraction
-4. **Images** are processed via GLM-4V-Flash VLM for OCR
-5. Extracted text is sent to the AI model to parse into structured sections (personal info, experience, education, skills, projects)
+1. User uploads a DOCX or text file (or pastes text directly)
+2. **DOCX files** are processed via `mammoth` for Word document extraction
+3. Extracted text is sent to the AI model to parse into structured sections (personal info, experience, education, skills, projects)
 
 ### Job Analysis & CV Restructuring
 1. User provides a target job description
