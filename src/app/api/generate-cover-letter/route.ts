@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   callAIWithFallback,
+  getNextRotatingModel,
   getProvider,
   getRequiredEnvKey,
   type AIMessage,
@@ -67,7 +68,8 @@ function isValidCoverLetterData(obj: unknown): obj is CoverLetterData {
 export async function POST(request: NextRequest) {
   try {
     const body: GenerateCoverLetterRequest = await request.json();
-    const { cvData, jobAnalysis, jobDescText, formatId, modelId = 'glm-4-plus' } = body;
+    const { cvData, jobAnalysis, jobDescText, formatId, modelId } = body;
+    const requestedModel = modelId || getNextRotatingModel('glm-4-plus');
 
     // Validate required fields
     if (!cvData || typeof cvData !== 'object') {
@@ -98,13 +100,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!modelId || typeof modelId !== 'string') {
-      return NextResponse.json(
-        { success: false, error: 'modelId is required and must be a string' },
-        { status: 400 }
-      );
-    }
-
     // Look up tone for the selected format
     const format = COVER_LETTER_FORMATS.find((f) => f.id === formatId);
     if (!format) {
@@ -117,7 +112,7 @@ export async function POST(request: NextRequest) {
     const toneInstruction = format.tone;
 
     // Check API key availability for non-GLM providers
-    const provider = getProvider(modelId);
+    const provider = getProvider(requestedModel);
     const requiredKey = getRequiredEnvKey(provider);
     if (requiredKey && !process.env[requiredKey]) {
       return NextResponse.json(
@@ -147,12 +142,12 @@ export async function POST(request: NextRequest) {
     let rawContent: string;
     let usedModel: string;
     try {
-      const result = await callAIWithFallback(messages, modelId, 'standard');
+      const result = await callAIWithFallback(messages, requestedModel, 'standard');
       rawContent = result.content;
       usedModel = result.model;
     } catch (providerError: unknown) {
       const message = providerError instanceof Error ? providerError.message : 'An error occurred with the AI provider';
-      console.error(`[generate-cover-letter] provider error for model ${modelId}:`, message);
+      console.error(`[generate-cover-letter] provider error for model ${requestedModel}:`, message);
       return NextResponse.json(
         { success: false, error: message },
         { status: 500 }

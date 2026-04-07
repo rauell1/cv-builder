@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import {
   callAIWithFallback,
+  getNextRotatingModel,
   estimateComplexity,
 } from '@/lib/ai-provider';
 import {
@@ -87,7 +88,9 @@ export async function POST(request: NextRequest) {
     const complexity = estimateComplexity(cvLength, jobLength, totalBullets, projectCount);
 
     // Use user-selected model or auto-select based on complexity
-    const requestedModel = modelId || (complexity === 'complex' ? 'glm-4-long' : complexity === 'standard' ? 'glm-4-plus' : 'glm-4-flash');
+    const requestedModel = modelId || getNextRotatingModel(
+      complexity === 'complex' ? 'glm-4-long' : complexity === 'standard' ? 'glm-4-plus' : 'glm-4-flash'
+    );
 
     const messages = [
       { role: 'system' as const, content: CV_RESTRUCTURE_SYSTEM_PROMPT },

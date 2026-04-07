@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { callAIWithFallback } from '@/lib/ai-provider';
+import { callAIWithFallback, getNextRotatingModel } from '@/lib/ai-provider';
 import { JOB_ANALYSIS_SYSTEM_PROMPT, type JobAnalysis } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
           { role: 'system', content: JOB_ANALYSIS_SYSTEM_PROMPT },
           { role: 'user', content: jobDescText },
         ],
-        'glm-4-flash',
+        getNextRotatingModel('glm-4-flash'),
         'simple'
       ),
       'normal',

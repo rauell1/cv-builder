@@ -330,6 +330,19 @@ const FALLBACK_MODEL_MAP: Record<string, string> = {
 const OPENAI_MODELS = ['gpt-4o-mini', 'gpt-4o'] as const;
 const ANTHROPIC_MODELS = ['claude-haiku-4-20250414', 'claude-sonnet-4-20250514'] as const;
 const GOOGLE_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'] as const;
+const MODEL_ROTATION_ORDER = [
+  'glm-4-flash',
+  'glm-4-plus',
+  'glm-4-long',
+  'gpt-4o-mini',
+  'gpt-4o',
+  'claude-haiku-4-20250414',
+  'claude-sonnet-4-20250514',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+] as const;
+
+let modelRotationIndex = 0;
 
 function hasProviderCredentials(provider: AIProvider): boolean {
   switch (provider) {
@@ -387,6 +400,21 @@ function buildFallbackChain(primaryModel: string): string[] {
   chain.push('glm-4-flash', 'glm-4-plus');
 
   return [...new Set(chain)].filter(Boolean);
+}
+
+export function getNextRotatingModel(preferredModel?: string): string {
+  const seed = preferredModel || 'glm-4-flash';
+  const pool = [
+    ...MODEL_ROTATION_ORDER,
+    ...buildFallbackChain(seed),
+  ];
+
+  const enabled = [...new Set(pool)].filter((model) => hasProviderCredentials(getProvider(model)));
+  if (enabled.length === 0) return seed;
+
+  const idx = modelRotationIndex % enabled.length;
+  modelRotationIndex = (modelRotationIndex + 1) % enabled.length;
+  return enabled[idx];
 }
 
 export async function callAIWithFallback(

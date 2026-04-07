@@ -26,6 +26,8 @@ import os from 'os';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sharp = require('sharp') as typeof import('sharp');
 
+export const maxDuration = 60;
+
 const execAsync = promisify(exec);
 const inflateAsync = promisify(zlib.inflate);
 const inflateRawAsync = promisify(zlib.inflateRaw);
@@ -585,18 +587,17 @@ async function extractTextFromImage(buffer: ArrayBuffer): Promise<string> {
   const dataUrl = `data:image/jpeg;base64,${compressed.toString('base64')}`;
   let lastErr: Error | null = null;
 
-  for (let attempt = 0; attempt <= 2; attempt++) {
+  for (let attempt = 0; attempt <= 0; attempt++) {
     try {
       const text = await aiQueue.enqueue(
-        () => callAIVision([{ role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }, { type: 'text', text: 'Extract all text from this image. Return only the extracted text, preserving formatting and line breaks. Do not add commentary.' }] }], 'glm-4v-flash', 30_000),
-        'normal', 35_000
+        () => callAIVision([{ role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }, { type: 'text', text: 'Extract all text from this image. Return only the extracted text, preserving formatting and line breaks. Do not add commentary.' }] }], 'glm-4v-flash', 8_000),
+        'normal', 10_000
       );
       if (text) return text;
       lastErr = new Error('Vision model returned no text.');
     } catch (e) {
       lastErr = e instanceof Error ? e : new Error(String(e));
       console.warn(`[extract-file] Image OCR attempt ${attempt + 1} failed:`, lastErr.message);
-      if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
   }
   throw lastErr || new Error('Vision model returned no text from the image.');
@@ -764,6 +765,8 @@ export async function POST(request: NextRequest) {
 
     // --- 2. Parse FormData ---
     const formData = await request.formData();
+    const fastMode = request.nextUrl.searchParams.get('fast') !== '0' && formData.get('fast') !== '0';
+    const shouldParse = request.nextUrl.searchParams.get('parse') === '1' || formData.get('parse') === '1';
     const file = formData.get('file');
     console.log('[extract-file] Request received, file:', file instanceof File ? `${file.name} (${(file.size / 1024).toFixed(1)} KB, ${file.type})` : 'NOT a File');
 
@@ -861,7 +864,7 @@ export async function POST(request: NextRequest) {
         const needsOcr = nativeLen < MIN_TEXT_LENGTH || (nativeLen >= MIN_TEXT_LENGTH && readability < 0.15);
         console.log(`[extract-file] PDF readability: ${readability.toFixed(3)}, textLen: ${nativeLen}, needsOcr: ${needsOcr}`);
 
-        if (needsOcr) {
+        if (needsOcr && !fastMode) {
           console.warn(`[extract-file] PDF text extraction insufficient (${nativeLen} chars, readability ${readability.toFixed(2)}), using VLM OCR...`);
           try {
             extractedText = await ocrFallbackForPDF(fileBuffer, pageCount || 1);
@@ -875,6 +878,8 @@ export async function POST(request: NextRequest) {
               error: 'Could not extract text from this PDF. It may contain scanned images. Try: 1) Upload as PNG/JPG image, 2) Paste text directly, 3) Re-export as text PDF.',
             }, { status: 422 });
           }
+        } else if (needsOcr && fastMode) {
+          warning = 'Fast mode skipped OCR to return quickly. If text looks incomplete, paste text directly or retry with a cleaner PDF.';
         }
         break;
       }
@@ -920,13 +925,15 @@ export async function POST(request: NextRequest) {
     let usedModel = '';
     let llmError: string | undefined;
 
-    try {
-      const parseResult = await parseCvWithRetry(extractedText);
-      parsedCv = sanitizeParsedCV(parseResult.parsedCv);
-      usedModel = parseResult.usedModel;
-    } catch (err) {
-      llmError = err instanceof Error ? err.message : 'LLM parsing failed';
-      console.error('[extract-file] LLM parsing failed:', llmError);
+    if (shouldParse) {
+      try {
+        const parseResult = await parseCvWithRetry(extractedText);
+        parsedCv = sanitizeParsedCV(parseResult.parsedCv);
+        usedModel = parseResult.usedModel;
+      } catch (err) {
+        llmError = err instanceof Error ? err.message : 'LLM parsing failed';
+        console.error('[extract-file] LLM parsing failed:', llmError);
+      }
     }
 
     // --- 8. Build response ---
@@ -944,7 +951,7 @@ export async function POST(request: NextRequest) {
     if (parsedCv) {
       response.data = parsedCv;
       response.model = usedModel;
-    } else {
+    } else if (shouldParse) {
       response.parseError = llmError || 'CV parsing failed';
       response.partialSuccess = true;
     }

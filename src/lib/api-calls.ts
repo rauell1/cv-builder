@@ -284,10 +284,10 @@ export async function extractFile(file: File): Promise<ExtractFileResult> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const controller = new AbortController();
-      // 60-second timeout for file upload + processing (OCR may take ~30-50s for multi-page PDFs)
-      const timeoutId = setTimeout(() => controller.abort(), 60_000);
+      // Fast-path timeout: extraction should return in a few seconds.
+      const timeoutId = setTimeout(() => controller.abort(), 15_000);
 
-      const response = await fetch('/api/extract-file', {
+      const response = await fetch('/api/extract-file?fast=1&parse=0', {
         method: 'POST',
         body: formData,
         signal: controller.signal,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { callAIWithFallback } from '@/lib/ai-provider';
+import { callAIWithFallback, getNextRotatingModel } from '@/lib/ai-provider';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
@@ -296,6 +296,7 @@ interface ParseResult {
 
 async function parseCvCore(cvText: string): Promise<ParseResult> {
   const t0 = Date.now();
+  const startModel = getNextRotatingModel('glm-4-flash');
 
   // --- Attempt 1: Primary call with fast fallback (glm-4-flash → glm-4-plus) ---
   const aiResult = await callAIWithFallback(
@@ -303,7 +304,7 @@ async function parseCvCore(cvText: string): Promise<ParseResult> {
       { role: 'system', content: CV_PARSE_SYSTEM_PROMPT },
       { role: 'user', content: cvText },
     ],
-    'glm-4-flash',
+    startModel,
     'simple'
   );
   const { content: responseText, model: usedModel } = aiResult;
