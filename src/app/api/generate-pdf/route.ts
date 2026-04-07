@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, PDFPage, PDFFont } from 'pdf-lib';
-import fontkit from '@pdf-lib/fontkit';
 import type { ParsedCV, CVFormatId } from '@/lib/cv-types';
-import { buildContactParts, PAGE_WIDTH, PAGE_HEIGHT, splitTextIntoWordLines } from '@/lib/pdf-utils';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { buildContactParts, PAGE_WIDTH, PAGE_HEIGHT, splitTextIntoWordLines, embedNotoSansFont } from '@/lib/pdf-utils';
+import { sanitizeParsedCV } from '@/lib/text-cleaning';
 
 // ===== FONT LOADING =====
 
@@ -16,20 +14,11 @@ interface Fonts {
 }
 
 async function loadFonts(doc: PDFDocument): Promise<Fonts> {
-  const fontDir = join(process.cwd(), 'public', 'fonts');
-  const [regBytes, boldBytes, italBytes, biBytes] = await Promise.all([
-    readFile(join(fontDir, 'NotoSans-Regular.ttf')),
-    readFile(join(fontDir, 'NotoSans-Bold.ttf')),
-    readFile(join(fontDir, 'NotoSans-Italic.ttf')),
-    readFile(join(fontDir, 'NotoSans-BoldItalic.ttf')),
-  ]);
-
-  doc.registerFontkit(fontkit);
   const [regular, bold, italic, boldItalic] = await Promise.all([
-    doc.embedFont(regBytes),
-    doc.embedFont(boldBytes),
-    doc.embedFont(italBytes),
-    doc.embedFont(biBytes),
+    embedNotoSansFont(doc, 'NotoSans-Regular.ttf'),
+    embedNotoSansFont(doc, 'NotoSans-Bold.ttf'),
+    embedNotoSansFont(doc, 'NotoSans-Italic.ttf'),
+    embedNotoSansFont(doc, 'NotoSans-BoldItalic.ttf'),
   ]);
 
   return { regular, bold, italic, boldItalic };
@@ -43,14 +32,34 @@ function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: numbe
   const lines: string[] = [];
   let currentLine = '';
 
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const testWidth = font.widthOfTextAtSize(testLine, fontSize);
-    if (testWidth > maxWidth && currentLine) {
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
+  const splitLongWord = (word: string): string[] => {
+    if (font.widthOfTextAtSize(word, fontSize) <= maxWidth) return [word];
+    const chunks: string[] = [];
+    let chunk = '';
+    for (const ch of word) {
+      const candidate = `${chunk}${ch}`;
+      if (font.widthOfTextAtSize(candidate, fontSize) > maxWidth && chunk) {
+        chunks.push(chunk);
+        chunk = ch;
+      } else {
+        chunk = candidate;
+      }
+    }
+    if (chunk) chunks.push(chunk);
+    return chunks;
+  };
+
+  for (const rawWord of words) {
+    const parts = splitLongWord(rawWord);
+    for (const word of parts) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+      if (testWidth > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
     }
   }
   if (currentLine) lines.push(currentLine);
@@ -110,6 +119,11 @@ const EU_SECTION_GAP_BEFORE = 4 * MM;
 const EU_SECTION_GAP_AFTER = 4 * MM;
 const EU_ENTRY_GAP = 1.5 * MM;
 const EU_BULLET_PREFIX = '\u2022  ';
+
+// Shared vertical rhythm for non-Europass formats
+const PRO_LINE_SPACING = 4;
+const PRO_SECTION_HEADER_GAP = 12;
+const PRO_ENTRY_GAP = 6;
 
 // ===================================================================
 // EUROPASS FORMAT
@@ -425,10 +439,16 @@ async function generateATSPDF(cv: ParsedCV): Promise<Uint8Array> {
   function drawWrapped(text: string, fontSize: number, font: PDFFont = fonts.regular, color = black, indent = 0) {
     const lines = wrapText(text, font, fontSize, contentWidth - indent);
     for (const line of lines) {
-      checkSpace(fontSize + 3);
+      checkSpace(fontSize + PRO_LINE_SPACING);
       page.drawText(line, { x: margin + indent, y, size: fontSize, font, color });
-      y -= (fontSize + 3);
+      y -= (fontSize + PRO_LINE_SPACING);
     }
+  }
+
+  function drawWrappedBlock(text: string, fontSize: number, font: PDFFont = fonts.regular, color = black, gap = 0) {
+    if (!text) return;
+    drawWrapped(text, fontSize, font, color);
+    if (gap > 0) y -= gap;
   }
 
   function drawBullets(bullets: string[]) {
@@ -441,13 +461,13 @@ async function generateATSPDF(cv: ParsedCV): Promise<Uint8Array> {
       for (let li = 0; li < wordLines.length; li++) {
         const words = wordLines[li];
         const isLast = li === wordLines.length - 1;
-        checkSpace(13);
+        checkSpace(10 + PRO_LINE_SPACING);
         if (isLast || words.length <= 1) {
           page.drawText(words.join(' '), { x: margin + bw, y, size: 10, font: fonts.regular, color: black });
         } else {
           drawJustifiedWordsOnPage(page, words, margin + bw, y, 10, fonts.regular, black, textWidth);
         }
-        y -= 13;
+        y -= (10 + PRO_LINE_SPACING);
       }
       y -= 2;
     }
@@ -460,13 +480,13 @@ async function generateATSPDF(cv: ParsedCV): Promise<Uint8Array> {
     for (let i = 0; i < wordLines.length; i++) {
       const words = wordLines[i];
       const isLast = i === wordLines.length - 1;
-      checkSpace(fontSize + 3);
+      checkSpace(fontSize + PRO_LINE_SPACING);
       if (isLast || words.length <= 1) {
         page.drawText(words.join(' '), { x: margin + indent, y, size: fontSize, font, color });
       } else {
         drawJustifiedWordsOnPage(page, words, margin + indent, y, fontSize, font, color, w);
       }
-      y -= (fontSize + 3);
+      y -= (fontSize + PRO_LINE_SPACING);
     }
   }
 
@@ -479,7 +499,7 @@ async function generateATSPDF(cv: ParsedCV): Promise<Uint8Array> {
       start: { x: margin, y }, end: { x: margin + contentWidth, y },
       thickness: 0.5, color: black,
     });
-    y -= 14;
+    y -= PRO_SECTION_HEADER_GAP;
   }
 
   // Name
@@ -500,19 +520,12 @@ async function generateATSPDF(cv: ParsedCV): Promise<Uint8Array> {
     drawSectionHeader('Professional Experience');
     for (const exp of cv.workExperience) {
       checkSpace(20);
-      page.drawText(exp.title || '', { x: margin, y, size: 11, font: fonts.bold, color: black });
-      y -= 14;
-      if (exp.subtitle) {
-        page.drawText(exp.subtitle, { x: margin, y, size: 10, font: fonts.regular, color: black });
-        y -= 13;
-      }
-      if (exp.dateRange) {
-        page.drawText(exp.dateRange, { x: margin, y, size: 10, font: fonts.regular, color: black });
-        y -= 13;
-      }
+      drawWrappedBlock(exp.title || '', 11, fonts.bold, black, 1);
+      if (exp.subtitle) drawWrappedBlock(exp.subtitle, 10, fonts.italic, black, 1);
+      if (exp.dateRange) drawWrappedBlock(exp.dateRange, 10, fonts.regular, black, 1);
       y -= 2;
       if (exp.bullets && exp.bullets.length > 0) drawBullets(exp.bullets);
-      y -= 6;
+      y -= PRO_ENTRY_GAP;
     }
   }
 
@@ -520,36 +533,18 @@ async function generateATSPDF(cv: ParsedCV): Promise<Uint8Array> {
     drawSectionHeader('Education');
     for (const edu of cv.education) {
       checkSpace(20);
-      page.drawText(edu.degree || '', { x: margin, y, size: 11, font: fonts.bold, color: black });
-      y -= 14;
-      if (edu.institution) {
-        page.drawText(edu.institution, { x: margin, y, size: 10, font: fonts.regular, color: black });
-        y -= 13;
-      }
-      if (edu.dateRange) {
-        page.drawText(edu.dateRange, { x: margin, y, size: 10, font: fonts.regular, color: black });
-        y -= 13;
-      }
-      if (edu.grade) {
-        page.drawText(edu.grade, { x: margin, y, size: 10, font: fonts.regular, color: black });
-        y -= 13;
-      }
-      y -= 6;
+      drawWrappedBlock(edu.degree || '', 11, fonts.bold, black, 1);
+      if (edu.institution) drawWrappedBlock(edu.institution, 10, fonts.italic, black, 1);
+      if (edu.dateRange) drawWrappedBlock(edu.dateRange, 10, fonts.regular, black, 1);
+      if (edu.grade) drawWrappedBlock(edu.grade, 10, fonts.regular, black, 1);
+      y -= PRO_ENTRY_GAP;
     }
   }
 
   if (cv.skills && cv.skills.length > 0) {
     drawSectionHeader('Skills');
     for (const skill of cv.skills) {
-      checkSpace(14);
-      page.drawText(`${skill.category}: `, { x: margin, y, size: 10, font: fonts.bold, color: black });
-      const catW = fonts.bold.widthOfTextAtSize(`${skill.category}: `, 10);
-      const skillsLines = wrapText(skill.skills, fonts.regular, 10, contentWidth - catW);
-      for (const line of skillsLines) {
-        checkSpace(13);
-        page.drawText(line, { x: margin + catW, y, size: 10, font: fonts.regular, color: black });
-        y -= 13;
-      }
+      drawJustified(`${skill.category}: ${skill.skills}`, 10, fonts.regular, black);
       y -= 4;
     }
   }
@@ -619,13 +614,13 @@ async function generateModernPDF(cv: ParsedCV): Promise<Uint8Array> {
     for (let i = 0; i < wordLines.length; i++) {
       const words = wordLines[i];
       const isLast = i === wordLines.length - 1;
-      checkSpace(fontSize + 3);
+      checkSpace(fontSize + PRO_LINE_SPACING);
       if (isLast || words.length <= 1) {
         page.drawText(words.join(' '), { x: MAIN_LEFT, y, size: fontSize, font, color });
       } else {
         drawJustifiedWordsOnPage(page, words, MAIN_LEFT, y, fontSize, font, color, MAIN_WIDTH);
       }
-      y -= (fontSize + 3);
+      y -= (fontSize + PRO_LINE_SPACING);
     }
   }
 
@@ -638,7 +633,18 @@ async function generateModernPDF(cv: ParsedCV): Promise<Uint8Array> {
       start: { x: MAIN_LEFT, y }, end: { x: MAIN_RIGHT, y },
       thickness: 1, color: DARK_TEXT,
     });
-    y -= 12;
+    y -= PRO_SECTION_HEADER_GAP;
+  }
+
+  function drawMainWrapped(text: string, fontSize: number, font: PDFFont = fonts.regular, color = DARK_TEXT, gap = 0) {
+    if (!text) return;
+    const lines = wrapText(text, font, fontSize, MAIN_WIDTH);
+    for (const line of lines) {
+      checkSpace(fontSize + PRO_LINE_SPACING);
+      page.drawText(line, { x: MAIN_LEFT, y, size: fontSize, font, color });
+      y -= (fontSize + PRO_LINE_SPACING);
+    }
+    if (gap > 0) y -= gap;
   }
 
   drawSidebar(page);
@@ -655,10 +661,8 @@ async function generateModernPDF(cv: ParsedCV): Promise<Uint8Array> {
     }
   }
 
-  page.drawText(cv.personalInfo.fullName || 'Name', {
-    x: 15, y: sy, size: 16, font: fonts.bold, color: WHITE,
-  });
-  sy -= 20;
+  sidebarText(cv.personalInfo.fullName || 'Name', 14, fonts.bold);
+  sy -= 6;
 
   page.drawLine({ start: { x: 15, y: sy }, end: { x: SIDEBAR_W - 15, y: sy }, thickness: 0.5, color: rgb(0.5, 0.5, 0.8) });
   sy -= 12;
@@ -687,8 +691,13 @@ async function generateModernPDF(cv: ParsedCV): Promise<Uint8Array> {
 
   // ---- MAIN CONTENT ----
   checkSpace(35);
-  page.drawText(cv.personalInfo.fullName || 'Name', { x: MAIN_LEFT, y, size: 24, font: fonts.bold, color: DARK_TEXT });
-  y -= 30;
+  const nameLines = wrapText(cv.personalInfo.fullName || 'Name', fonts.bold, 24, MAIN_WIDTH);
+  for (const line of nameLines) {
+    checkSpace(28);
+    page.drawText(line, { x: MAIN_LEFT, y, size: 24, font: fonts.bold, color: DARK_TEXT });
+    y -= 28;
+  }
+  y -= 2;
 
   checkSpace(10);
   y -= 5;
@@ -705,19 +714,12 @@ async function generateModernPDF(cv: ParsedCV): Promise<Uint8Array> {
     drawSectionHeader('Work Experience');
     for (const exp of cv.workExperience) {
       checkSpace(20);
-      page.drawText(exp.title || '', { x: MAIN_LEFT, y, size: 11, font: fonts.bold, color: DARK_TEXT });
-      y -= 14;
-      if (exp.subtitle) {
-        page.drawText(exp.subtitle, { x: MAIN_LEFT, y, size: 10, font: fonts.italic, color: DARK_TEXT });
-        y -= 13;
-      }
-      if (exp.dateRange) {
-        page.drawText(exp.dateRange, { x: MAIN_LEFT, y, size: 9, font: fonts.regular, color: GRAY_TEXT });
-        y -= 13;
-      }
+      drawMainWrapped(exp.title || '', 11, fonts.bold, DARK_TEXT, 1);
+      if (exp.subtitle) drawMainWrapped(exp.subtitle, 10, fonts.italic, DARK_TEXT, 1);
+      if (exp.dateRange) drawMainWrapped(exp.dateRange, 9, fonts.regular, GRAY_TEXT, 1);
       y -= 2;
       if (exp.bullets && exp.bullets.length > 0) drawBullets(exp.bullets);
-      y -= 6;
+      y -= PRO_ENTRY_GAP;
     }
   }
 
@@ -725,21 +727,11 @@ async function generateModernPDF(cv: ParsedCV): Promise<Uint8Array> {
     drawSectionHeader('Education');
     for (const edu of cv.education) {
       checkSpace(20);
-      page.drawText(edu.degree || '', { x: MAIN_LEFT, y, size: 11, font: fonts.bold, color: DARK_TEXT });
-      y -= 14;
-      if (edu.institution) {
-        page.drawText(edu.institution, { x: MAIN_LEFT, y, size: 10, font: fonts.italic, color: DARK_TEXT });
-        y -= 13;
-      }
-      if (edu.dateRange) {
-        page.drawText(edu.dateRange, { x: MAIN_LEFT, y, size: 9, font: fonts.regular, color: GRAY_TEXT });
-        y -= 13;
-      }
-      if (edu.grade) {
-        page.drawText(edu.grade || '', { x: MAIN_LEFT, y, size: 10, font: fonts.regular, color: DARK_TEXT });
-        y -= 13;
-      }
-      y -= 6;
+      drawMainWrapped(edu.degree || '', 11, fonts.bold, DARK_TEXT, 1);
+      if (edu.institution) drawMainWrapped(edu.institution, 10, fonts.italic, DARK_TEXT, 1);
+      if (edu.dateRange) drawMainWrapped(edu.dateRange, 9, fonts.regular, GRAY_TEXT, 1);
+      if (edu.grade) drawMainWrapped(edu.grade || '', 10, fonts.regular, DARK_TEXT, 1);
+      y -= PRO_ENTRY_GAP;
     }
   }
 
@@ -748,14 +740,7 @@ async function generateModernPDF(cv: ParsedCV): Promise<Uint8Array> {
     for (const proj of cv.projects) {
       checkSpace(20);
       const label = proj.category ? `[${proj.category}] ` : '';
-      if (label) {
-        const lw = fonts.italic.widthOfTextAtSize(label, 10);
-        page.drawText(label, { x: MAIN_LEFT, y, size: 10, font: fonts.italic, color: DARK_TEXT });
-        page.drawText(proj.title || '', { x: MAIN_LEFT + lw, y, size: 10, font: fonts.bold, color: DARK_TEXT });
-      } else {
-        page.drawText(proj.title || '', { x: MAIN_LEFT, y, size: 10, font: fonts.bold, color: DARK_TEXT });
-      }
-      y -= 13;
+      drawMainWrapped(`${label}${proj.title || ''}`, 10, fonts.bold, DARK_TEXT, 1);
       if (proj.description) drawJustified(proj.description, 9);
       y -= 4;
     }
@@ -847,14 +832,25 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
     for (let i = 0; i < wordLines.length; i++) {
       const words = wordLines[i];
       const isLast = i === wordLines.length - 1;
-      ensureSpace(fontSize + 3);
+      ensureSpace(fontSize + PRO_LINE_SPACING);
       if (isLast || words.length <= 1) {
         currentPage.drawText(words.join(' '), { x: startX, y, size: fontSize, font, color });
       } else {
         drawJustifiedWordsOnPage(currentPage, words, startX, y, fontSize, font, color, maxWidth);
       }
-      y -= (fontSize + 3);
+      y -= (fontSize + PRO_LINE_SPACING);
     }
+  }
+
+  function drawWrappedOnCurrent(text: string, fontSize: number, font: PDFFont, color: ReturnType<typeof rgb>, maxWidth: number, startX: number, gap = 0) {
+    if (!text) return;
+    const lines = wrapText(text, font, fontSize, maxWidth);
+    for (const line of lines) {
+      ensureSpace(fontSize + PRO_LINE_SPACING);
+      currentPage.drawText(line, { x: startX, y, size: fontSize, font, color });
+      y -= (fontSize + PRO_LINE_SPACING);
+    }
+    if (gap > 0) y -= gap;
   }
 
   if (cv.personalStatement) {
@@ -879,11 +875,9 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
       const afterDateY = y;
 
       y = entryStartY;
-      currentPage.drawText(exp.title || '', { x: CONTENT_START, y, size: 11, font: fonts.bold, color: DARK });
-      y -= 14;
+      drawWrappedOnCurrent(exp.title || '', 11, fonts.bold, DARK, CONTENT_W, CONTENT_START, 1);
       if (exp.subtitle) {
-        currentPage.drawText(exp.subtitle, { x: CONTENT_START, y, size: 10, font: fonts.italic, color: GRAY });
-        y -= 13;
+        drawWrappedOnCurrent(exp.subtitle, 10, fonts.italic, GRAY, CONTENT_W, CONTENT_START, 1);
       }
       y = Math.min(y, afterDateY);
       y -= 3;
@@ -909,7 +903,7 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
           y -= 2;
         }
       }
-      y -= 8;
+      y -= PRO_ENTRY_GAP;
     }
   }
 
@@ -925,18 +919,15 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
       const afterDateY = y;
 
       y = entryStartY;
-      currentPage.drawText(edu.degree || '', { x: CONTENT_START, y, size: 11, font: fonts.bold, color: DARK });
-      y -= 14;
+      drawWrappedOnCurrent(edu.degree || '', 11, fonts.bold, DARK, CONTENT_W, CONTENT_START, 1);
       if (edu.institution) {
-        currentPage.drawText(edu.institution, { x: CONTENT_START, y, size: 10, font: fonts.italic, color: GRAY });
-        y -= 13;
+        drawWrappedOnCurrent(edu.institution, 10, fonts.italic, GRAY, CONTENT_W, CONTENT_START, 1);
       }
       if (edu.grade) {
-        currentPage.drawText(edu.grade || '', { x: CONTENT_START, y, size: 10, font: fonts.regular, color: DARK });
-        y -= 13;
+        drawWrappedOnCurrent(edu.grade || '', 10, fonts.regular, DARK, CONTENT_W, CONTENT_START, 1);
       }
       y = Math.min(y, afterDateY);
-      y -= 8;
+      y -= PRO_ENTRY_GAP;
     }
   }
 
@@ -945,14 +936,7 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
     for (const proj of cv.projects) {
       ensureSpace(20);
       const label = proj.category ? `[${proj.category}] ` : '';
-      if (label) {
-        const lw = fonts.italic.widthOfTextAtSize(label, 10);
-        currentPage.drawText(label, { x: margin, y, size: 10, font: fonts.italic, color: PURPLE });
-        currentPage.drawText(proj.title || '', { x: margin + lw, y, size: 10, font: fonts.bold, color: DARK });
-      } else {
-        currentPage.drawText(proj.title || '', { x: margin, y, size: 10, font: fonts.bold, color: DARK });
-      }
-      y -= 13;
+      drawWrappedOnCurrent(`${label}${proj.title || ''}`, 10, fonts.bold, DARK, contentWidth, margin, 1);
       if (proj.description) drawJustifiedOnCurrent(proj.description, 9);
       y -= 4;
     }
@@ -1050,14 +1034,25 @@ async function generateClassicPDF(cv: ParsedCV): Promise<Uint8Array> {
     for (let i = 0; i < wordLines.length; i++) {
       const words = wordLines[i];
       const isLast = i === wordLines.length - 1;
-      checkSpace(fontSize + 4);
+      checkSpace(fontSize + PRO_LINE_SPACING);
       if (isLast || words.length <= 1) {
         page.drawText(words.join(' '), { x: margin, y, size: fontSize, font, color });
       } else {
         drawJustifiedWordsOnPage(page, words, margin, y, fontSize, font, color, contentWidth);
       }
-      y -= (fontSize + 4);
+      y -= (fontSize + PRO_LINE_SPACING);
     }
+  }
+
+  function drawWrappedClassic(text: string, fontSize: number, font: PDFFont, color = DARK, gap = 0) {
+    if (!text) return;
+    const lines = wrapText(text, font, fontSize, contentWidth);
+    for (const line of lines) {
+      checkSpace(fontSize + PRO_LINE_SPACING);
+      page.drawText(line, { x: margin, y, size: fontSize, font, color });
+      y -= (fontSize + PRO_LINE_SPACING);
+    }
+    if (gap > 0) y -= gap;
   }
 
   function drawCenteredSectionHeader(title: string) {
@@ -1101,20 +1096,12 @@ async function generateClassicPDF(cv: ParsedCV): Promise<Uint8Array> {
     drawCenteredSectionHeader('Professional Experience');
     for (const exp of cv.workExperience) {
       checkSpace(20);
-      page.drawText(exp.title || '', { x: margin, y, size: 11, font: fonts.bold, color: DARK });
-      y -= 14;
-      if (exp.subtitle) {
-        page.drawText(exp.subtitle, { x: margin, y, size: 10, font: fonts.italic, color: MEDIUM });
-        y -= 13;
-      }
-      if (exp.dateRange) {
-        const dw = fonts.regular.widthOfTextAtSize(exp.dateRange, 9);
-        page.drawText(exp.dateRange, { x: PAGE_WIDTH - margin - dw, y, size: 9, font: fonts.regular, color: MEDIUM });
-        y -= 13;
-      }
+      drawWrappedClassic(exp.title || '', 11, fonts.bold, DARK, 1);
+      if (exp.subtitle) drawWrappedClassic(exp.subtitle, 10, fonts.italic, MEDIUM, 1);
+      if (exp.dateRange) drawWrappedClassic(exp.dateRange, 9, fonts.regular, MEDIUM, 1);
       y -= 2;
       if (exp.bullets && exp.bullets.length > 0) drawBullets(exp.bullets);
-      y -= 6;
+      y -= PRO_ENTRY_GAP;
     }
   }
 
@@ -1122,22 +1109,11 @@ async function generateClassicPDF(cv: ParsedCV): Promise<Uint8Array> {
     drawCenteredSectionHeader('Education');
     for (const edu of cv.education) {
       checkSpace(20);
-      page.drawText(edu.degree || '', { x: margin, y, size: 11, font: fonts.bold, color: DARK });
-      y -= 14;
-      if (edu.institution) {
-        page.drawText(edu.institution, { x: margin, y, size: 10, font: fonts.italic, color: MEDIUM });
-        y -= 13;
-      }
-      if (edu.dateRange) {
-        const dw = fonts.regular.widthOfTextAtSize(edu.dateRange, 9);
-        page.drawText(edu.dateRange, { x: PAGE_WIDTH - margin - dw, y, size: 9, font: fonts.regular, color: MEDIUM });
-        y -= 13;
-      }
-      if (edu.grade) {
-        page.drawText(edu.grade || '', { x: margin, y, size: 10, font: fonts.regular, color: DARK });
-        y -= 13;
-      }
-      y -= 6;
+      drawWrappedClassic(edu.degree || '', 11, fonts.bold, DARK, 1);
+      if (edu.institution) drawWrappedClassic(edu.institution, 10, fonts.italic, MEDIUM, 1);
+      if (edu.dateRange) drawWrappedClassic(edu.dateRange, 9, fonts.regular, MEDIUM, 1);
+      if (edu.grade) drawWrappedClassic(edu.grade || '', 10, fonts.regular, DARK, 1);
+      y -= PRO_ENTRY_GAP;
     }
   }
 
@@ -1146,14 +1122,7 @@ async function generateClassicPDF(cv: ParsedCV): Promise<Uint8Array> {
     for (const proj of cv.projects) {
       checkSpace(20);
       const label = proj.category ? `${proj.category}: ` : '';
-      if (label) {
-        const lw = fonts.italic.widthOfTextAtSize(label, 10);
-        page.drawText(label, { x: margin, y, size: 10, font: fonts.italic, color: MEDIUM });
-        page.drawText(proj.title || '', { x: margin + lw, y, size: 10, font: fonts.bold, color: DARK });
-      } else {
-        page.drawText(proj.title || '', { x: margin, y, size: 10, font: fonts.bold, color: DARK });
-      }
-      y -= 14;
+      drawWrappedClassic(`${label}${proj.title || ''}`, 10, fonts.bold, DARK, 1);
       if (proj.description) drawJustified(proj.description, 10);
       y -= 4;
     }
@@ -1162,15 +1131,7 @@ async function generateClassicPDF(cv: ParsedCV): Promise<Uint8Array> {
   if (cv.skills && cv.skills.length > 0) {
     drawCenteredSectionHeader('Skills');
     for (const skill of cv.skills) {
-      checkSpace(14);
-      page.drawText(`${skill.category}: `, { x: margin, y, size: 10, font: fonts.bold, color: DARK });
-      const catW = fonts.bold.widthOfTextAtSize(`${skill.category}: `, 10);
-      const skillsLines = wrapText(skill.skills, fonts.regular, 10, contentWidth - catW);
-      for (const line of skillsLines) {
-        checkSpace(14);
-        page.drawText(line, { x: margin + catW, y, size: 10, font: fonts.regular, color: DARK });
-        y -= 14;
-      }
+      drawJustified(`${skill.category}: ${skill.skills}`, 10, fonts.regular, DARK);
       y -= 4;
     }
   }
@@ -1191,7 +1152,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cv: ParsedCV = cvData;
+    const cv: ParsedCV = sanitizeParsedCV(cvData as ParsedCV);
     const fmt: CVFormatId = format || 'europass';
 
     let pdfBytes: Uint8Array;

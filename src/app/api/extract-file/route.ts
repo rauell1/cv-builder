@@ -36,6 +36,7 @@ import { extractionCache, hashContent } from '@/lib/response-cache';
 import { callAI, callAIWithFallback, callAIVision } from '@/lib/ai-provider';
 import { checkRateLimit, resolveClientIp } from '@/lib/rate-limit';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
+import { sanitizeGeneratedText, sanitizeParsedCV } from '@/lib/text-cleaning';
 
 // =============================================================================
 // Constants
@@ -118,8 +119,18 @@ function textReadabilityScore(text: string): number {
   return Math.max(0, Math.min(1, score));
 }
 
-function isGarbledText(text: string): boolean {
-  return textReadabilityScore(text) < 0.2;
+function normalizeExtractedText(text: string): string {
+  if (!text) return '';
+
+  return sanitizeGeneratedText(text)
+    .replace(/[\uFFFD\u0000]/g, '')
+    .replace(/[│┃┆┊┈┄┐┘└┌├┤┬┴┼╭╮╯╰╱╲═║╔╗╚╝╠╣╦╩╬]/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+function hasCvSignal(text: string): boolean {
+  return /[\w.-]+@[\w.-]+\.[A-Za-z]{2,}|\+?\d[\d\s().-]{7,}|\b(experience|education|skills|projects|linkedin|github|summary|profile|work)\b/i.test(text);
 }
 
 /**
@@ -127,10 +138,15 @@ function isGarbledText(text: string): boolean {
  * Returns { valid, reason } — valid=false means the text should NOT go to LLM.
  */
 function validateExtractedText(text: string): { valid: boolean; reason?: string } {
-  const trimmed = text.trim();
+  const trimmed = normalizeExtractedText(text);
   if (trimmed.length === 0) return { valid: false, reason: 'Extracted text is empty.' };
   if (trimmed.length < MIN_TEXT_LENGTH) return { valid: false, reason: `Extracted text is too short (${trimmed.length} chars). Minimum ${MIN_TEXT_LENGTH} characters required.` };
-  if (isGarbledText(trimmed)) return { valid: false, reason: 'Extracted text appears garbled or unreadable.' };
+
+  const readability = textReadabilityScore(trimmed);
+  if (readability < 0.12) return { valid: false, reason: 'Extracted text appears garbled or unreadable.' };
+  if (readability < 0.2 && !hasCvSignal(trimmed)) {
+    return { valid: false, reason: 'Extracted text appears garbled or unreadable.' };
+  }
 
   // Check for excessive control characters
   const controlChars = (trimmed.match(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g) || []).length;
@@ -869,6 +885,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    extractedText = normalizeExtractedText(extractedText);
+
     // --- 6. Validate extracted text ---
     const validation = validateExtractedText(extractedText);
     if (!validation.valid) {
@@ -882,7 +900,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const parseResult = await parseCvWithRetry(extractedText);
-      parsedCv = parseResult.parsedCv;
+      parsedCv = sanitizeParsedCV(parseResult.parsedCv);
       usedModel = parseResult.usedModel;
     } catch (err) {
       llmError = err instanceof Error ? err.message : 'LLM parsing failed';

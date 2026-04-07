@@ -13,6 +13,7 @@ import {
   type CoverLetterData,
   type CoverLetterFormatId,
 } from '@/lib/cv-types';
+import { sanitizeCoverLetterData } from '@/lib/text-cleaning';
 
 interface GenerateCoverLetterRequest {
   cvData: ParsedCV;
@@ -183,7 +184,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: parsed as CoverLetterData,
+      data: sanitizeCoverLetterData(parsed as CoverLetterData),
       model: usedModel,
     });
   } catch (error: unknown) {

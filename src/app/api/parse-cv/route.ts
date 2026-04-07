@@ -5,6 +5,7 @@ import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
 import { checkRateLimit, resolveClientIp } from '@/lib/rate-limit';
+import { sanitizeParsedCV } from '@/lib/text-cleaning';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -259,7 +260,7 @@ function validateAndNormalize(obj: unknown): ParsedCV {
       : [],
   };
 
-  return parsedCv;
+  return sanitizeParsedCV(parsedCv);
 }
 
 // ---------------------------------------------------------------------------

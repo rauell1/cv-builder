@@ -8,6 +8,7 @@ import {
   CV_RESTRUCTURE_SYSTEM_PROMPT,
   type ParsedCV,
 } from '@/lib/cv-types';
+import { sanitizeParsedCV } from '@/lib/text-cleaning';
 
 // ---------------------------------------------------------------------------
 // Robust JSON extraction from LLM responses
@@ -111,11 +112,12 @@ export async function POST(request: NextRequest) {
 
       const fixed = fixCommonJSONIssues(rawJson);
       restructuredCv = JSON.parse(fixed) as ParsedCV;
-      restructuredCv.personalInfo = parsedCv.personalInfo;
+      restructuredCv.personalInfo = sanitizeParsedCV(parsedCv).personalInfo;
       restructuredCv.projects = restructuredCv.projects || [];
       restructuredCv.workExperience = restructuredCv.workExperience || [];
       restructuredCv.education = restructuredCv.education || [];
       restructuredCv.skills = restructuredCv.skills || [];
+      restructuredCv = sanitizeParsedCV(restructuredCv);
     } catch (parseError) {
       console.error('Failed to parse LLM JSON response for restructuring:', parseError);
       console.error('Raw response:', responseText);

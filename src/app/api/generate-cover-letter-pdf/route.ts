@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, PDFFont } from 'pdf-lib';
 import type { CoverLetterData, CoverLetterFormatId } from '@/lib/cv-types';
+import { sanitizeCoverLetterData } from '@/lib/text-cleaning';
 import {
   splitTextIntoLines, splitTextIntoWordLines,
   PAGE_WIDTH, PAGE_HEIGHT, embedNotoSansFont,
@@ -21,6 +22,13 @@ async function loadFonts(doc: PDFDocument): Promise<Fonts> {
   return { regular, bold, italic };
 }
 
+const CL_TOP_MARGIN = 60;
+const CL_MIN_MARGIN = 54;
+const CL_LINE_TIGHT = 3;
+const CL_LINE_NORMAL = 4;
+const CL_LINE_LOOSE = 5;
+const CL_PARAGRAPH_GAP = 8;
+
 // ===== PROFESSIONAL BUSINESS LETTER =====
 
 async function generateProfessionalPDF(cl: CoverLetterData): Promise<Uint8Array> {
@@ -35,17 +43,17 @@ async function generateProfessionalPDF(cl: CoverLetterData): Promise<Uint8Array>
   const grayColor = rgb(0.3, 0.3, 0.3);
 
   let page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  let y = PAGE_HEIGHT - 60;
+  let y = PAGE_HEIGHT - CL_TOP_MARGIN;
 
   function checkSpace(needed: number) {
-    if (y - needed < RIGHT_MARGIN) {
+    if (y - needed < CL_MIN_MARGIN) {
       page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      y = PAGE_HEIGHT - 60;
+      y = PAGE_HEIGHT - CL_TOP_MARGIN;
     }
   }
 
   // Page-break-aware justified drawing
-  function drawJustified(text: string, fontSize: number, lineSpacing = 5) {
+  function drawJustified(text: string, fontSize: number, lineSpacing = CL_LINE_LOOSE) {
     if (!text) return;
     const wordLines = splitTextIntoWordLines(text, fonts.regular, fontSize, contentWidth);
     for (let i = 0; i < wordLines.length; i++) {
@@ -69,7 +77,7 @@ async function generateProfessionalPDF(cl: CoverLetterData): Promise<Uint8Array>
   }
 
   // Page-break-aware left-aligned drawing
-  function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = 4) {
+  function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = CL_LINE_NORMAL) {
     const lines = splitTextIntoLines(text, font, fontSize, contentWidth);
     for (const line of lines) {
       checkSpace(fontSize + ls);
@@ -85,12 +93,12 @@ async function generateProfessionalPDF(cl: CoverLetterData): Promise<Uint8Array>
   });
   y -= 18;
   drawText(cl.applicantContact || '', 10, fonts.regular, grayColor, 3);
-  y -= 10;
+  y -= CL_PARAGRAPH_GAP;
 
   // --- Date ---
   checkSpace(14);
   drawText(cl.date || '', 11, fonts.regular, grayColor, 4);
-  y -= 12;
+  y -= CL_PARAGRAPH_GAP;
 
   // --- Recipient info ---
   if (cl.recipientName) drawText(cl.recipientName, 11, fonts.bold, textColor, 4);
@@ -102,27 +110,27 @@ async function generateProfessionalPDF(cl: CoverLetterData): Promise<Uint8Array>
     }
   }
 
-  y -= 16;
+  y -= CL_PARAGRAPH_GAP;
 
   // --- Greeting ---
   if (cl.greeting) {
     drawText(cl.greeting, 11, fonts.regular, textColor, 4);
-    y -= 6;
+    y -= CL_LINE_NORMAL;
   }
 
   // --- Body paragraphs (justified) ---
   drawJustified(cl.openingParagraph || '', 11, 5);
-  y -= 10;
+  y -= CL_PARAGRAPH_GAP;
 
   if (cl.bodyParagraphs && cl.bodyParagraphs.length > 0) {
     for (const para of cl.bodyParagraphs) {
       drawJustified(para, 11, 5);
-      y -= 10;
+      y -= CL_PARAGRAPH_GAP;
     }
   }
 
   drawJustified(cl.closingParagraph || '', 11, 5);
-  y -= 16;
+  y -= CL_PARAGRAPH_GAP;
 
   // --- Sign-off ---
   drawText(cl.signOff || '', 11);
@@ -138,7 +146,7 @@ async function generateModernPDF(cl: CoverLetterData): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const fonts = await loadFonts(doc);
 
-  const margin = 60;
+  const margin = CL_TOP_MARGIN;
   const contentWidth = PAGE_WIDTH - 2 * margin;
   const textColor = rgb(0.12, 0.12, 0.12);
   const grayColor = rgb(0.35, 0.35, 0.35);
@@ -154,7 +162,7 @@ async function generateModernPDF(cl: CoverLetterData): Promise<Uint8Array> {
     }
   }
 
-  function drawJustified(text: string, fontSize: number, lineSpacing = 4) {
+  function drawJustified(text: string, fontSize: number, lineSpacing = CL_LINE_NORMAL) {
     if (!text) return;
     const wordLines = splitTextIntoWordLines(text, fonts.regular, fontSize, contentWidth);
     for (let i = 0; i < wordLines.length; i++) {
@@ -177,7 +185,7 @@ async function generateModernPDF(cl: CoverLetterData): Promise<Uint8Array> {
     }
   }
 
-  function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = 3) {
+  function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = CL_LINE_TIGHT) {
     const lines = splitTextIntoLines(text, font, fontSize, contentWidth);
     for (const line of lines) {
       checkSpace(fontSize + ls);
@@ -226,12 +234,12 @@ async function generateModernPDF(cl: CoverLetterData): Promise<Uint8Array> {
   }
 
   drawJustified(cl.openingParagraph || '', 11, 4);
-  y -= 8;
+  y -= CL_PARAGRAPH_GAP;
 
   if (cl.bodyParagraphs && cl.bodyParagraphs.length > 0) {
     for (const para of cl.bodyParagraphs) {
       drawJustified(para, 11, 4);
-      y -= 8;
+      y -= CL_PARAGRAPH_GAP;
     }
   }
 
@@ -265,7 +273,7 @@ async function generateCreativePDF(cl: CoverLetterData): Promise<Uint8Array> {
   const grayColor = rgb(0.35, 0.35, 0.35);
 
   const HEADER_HEIGHT = 40;
-  const margin = 70;
+  const margin = Math.max(70, CL_MIN_MARGIN);
   const contentWidth = PAGE_WIDTH - 2 * margin;
 
   let page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -292,7 +300,7 @@ async function generateCreativePDF(cl: CoverLetterData): Promise<Uint8Array> {
     }
   }
 
-  function drawJustified(text: string, fontSize: number, lineSpacing = 4) {
+  function drawJustified(text: string, fontSize: number, lineSpacing = CL_LINE_NORMAL) {
     if (!text) return;
     const wordLines = splitTextIntoWordLines(text, fonts.regular, fontSize, contentWidth);
     for (let i = 0; i < wordLines.length; i++) {
@@ -315,7 +323,7 @@ async function generateCreativePDF(cl: CoverLetterData): Promise<Uint8Array> {
     }
   }
 
-  function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = 3) {
+  function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = CL_LINE_TIGHT) {
     const lines = splitTextIntoLines(text, font, fontSize, contentWidth);
     for (const line of lines) {
       checkSpace(fontSize + ls);
@@ -359,8 +367,8 @@ async function generateCreativePDF(cl: CoverLetterData): Promise<Uint8Array> {
 
   if (cl.bodyParagraphs && cl.bodyParagraphs.length > 0) {
     for (const para of cl.bodyParagraphs) {
-      drawJustified(para, 10.5, 3);
-      y -= 6;
+      drawJustified(para, 10.5, CL_LINE_TIGHT);
+      y -= CL_PARAGRAPH_GAP;
     }
   }
 
@@ -388,7 +396,7 @@ async function generateConcisePDF(cl: CoverLetterData): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const fonts = await loadFonts(doc);
 
-  const margin = 54;
+  const margin = CL_MIN_MARGIN;
   const contentWidth = PAGE_WIDTH - 2 * margin;
   const textColor = rgb(0.12, 0.12, 0.12);
   const grayColor = rgb(0.3, 0.3, 0.3);
@@ -403,7 +411,7 @@ async function generateConcisePDF(cl: CoverLetterData): Promise<Uint8Array> {
     }
   }
 
-  function drawJustified(text: string, fontSize: number, lineSpacing = 3) {
+  function drawJustified(text: string, fontSize: number, lineSpacing = CL_LINE_TIGHT) {
     if (!text) return;
     const wordLines = splitTextIntoWordLines(text, fonts.regular, fontSize, contentWidth);
     for (let i = 0; i < wordLines.length; i++) {
@@ -426,7 +434,7 @@ async function generateConcisePDF(cl: CoverLetterData): Promise<Uint8Array> {
     }
   }
 
-  function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = 2) {
+  function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = CL_LINE_TIGHT) {
     const lines = splitTextIntoLines(text, font, fontSize, contentWidth);
     for (const line of lines) {
       checkSpace(fontSize + ls);
@@ -507,7 +515,7 @@ async function generateFormalPDF(cl: CoverLetterData): Promise<Uint8Array> {
     page.drawText(text, { x: (PAGE_WIDTH - tw) / 2, y: yPos, size: fontSize, font, color });
   }
 
-  function drawJustified(text: string, fontSize: number, lineSpacing = 5) {
+  function drawJustified(text: string, fontSize: number, lineSpacing = CL_LINE_LOOSE) {
     if (!text) return;
     const wordLines = splitTextIntoWordLines(text, fonts.regular, fontSize, contentWidth);
     for (let i = 0; i < wordLines.length; i++) {
@@ -530,7 +538,7 @@ async function generateFormalPDF(cl: CoverLetterData): Promise<Uint8Array> {
     }
   }
 
-  function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = 4) {
+  function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = CL_LINE_NORMAL) {
     const lines = splitTextIntoLines(text, font, fontSize, contentWidth);
     for (const line of lines) {
       checkSpace(fontSize + ls);
@@ -637,22 +645,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const cleanCoverLetter = sanitizeCoverLetterData(coverLetter);
+
     let pdfBytes: Uint8Array;
     switch (formatId) {
       case 'professional':
-        pdfBytes = await generateProfessionalPDF(coverLetter);
+        pdfBytes = await generateProfessionalPDF(cleanCoverLetter);
         break;
       case 'modern':
-        pdfBytes = await generateModernPDF(coverLetter);
+        pdfBytes = await generateModernPDF(cleanCoverLetter);
         break;
       case 'creative':
-        pdfBytes = await generateCreativePDF(coverLetter);
+        pdfBytes = await generateCreativePDF(cleanCoverLetter);
         break;
       case 'concise':
-        pdfBytes = await generateConcisePDF(coverLetter);
+        pdfBytes = await generateConcisePDF(cleanCoverLetter);
         break;
       case 'formal':
-        pdfBytes = await generateFormalPDF(coverLetter);
+        pdfBytes = await generateFormalPDF(cleanCoverLetter);
         break;
       default:
         return NextResponse.json(
@@ -661,7 +671,7 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    const safeName = (coverLetter.applicantName || 'Applicant')
+    const safeName = (cleanCoverLetter.applicantName || 'Applicant')
       .replace(/[^a-zA-Z0-9]/g, '_')
       .replace(/_+/g, '_')
       .toLowerCase();

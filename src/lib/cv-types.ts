@@ -315,6 +315,7 @@ CRITICAL RULES — YOU MUST FOLLOW THESE EXACTLY:
    - dateRange = extract any dates mentioned nearby, otherwise leave empty
 5. Skills should be split into meaningful categories (e.g., "Technical Skills", "Software", "Tools") rather than one giant list.
 6. If a section has no content, use an EMPTY array [] — never use placeholder objects with empty strings.
+7. Use plain professional text only: NO markdown formatting, no **bold markers**, no heading hashes, and no em/en dashes (use standard hyphen "-").
 
 EXTRACTION RULES:
 - Extract dates in standardized format (e.g., "2018 - 2024" or "JAN 2023 - FEB 2024")
@@ -412,6 +413,7 @@ TRANSFORMATION RULES:
 10. IMPACT FOCUS: Transform task descriptions ("Responsible for...") into achievement statements ("Achieved X by doing Y, resulting in Z").
 11. SKILLS ALIGNMENT: Reorder skill categories so the most job-relevant skills appear first. Rename categories to match job description terminology where applicable.
 12. EDUCATION: Move education below experience unless the candidate is entry-level (< 3 years experience) or the job specifically prioritizes education.
+13. OUTPUT CLEANLINESS: Use plain text only. Do not include markdown symbols such as **, __, or headings. Do not use em/en dashes; use standard hyphen "-".
 
 Return ONLY valid JSON matching this exact structure:
 {
@@ -610,6 +612,7 @@ Generate a cover letter that follows these principles:
 8. STAY HONEST: Only reference qualifications, experiences, and skills that exist in the CV data. Never fabricate or exaggerate.
 9. KEEP UNDER 400 WORDS (unless the formal format is selected): Be concise and impactful. Every sentence must earn its place.
 10. END WITH CONFIDENT CALL TO ACTION: Close with a forward-looking statement that expresses enthusiasm for an interview and suggests next steps.
+11. FORMATTING RULE: Use plain professional text only. Do not include markdown symbols (e.g., **, __, #) and do not use em/en dashes; use standard hyphen "-".
 
 Return ONLY valid JSON matching this exact structure:
 {

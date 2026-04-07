@@ -28,14 +28,34 @@ export function splitTextIntoLines(
   const lines: string[] = [];
   let currentLine = '';
 
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const testWidth = font.widthOfTextAtSize(testLine, fontSize);
-    if (testWidth > maxWidth && currentLine) {
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
+  const splitLongWord = (word: string): string[] => {
+    if (font.widthOfTextAtSize(word, fontSize) <= maxWidth) return [word];
+    const chunks: string[] = [];
+    let chunk = '';
+    for (const ch of word) {
+      const candidate = `${chunk}${ch}`;
+      if (font.widthOfTextAtSize(candidate, fontSize) > maxWidth && chunk) {
+        chunks.push(chunk);
+        chunk = ch;
+      } else {
+        chunk = candidate;
+      }
+    }
+    if (chunk) chunks.push(chunk);
+    return chunks;
+  };
+
+  for (const rawWord of words) {
+    const parts = splitLongWord(rawWord);
+    for (const word of parts) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+      if (testWidth > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
     }
   }
 
@@ -216,10 +236,32 @@ export async function embedNotoSansFont(
   doc: import('pdf-lib').PDFDocument,
   fontFile: string
 ): Promise<PDFFont> {
-  const fs = await import('fs');
+  const fsPromises = await import('fs/promises');
   const path = await import('path');
   const fontPath = path.join(process.cwd(), 'public', 'fonts', fontFile);
-  const fontBytes = fs.readFileSync(fontPath);
+  const fallbackFontUrls: Record<string, string> = {
+    'NotoSans-Regular.ttf': 'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf',
+    'NotoSans-Bold.ttf': 'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Bold.ttf',
+    'NotoSans-Italic.ttf': 'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Italic.ttf',
+    'NotoSans-BoldItalic.ttf': 'https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-BoldItalic.ttf',
+  };
+
+  let fontBytes: Buffer;
+  try {
+    fontBytes = await fsPromises.readFile(fontPath);
+  } catch (err) {
+    const url = fallbackFontUrls[fontFile];
+    if (!url) throw err;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch fallback font ${fontFile} (HTTP ${response.status})`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    fontBytes = Buffer.from(arrayBuffer);
+  }
+
   if (!registeredFontkitDocs.has(doc)) {
     const fontkit = await import('@pdf-lib/fontkit');
     doc.registerFontkit(fontkit.default || fontkit);
