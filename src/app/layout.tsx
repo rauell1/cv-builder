@@ -4,9 +4,6 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
-const geistSans = GeistSans;
-const geistMono = GeistMono;
-
 export const metadata: Metadata = {
   title: "AI CV Builder - Intelligent Resume Optimization",
   description: "Transform your CV with AI intelligence. Parse, analyze job descriptions, restructure your resume, and generate professional Europass PDFs powered by advanced AI models.",
@@ -37,7 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${GeistSans.variable} ${GeistMono.variable} antialiased bg-background text-foreground`}
       >
         {children}
         <Toaster />
