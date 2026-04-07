@@ -1,0 +1,8 @@
+﻿Jane Doe
+Senior Software Engineer
+Email: jane.doe@example.com
+Phone: +1 555-123-4567
+Experience
+- Built scalable APIs in Node.js and Python.
+Education
+BSc Computer Science

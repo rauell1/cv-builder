@@ -313,7 +313,7 @@ export function CvInputStep() {
       setIsPreviewOpen(true);
 
       try {
-        const result = await extractFile(file);
+        const result = await extractFile(file, { fast: false, parse: true, timeoutMs: 60_000 });
 
         // Populate the paste textarea so user can see/edit
         setRawCvText(result.text);
@@ -340,8 +340,23 @@ export function CvInputStep() {
           description: `Extracted ${result.text.length.toLocaleString()} characters from ${file.name}.`,
         });
 
-        // Auto-parse if text is long enough
-        if (result.text.trim().length > AUTO_PARSE_MIN_LENGTH) {
+        // Prefer server-side parsed data from extract-file when available
+        if (result.data) {
+          setParsedCv(result.data);
+          if (result.model) setModelUsed(result.model);
+          toast({
+            title: 'CV Parsed Successfully',
+            description: `Parsed with ${result.model || 'AI model'} from uploaded file. All sections extracted.`,
+          });
+        } else if (result.partialSuccess && result.parseError) {
+          setParseError(result.parseError);
+          toast({
+            title: 'Parse Error',
+            description: result.parseError,
+            variant: 'destructive',
+          });
+        } else if (result.text.trim().length > AUTO_PARSE_MIN_LENGTH) {
+          // Fallback: parse extracted text in a separate call
           setIsParsing(true);
           setParseError(null);
           try {

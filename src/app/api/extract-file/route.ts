@@ -630,11 +630,11 @@ async function extractTextFromImage(buffer: ArrayBuffer): Promise<string> {
             { type: 'image_url', image_url: { url: dataUrl } },
             {
               type: 'text',
-              text: `Extract ALL text from this CV/resume image exactly as it appears, preserving the document structure.
+              text: `Extract ALL text from this document image exactly as it appears, preserving the document structure.
 
 CRITICAL INSTRUCTIONS:
 - Read text in natural order (top to bottom, left to right)
-- Preserve section headers exactly (e.g., "WORK EXPERIENCE", "EDUCATION", "SKILLS", "SUMMARY")
+- Preserve section headers exactly (e.g., "WORK EXPERIENCE", "EDUCATION", "SKILLS", "SUMMARY", "RESPONSIBILITIES", "QUALIFICATIONS")
 - Keep job titles, company names, and dates together
 - Maintain bullet points and descriptions under their respective positions
 - Include all contact information (email, phone, LinkedIn, GitHub, etc.)
@@ -825,7 +825,7 @@ export async function POST(request: NextRequest) {
 
     // --- 2. Parse FormData ---
     const formData = await request.formData();
-    const fastMode = request.nextUrl.searchParams.get('fast') !== '0' && formData.get('fast') !== '0';
+    const fastMode = request.nextUrl.searchParams.get('fast') === '1' || formData.get('fast') === '1';
     const shouldParse = request.nextUrl.searchParams.get('parse') === '1' || formData.get('parse') === '1';
     const file = formData.get('file');
     console.log('[extract-file] Request received, file:', file instanceof File ? `${file.name} (${(file.size / 1024).toFixed(1)} KB, ${file.type})` : 'NOT a File');
@@ -921,8 +921,13 @@ export async function POST(request: NextRequest) {
         // Step B: Check if OCR is needed
         const nativeLen = extractedText.trim().length;
         const readability = textReadabilityScore(extractedText);
-        // Lower threshold from 0.15 to 0.12 — be more aggressive with OCR for poor extractions
-        const needsOcr = nativeLen < MIN_TEXT_LENGTH || (nativeLen >= MIN_TEXT_LENGTH && readability < 0.12);
+        const nonAscii = (extractedText.match(/[^\x00-\x7F]/g) || []).length;
+        const nonAsciiRatio = nonAscii / Math.max(1, extractedText.length);
+        const cvSignal = hasCvSignal(extractedText);
+        const needsOcr =
+          nativeLen < MIN_TEXT_LENGTH ||
+          (nativeLen >= MIN_TEXT_LENGTH && readability < 0.12) ||
+          (nativeLen >= MIN_TEXT_LENGTH && !cvSignal && nonAsciiRatio > 0.25);
         console.log(`[extract-file] PDF readability: ${readability.toFixed(3)}, textLen: ${nativeLen}, needsOcr: ${needsOcr}`);
 
         if (needsOcr && !fastMode) {
@@ -934,10 +939,13 @@ export async function POST(request: NextRequest) {
             console.log(`[extract-file] OCR fallback: ${extractedText.trim().length} chars in ${Date.now() - t0}ms total`);
           } catch (_ocrErr) {
             console.error('[extract-file] OCR fallback failed:', _ocrErr instanceof Error ? _ocrErr.message : _ocrErr);
-            return NextResponse.json({
-              success: false,
-              error: 'Could not extract text from this PDF. It may contain scanned images. Try: 1) Upload as PNG/JPG image, 2) Paste text directly, 3) Re-export as text PDF.',
-            }, { status: 422 });
+            if (nativeLen < MIN_TEXT_LENGTH) {
+              return NextResponse.json({
+                success: false,
+                error: 'Could not extract text from this PDF. It may contain scanned images. Try: 1) Upload as PNG/JPG image, 2) Paste text directly, 3) Re-export as text PDF.',
+              }, { status: 422 });
+            }
+            warning = 'OCR fallback was unavailable. Proceeding with native extraction; please review text quality before parsing.';
           }
         } else if (needsOcr && fastMode) {
           warning = 'Fast mode skipped OCR to return quickly. If text looks incomplete, paste text directly or retry with a cleaner PDF.';

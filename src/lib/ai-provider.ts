@@ -172,6 +172,45 @@ async function callGLMVision(messages: any[], modelId: string, _timeoutMs = 35_0
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callOpenAIVision(messages: any[], modelId: string, timeoutMs = 30_000): Promise<string | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages,
+        temperature: 0,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      console.warn(`OpenAI Vision ${modelId} error:`, await res.text());
+      return null;
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (err) {
+    clearTimeout(timer);
+    console.warn(`OpenAI Vision model ${modelId} failed:`, err instanceof Error ? err.message : String(err));
+    return null;
+  }
+}
+
 async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
@@ -312,7 +351,17 @@ export async function callAIVision(
   modelId: string,
   timeoutMs = 30_000
 ): Promise<string | null> {
-  return callGLMVision(messages, modelId, timeoutMs);
+  const provider = getProvider(modelId);
+
+  if (provider === 'openai') {
+    return callOpenAIVision(messages, modelId, timeoutMs);
+  }
+
+  const glmAttempt = await callGLMVision(messages, modelId, timeoutMs);
+  if (glmAttempt) return glmAttempt;
+
+  // Fallback to OpenAI vision when GLM vision is unavailable or fails.
+  return callOpenAIVision(messages, 'gpt-4o-mini', timeoutMs);
 }
 
 const FALLBACK_MODEL_MAP: Record<string, string> = {
@@ -347,8 +396,8 @@ let modelRotationIndex = 0;
 function hasProviderCredentials(provider: AIProvider): boolean {
   switch (provider) {
     case 'glm':
-      // GLM can work either with ZHIPU_API_KEY or the Z.ai SDK runtime environment.
-      return true;
+      // GLM works with ZHIPU_API_KEY, or explicitly enabled SDK fallback.
+      return Boolean(process.env.ZHIPU_API_KEY || process.env.ZAI_SDK_FALLBACK === '1');
     case 'openai':
       return Boolean(process.env.OPENAI_API_KEY);
     case 'anthropic':
@@ -423,12 +472,17 @@ export async function callAIWithFallback(
   _complexity?: 'simple' | 'standard' | 'complex'
 ): Promise<AIResponse> {
   const candidates = buildFallbackChain(modelId);
+  const failedProviders = new Set<AIProvider>();
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
     const provider = getProvider(candidate);
 
     if (!hasProviderCredentials(provider)) {
+      continue;
+    }
+
+    if (failedProviders.has(provider)) {
       continue;
     }
 
@@ -440,6 +494,8 @@ export async function callAIWithFallback(
     if (content) {
       return { content, model: candidate, provider };
     }
+
+    failedProviders.add(provider);
   }
 
   throw new Error('AI model failed. Please try again. Check that at least one provider API key is configured correctly.');

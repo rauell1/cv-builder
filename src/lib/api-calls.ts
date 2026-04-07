@@ -26,7 +26,7 @@ export interface ParseCvResult {
 
 export async function parseCv(cvText: string, sessionId?: string): Promise<ParseCvResult> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20_000); // 20s timeout (primary + fallback + repair)
+  const timeoutId = setTimeout(() => controller.abort(), 45_000); // 45s timeout for provider fallback chains
 
   try {
     const response = await fetch('/api/parse-cv', {
@@ -213,6 +213,10 @@ export interface ExtractFileResult {
   fileType: string;
   fileName: string;
   warning?: string;
+  data?: ParsedCV;
+  model?: string;
+  parseError?: string;
+  partialSuccess?: boolean;
   extractionMethod: 'native' | 'ocr' | 'direct';
   confidence: number;
   detectedLanguage: string;
@@ -230,6 +234,12 @@ export interface ExtractFileResult {
     qualityScore: number;
     suggestions: string[];
   };
+}
+
+export interface ExtractFileOptions {
+  fast?: boolean;
+  parse?: boolean;
+  timeoutMs?: number;
 }
 
 /**
@@ -264,7 +274,7 @@ function isNetworkError(err: unknown): boolean {
  * - Transient gateway errors (502/503/504)
  * - Network-level failures (server unreachable, connection refused)
  */
-export async function extractFile(file: File): Promise<ExtractFileResult> {
+export async function extractFile(file: File, options: ExtractFileOptions = {}): Promise<ExtractFileResult> {
   // Client-side file size validation (10 MB hard limit)
   const TEN_MB = 10 * 1024 * 1024;
   if (file.size > TEN_MB) {
@@ -276,6 +286,10 @@ export async function extractFile(file: File): Promise<ExtractFileResult> {
   const formData = new FormData();
   formData.append('file', file);
 
+  const fast = options.fast ?? false;
+  const parse = options.parse ?? false;
+  const timeoutMs = options.timeoutMs ?? 45_000;
+
   const MAX_RETRIES = 2;
   const RETRY_DELAYS = [1000, 3000]; // 1s, 3s — fast retries
 
@@ -284,10 +298,9 @@ export async function extractFile(file: File): Promise<ExtractFileResult> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const controller = new AbortController();
-      // Fast-path timeout: extraction should return in a few seconds.
-      const timeoutId = setTimeout(() => controller.abort(), 15_000);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-      const response = await fetch('/api/extract-file?fast=1&parse=0', {
+      const response = await fetch(`/api/extract-file?fast=${fast ? '1' : '0'}&parse=${parse ? '1' : '0'}`, {
         method: 'POST',
         body: formData,
         signal: controller.signal,

@@ -110,7 +110,7 @@ export function JobDescStep() {
         setExtractionWarning(null);
 
         try {
-          const result = await extractFile(file);
+          const result = await extractFile(file, { fast: false, parse: false, timeoutMs: 45_000 });
           setJobDescText(result.text);
 
           if (result.warning) {
