@@ -73,7 +73,7 @@ const REQUEST_TIMEOUT_MS = 60_000;
 
 const MAX_OCR_IMAGE_DIMENSION = 1024;
 const MAX_OCR_IMAGE_BYTES = 50_000; // 50KB target
-const MIN_PDF_NATIVE_FALLBACK_LEN = 10;
+const MIN_PDF_NATIVE_FALLBACK_LEN = MIN_TEXT_LENGTH;
 
 // =============================================================================
 // Text Quality Validation
@@ -1179,7 +1179,7 @@ export async function POST(request: NextRequest) {
             console.log(`[extract-file] OCR fallback: ${extractedText.trim().length} chars in ${Date.now() - t0}ms total`);
           } catch (_ocrErr) {
             console.error('[extract-file] OCR fallback failed:', _ocrErr instanceof Error ? _ocrErr.message : _ocrErr);
-            if (nativeLen < 120 || !hasCvSignal(extractedText)) {
+            if (nativeLen < MIN_PDF_NATIVE_FALLBACK_LEN) {
               const missingOcrProviderHint = hasOpenAI
                 ? ''
                 : ' Scanned-PDF OCR requires OPENAI_API_KEY in deployment environment.';
@@ -1222,8 +1222,7 @@ export async function POST(request: NextRequest) {
     if (!validation.valid) {
       const canProceedWithWarning =
         fileType === 'pdf' &&
-        extractedText.trim().length >= 120 &&
-        hasCvSignal(extractedText);
+        extractedText.trim().length >= MIN_PDF_NATIVE_FALLBACK_LEN;
 
       if (!canProceedWithWarning) {
         return NextResponse.json({ success: false, error: validation.reason }, { status: 422 });
