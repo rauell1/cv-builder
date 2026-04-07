@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PDFDocument, rgb, PDFPage, PDFFont } from 'pdf-lib';
+import { PDFDocument, rgb, PDFPage, PDFFont, StandardFonts } from 'pdf-lib';
 import type { ParsedCV, CVFormatId } from '@/lib/cv-types';
 import { buildContactParts, PAGE_WIDTH, PAGE_HEIGHT, splitTextIntoWordLines, embedNotoSansFont } from '@/lib/pdf-utils';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';
@@ -14,14 +14,24 @@ interface Fonts {
 }
 
 async function loadFonts(doc: PDFDocument): Promise<Fonts> {
-  const [regular, bold, italic, boldItalic] = await Promise.all([
-    embedNotoSansFont(doc, 'NotoSans-Regular.ttf'),
-    embedNotoSansFont(doc, 'NotoSans-Bold.ttf'),
-    embedNotoSansFont(doc, 'NotoSans-Italic.ttf'),
-    embedNotoSansFont(doc, 'NotoSans-BoldItalic.ttf'),
-  ]);
-
-  return { regular, bold, italic, boldItalic };
+  try {
+    const [regular, bold, italic, boldItalic] = await Promise.all([
+      embedNotoSansFont(doc, 'NotoSans-Regular.ttf'),
+      embedNotoSansFont(doc, 'NotoSans-Bold.ttf'),
+      embedNotoSansFont(doc, 'NotoSans-Italic.ttf'),
+      embedNotoSansFont(doc, 'NotoSans-BoldItalic.ttf'),
+    ]);
+    return { regular, bold, italic, boldItalic };
+  } catch (err) {
+    console.warn('[generate-pdf] Noto fonts unavailable, falling back to standard PDF fonts:', err instanceof Error ? err.message : err);
+    const [regular, bold, italic, boldItalic] = await Promise.all([
+      doc.embedFont(StandardFonts.Helvetica),
+      doc.embedFont(StandardFonts.HelveticaBold),
+      doc.embedFont(StandardFonts.HelveticaOblique),
+      doc.embedFont(StandardFonts.HelveticaBoldOblique),
+    ]);
+    return { regular, bold, italic, boldItalic };
+  }
 }
 
 // ===== TEXT UTILITIES =====

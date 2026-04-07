@@ -836,7 +836,20 @@ export async function POST(request: NextRequest) {
         try {
           const pdfDoc = await PDFDocument.load(fileBuffer, { ignoreEncryption: true });
           pageCount = pdfDoc.getPageCount();
-          extractedText = await extractTextFromPDF(fileBuffer);
+          // First attempt: pdf-parse (usually better on real-world PDFs)
+          try {
+            const pdfParseModule = await import('pdf-parse');
+            const pdfParse = (pdfParseModule as { default: (input: Buffer) => Promise<{ text?: string }> }).default;
+            const parsed = await pdfParse(Buffer.from(fileBuffer));
+            extractedText = parsed?.text || '';
+            console.log(`[extract-file] pdf-parse extraction: ${extractedText.trim().length} chars`);
+          } catch (parseLibErr) {
+            console.warn('[extract-file] pdf-parse extraction failed, using internal parser:', parseLibErr instanceof Error ? parseLibErr.message : parseLibErr);
+          }
+
+          if (!extractedText.trim()) {
+            extractedText = await extractTextFromPDF(fileBuffer);
+          }
           console.log(`[extract-file] Native PDF extraction: ${extractedText.trim().length} chars in ${Date.now() - t0}ms`);
         } catch (e) {
           console.error('[extract-file] Native PDF extraction error:', e);
@@ -890,7 +903,16 @@ export async function POST(request: NextRequest) {
     // --- 6. Validate extracted text ---
     const validation = validateExtractedText(extractedText);
     if (!validation.valid) {
-      return NextResponse.json({ success: false, error: validation.reason }, { status: 422 });
+      const canProceedWithWarning =
+        fileType === 'pdf' &&
+        extractedText.trim().length >= 120;
+
+      if (!canProceedWithWarning) {
+        return NextResponse.json({ success: false, error: validation.reason }, { status: 422 });
+      }
+
+      warning = warning || 'Text quality appears low, but extraction returned usable content. Please review before final download.';
+      console.warn('[extract-file] Proceeding despite low validation confidence for PDF:', validation.reason);
     }
 
     // --- 7. Parse extracted text via LLM → structured CV data ---

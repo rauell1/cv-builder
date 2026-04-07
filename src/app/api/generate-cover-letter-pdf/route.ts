@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PDFDocument, rgb, PDFFont } from 'pdf-lib';
+import { PDFDocument, rgb, PDFFont, StandardFonts } from 'pdf-lib';
 import type { CoverLetterData, CoverLetterFormatId } from '@/lib/cv-types';
 import { sanitizeCoverLetterData } from '@/lib/text-cleaning';
 import {
@@ -16,10 +16,20 @@ interface Fonts {
 }
 
 async function loadFonts(doc: PDFDocument): Promise<Fonts> {
-  const regular = await embedNotoSansFont(doc, 'NotoSans-Regular.ttf');
-  const bold = await embedNotoSansFont(doc, 'NotoSans-Bold.ttf');
-  const italic = await embedNotoSansFont(doc, 'NotoSans-Italic.ttf');
-  return { regular, bold, italic };
+  try {
+    const regular = await embedNotoSansFont(doc, 'NotoSans-Regular.ttf');
+    const bold = await embedNotoSansFont(doc, 'NotoSans-Bold.ttf');
+    const italic = await embedNotoSansFont(doc, 'NotoSans-Italic.ttf');
+    return { regular, bold, italic };
+  } catch (err) {
+    console.warn('[generate-cover-letter-pdf] Noto fonts unavailable, falling back to standard PDF fonts:', err instanceof Error ? err.message : err);
+    const [regular, bold, italic] = await Promise.all([
+      doc.embedFont(StandardFonts.Helvetica),
+      doc.embedFont(StandardFonts.HelveticaBold),
+      doc.embedFont(StandardFonts.HelveticaOblique),
+    ]);
+    return { regular, bold, italic };
+  }
 }
 
 const CL_TOP_MARGIN = 60;
