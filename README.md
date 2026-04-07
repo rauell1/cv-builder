@@ -7,10 +7,10 @@ A full-featured, AI-powered CV/Resume Builder that parses your CV, analyzes job 
 ## Features
 
 ### Multi-Step CV Building Workflow
-1. **Upload or Paste Your CV** — Upload a PDF, image (PNG/JPG/WEBP), or plain text file. The app uses robust text extraction (`pdf-parse`) for PDFs and AI-powered OCR (GLM-4V-Flash) for images.
+1. **Upload or Paste Your CV** — Upload a PDF, DOCX, image (PNG/JPG/WEBP), or plain text file. The app uses robust text extraction (`pdf-parse`) for PDFs, `mammoth` for DOCX files, and AI-powered OCR (GLM-4V-Flash) for images.
 2. **Provide a Job Description** — Paste or upload a job description. The AI analyzes requirements, keywords, skills, and experience level.
 3. **Choose Your AI Model** — Select from 9 models across 4 providers. GLM models are built-in; others require API keys.
-4. **Review & Download** — Edit every section, generate per-section AI insights, download your tailored CV in 5 formats, and generate cover letters in 5 styles.
+4. **Review & Download** — Edit every section, generate per-section AI insights, score your CV against the job, enhance achievement bullets, download your tailored CV in 5 formats, and generate cover letters in 5 styles.
 
 ### 5 CV Output Formats
 | Format | Style | Best For |
@@ -33,6 +33,8 @@ A full-featured, AI-powered CV/Resume Builder that parses your CV, analyzes job 
 ### AI-Powered Features
 - **Per-Section Insights** — Get AI analysis for each CV section (Personal Info, Statement, Experience, Education, Projects, Skills) with scores, strengths, weaknesses, and improvement suggestions.
 - **Apply Improvements** — One-click to apply AI-suggested improvements to any section.
+- **ATS CV Scoring** — Simulate ATS screening with a full scoring breakdown: keyword match, experience relevance, achievement quality, skills coverage, format, and education (0–100).
+- **Achievement Enhancement** — AI rewrites experience bullet points to be more impactful, action-verb-led, and results-quantified.
 - **Smart CV Parsing** — AI extracts structured data from raw CV text.
 - **Job Description Analysis** — AI identifies key requirements, preferred skills, keywords, and experience level.
 - **Intelligent Restructuring** — AI rewrites and reorders your CV to match the target role.
@@ -63,6 +65,7 @@ Use any of these AI models to power your CV generation:
 - **Database**: Prisma ORM (SQLite)
 - **PDF Generation**: pdf-lib
 - **PDF Text Extraction**: pdf-parse
+- **DOCX Extraction**: mammoth
 - **Image OCR**: GLM-4V-Flash (via z-ai-web-dev-sdk)
 - **Animations**: Framer Motion
 - **Icons**: Lucide React
@@ -174,17 +177,23 @@ src/
 │   ├── layout.tsx                    # Root layout with metadata
 │   ├── page.tsx                      # Main page (step router)
 │   ├── globals.css                   # Global styles
+│   ├── error.tsx                     # Global error boundary page
+│   ├── not-found.tsx                 # 404 page
 │   └── api/
+│       ├── route.ts                  # Root API — queue & cache metrics
 │       ├── parse-cv/route.ts         # CV text → structured JSON
 │       ├── analyze-job/route.ts      # Job description analysis
 │       ├── restructure-cv/route.ts   # AI-driven CV restructuring
+│       ├── score-cv/route.ts         # ATS simulation & CV scoring
+│       ├── enhance-achievements/route.ts  # AI bullet-point enhancer
 │       ├── generate-pdf/route.ts     # PDF generation (5 formats)
 │       ├── generate-script/route.ts  # Python fpdf2 Europass script
 │       ├── generate-insights/route.ts # Per-section AI analysis
 │       ├── generate-cover-letter/route.ts      # Cover letter generation
 │       ├── generate-cover-letter-pdf/route.ts  # Cover letter PDF (5 formats)
-│       ├── extract-file/route.ts     # File upload extraction (PDF/image/text)
-│       └── ai-chat/route.ts         # Multi-provider AI chat endpoint
+│       ├── extract-file/route.ts     # File upload extraction (PDF/DOCX/image/text)
+│       ├── ai-chat/route.ts          # Multi-provider AI chat endpoint
+│       └── health/route.ts           # App health — queue/cache/memory stats
 ├── components/
 │   ├── cv-builder/
 │   │   ├── landing-page.tsx          # Hero, features, AI models, formats
@@ -193,13 +202,27 @@ src/
 │   │   ├── job-desc-step.tsx         # Step 2: Job description
 │   │   ├── processing-step.tsx       # Step 3: AI model selection & processing
 │   │   └── output-step.tsx           # Step 4: Review, edit, download
+│   ├── error-boundary.tsx            # React error boundary component
 │   └── ui/                           # shadcn/ui components
+├── hooks/
+│   ├── use-mobile.ts                 # Mobile breakpoint hook
+│   └── use-toast.ts                  # Toast notification hook
 ├── lib/
+│   ├── ai-provider.ts                # Centralized AI gateway (callAI / callAIWithFallback)
+│   ├── config.ts                     # App-wide configuration constants
 │   ├── cv-types.ts                   # TypeScript types, AI model configs, prompts
 │   ├── cv-store.ts                   # Zustand state management
 │   ├── api-calls.ts                  # Frontend API call functions
 │   ├── db.ts                         # Prisma database client
+│   ├── pdf-utils.ts                  # Shared PDF layout utilities
+│   ├── rate-limit.ts                 # Rate limiting helpers
+│   ├── rate-limiter.ts               # Rate limiter implementation
+│   ├── request-queue.ts              # AI & general request queue management
+│   ├── response-cache.ts             # Response caching (extraction, parsing)
+│   ├── sdk-retry.ts                  # SDK retry / backoff logic
+│   ├── text-cleaning.ts              # Text sanitization utilities
 │   └── utils.ts                      # Utility functions
+└── instrumentation.ts                # Next.js instrumentation
 prisma/
 └── schema.prisma                     # Database schema
 ```
@@ -210,26 +233,31 @@ prisma/
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| `GET`  | `/api` | Queue & cache metrics |
 | `POST` | `/api/parse-cv` | Parse raw CV text into structured JSON |
 | `POST` | `/api/analyze-job` | Analyze a job description |
 | `POST` | `/api/restructure-cv` | AI-restructure CV for a specific job |
+| `POST` | `/api/score-cv` | ATS simulation & comprehensive CV scoring |
+| `POST` | `/api/enhance-achievements` | AI-enhance experience bullet points |
 | `POST` | `/api/generate-pdf` | Generate tailored CV as PDF (5 formats) |
 | `POST` | `/api/generate-script` | Generate Python fpdf2 Europass script |
 | `POST` | `/api/generate-insights` | Per-section AI analysis |
 | `POST` | `/api/generate-cover-letter` | Generate AI cover letter |
 | `POST` | `/api/generate-cover-letter-pdf` | Generate cover letter PDF |
-| `POST` | `/api/extract-file` | Extract text from uploaded files |
+| `POST` | `/api/extract-file` | Extract text from uploaded files (PDF/DOCX/image/text) |
 | `POST` | `/api/ai-chat` | Multi-provider AI chat endpoint |
+| `GET`  | `/api/health` | App health — queues, cache, memory stats |
 
 ---
 
 ## How It Works
 
 ### CV Upload & Parsing
-1. User uploads a PDF, image, or text file (or pastes text directly)
+1. User uploads a PDF, DOCX, image, or text file (or pastes text directly)
 2. **PDF files** are parsed using `pdf-parse` for robust text extraction
-3. **Images** are processed via GLM-4V-Flash VLM for OCR
-4. Extracted text is sent to the AI model to parse into structured sections (personal info, experience, education, skills, projects)
+3. **DOCX files** are processed via `mammoth` for Word document extraction
+4. **Images** are processed via GLM-4V-Flash VLM for OCR
+5. Extracted text is sent to the AI model to parse into structured sections (personal info, experience, education, skills, projects)
 
 ### Job Analysis & CV Restructuring
 1. User provides a target job description
