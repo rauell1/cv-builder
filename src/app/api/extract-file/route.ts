@@ -479,29 +479,34 @@ async function resolveStreamBytes(stream: any, _ctx: any): Promise<Uint8Array | 
 }
 
 async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
-  const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
-  const pages = pdfDoc.getPages();
-  const ctx = pdfDoc.context;
+  // Use pdfjs-dist for robust Unicode text extraction in real-world PDFs.
+  const pdfjsLib = await import('pdfjs-dist/build/pdf.mjs');
+  const loadingTask = pdfjsLib.getDocument({
+    data: buffer,
+    useSystemFonts: true,
+    isEvalSupported: false,
+  });
+  const pdf = await loadingTask.promise;
+  const MAX_NATIVE_PAGES = 12;
+  const pagesToRead = Math.min(pdf.numPages, MAX_NATIVE_PAGES);
   const pageTexts: string[] = [];
 
-  for (const page of pages) {
+  for (let i = 1; i <= pagesToRead; i++) {
     try {
-      const contentsEntry = page.node.get(PDFName.of('Contents'));
-      if (!contentsEntry) continue;
-      const refs: unknown[] = [];
-      if (contentsEntry instanceof PDFArray) { for (let i = 0; i < contentsEntry.size(); i++) { const r = contentsEntry.get(i); if (r) refs.push(r); } }
-      else refs.push(contentsEntry);
-
-      for (const ref of refs) {
-        try {
-          const stream = ctx.lookup(ref as PDFRef);
-          if (!stream) continue;
-          const bytes = await resolveStreamBytes(stream, ctx);
-          if (bytes && bytes.length > 0) { const t = extractTextFromContentStream(bytes); if (t.trim()) pageTexts.push(t); }
-        } catch (e) { console.warn('[extract-file] Stream read error:', e); }
-      }
-    } catch (e) { console.warn('[extract-file] Page error:', e); }
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((item: any) => (typeof item?.str === 'string' ? item.str : ''))
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      if (pageText) pageTexts.push(pageText);
+    } catch (e) {
+      console.warn(`[extract-file] pdfjs page ${i} extraction failed:`, e instanceof Error ? e.message : e);
+    }
   }
+
   return pageTexts.join('\n\n');
 }
 
@@ -924,9 +929,12 @@ export async function POST(request: NextRequest) {
         const nonAscii = (extractedText.match(/[^\x00-\x7F]/g) || []).length;
         const nonAsciiRatio = nonAscii / Math.max(1, extractedText.length);
         const cvSignal = hasCvSignal(extractedText);
+        const garbledMarkers = (extractedText.match(/[�□■▢▣◻◼]/g) || []).length;
+        const garbledRatio = garbledMarkers / Math.max(1, extractedText.length);
         const needsOcr =
           nativeLen < MIN_TEXT_LENGTH ||
-          (nativeLen >= MIN_TEXT_LENGTH && readability < 0.12) ||
+          (nativeLen >= MIN_TEXT_LENGTH && readability < 0.2) ||
+          (nativeLen >= MIN_TEXT_LENGTH && garbledRatio > 0.02) ||
           (nativeLen >= MIN_TEXT_LENGTH && !cvSignal && nonAsciiRatio > 0.25);
         console.log(`[extract-file] PDF readability: ${readability.toFixed(3)}, textLen: ${nativeLen}, needsOcr: ${needsOcr}`);
 
