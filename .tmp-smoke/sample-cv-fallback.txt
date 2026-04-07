@@ -1,0 +1,21 @@
+﻿Jane Doe
+Lagos, Nigeria
+jane@example.com
++234 801 234 5678
+https://linkedin.com/in/janedoe
+
+SUMMARY
+Software engineer with 5 years of experience building web apps.
+
+EXPERIENCE
+Jan 2021 - Present
+Senior Developer
+Acme Ltd
+- Built internal dashboard
+- Reduced page load time by 30%
+
+EDUCATION
+BSc Computer Science, University of Lagos, 2020
+
+SKILLS
+JavaScript, TypeScript, React, Next.js, Node.js

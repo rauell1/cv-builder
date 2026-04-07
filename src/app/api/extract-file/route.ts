@@ -650,8 +650,33 @@ async function extractPdfTextWithOpenAI(buffer: ArrayBuffer): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return '';
 
+  let uploadedFileId: string | null = null;
+
   try {
-    const fileData = `data:application/pdf;base64,${Buffer.from(buffer).toString('base64')}`;
+    const uploadForm = new FormData();
+    uploadForm.append('purpose', 'user_data');
+    uploadForm.append('file', new Blob([Buffer.from(buffer)], { type: 'application/pdf' }), 'cv.pdf');
+
+    const uploadRes = await fetch('https://api.openai.com/v1/files', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: uploadForm,
+    });
+
+    if (!uploadRes.ok) {
+      console.warn('[extract-file] OpenAI file upload error:', await uploadRes.text());
+      return '';
+    }
+
+    const uploaded = await uploadRes.json();
+    uploadedFileId = uploaded?.id || null;
+    if (!uploadedFileId) {
+      console.warn('[extract-file] OpenAI file upload did not return a file id.');
+      return '';
+    }
+
     const res = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -666,8 +691,7 @@ async function extractPdfTextWithOpenAI(buffer: ArrayBuffer): Promise<string> {
             content: [
               {
                 type: 'input_file',
-                filename: 'cv.pdf',
-                file_data: fileData,
+                file_id: uploadedFileId,
               },
               {
                 type: 'input_text',
@@ -705,6 +729,19 @@ async function extractPdfTextWithOpenAI(buffer: ArrayBuffer): Promise<string> {
   } catch (err) {
     console.warn('[extract-file] OpenAI PDF OCR failed:', err instanceof Error ? err.message : err);
     return '';
+  } finally {
+    if (uploadedFileId) {
+      try {
+        await fetch(`https://api.openai.com/v1/files/${uploadedFileId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+          },
+        });
+      } catch (cleanupErr) {
+        console.warn('[extract-file] OpenAI file cleanup failed:', cleanupErr instanceof Error ? cleanupErr.message : cleanupErr);
+      }
+    }
   }
 }
 
@@ -1036,6 +1073,7 @@ export async function POST(request: NextRequest) {
 
         if (needsOcr && !fastMode) {
           console.warn(`[extract-file] PDF text extraction insufficient (${nativeLen} chars, readability ${readability.toFixed(2)}), using VLM OCR...`);
+          const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
           const openAiPdfText = await extractPdfTextWithOpenAI(fileBuffer);
           if (openAiPdfText.trim().length >= MIN_TEXT_LENGTH) {
             extractedText = openAiPdfText;
@@ -1053,9 +1091,12 @@ export async function POST(request: NextRequest) {
           } catch (_ocrErr) {
             console.error('[extract-file] OCR fallback failed:', _ocrErr instanceof Error ? _ocrErr.message : _ocrErr);
             if (nativeLen < 120 || !hasCvSignal(extractedText)) {
+              const missingOcrProviderHint = hasOpenAI
+                ? ''
+                : ' Scanned-PDF OCR requires OPENAI_API_KEY in deployment environment.';
               return NextResponse.json({
                 success: false,
-                error: 'Could not extract text from this PDF. It may contain scanned images. Try: 1) Upload as PNG/JPG image, 2) Paste text directly, 3) Re-export as text PDF.',
+                error: `Could not extract text from this PDF. It may contain scanned images. Try: 1) Upload as PNG/JPG image, 2) Paste text directly, 3) Re-export as text PDF.${missingOcrProviderHint}`,
               }, { status: 422 });
             }
             warning = 'OCR fallback was unavailable. Proceeding with native extraction; please review text quality before parsing.';

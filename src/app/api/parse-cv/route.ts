@@ -288,6 +288,160 @@ function tryParseResponse(text: string): ParsedCV | null {
   }
 }
 
+function pickFirstMatch(text: string, re: RegExp): string {
+  const match = text.match(re);
+  return match?.[0]?.trim() || '';
+}
+
+function cleanLine(line: string): string {
+  return line.replace(/^[\s\-•*]+/, '').trim();
+}
+
+function parseSectionBlocks(cvText: string): Record<string, string[]> {
+  const lines = cvText
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const sectionMap: Record<string, string[]> = {
+    header: [],
+    summary: [],
+    experience: [],
+    education: [],
+    skills: [],
+    projects: [],
+    certifications: [],
+  };
+
+  const headingToKey: Array<{ re: RegExp; key: keyof typeof sectionMap }> = [
+    { re: /^(summary|profile|objective|personal\s+statement)$/i, key: 'summary' },
+    { re: /^(experience|work\s+experience|employment\s+history|professional\s+experience)$/i, key: 'experience' },
+    { re: /^(education|academic\s+background)$/i, key: 'education' },
+    { re: /^(skills|technical\s+skills|core\s+competencies)$/i, key: 'skills' },
+    { re: /^(projects|project\s+experience)$/i, key: 'projects' },
+    { re: /^(certifications|licenses|certificates)$/i, key: 'certifications' },
+  ];
+
+  let current: keyof typeof sectionMap = 'header';
+  for (const line of lines) {
+    const maybeHeading = headingToKey.find((h) => h.re.test(line));
+    if (maybeHeading) {
+      current = maybeHeading.key;
+      continue;
+    }
+    sectionMap[current].push(line);
+  }
+
+  return sectionMap;
+}
+
+function parseBuiltIn(cvText: string): ParsedCV {
+  const sections = parseSectionBlocks(cvText);
+  const topLines = sections.header.slice(0, 12);
+
+  const email = pickFirstMatch(cvText, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi);
+  const phone = pickFirstMatch(cvText, /(\+?\d[\d\s().-]{7,}\d)/g);
+  const linkedin = pickFirstMatch(cvText, /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/[\w\-./?=&%]+/gi);
+  const github = pickFirstMatch(cvText, /(?:https?:\/\/)?(?:www\.)?github\.com\/[\w\-./?=&%]+/gi);
+  const website = pickFirstMatch(cvText, /https?:\/\/(?!.*linkedin\.com)(?!.*github\.com)[^\s]+/gi);
+
+  const fullName =
+    topLines.find((line) => {
+      if (line.length < 3 || line.length > 60) return false;
+      if (/@|https?:\/\//i.test(line)) return false;
+      if (/\d{3,}/.test(line)) return false;
+      const words = line.split(/\s+/).filter(Boolean);
+      return words.length >= 2 && words.length <= 5;
+    }) || '';
+
+  const location =
+    topLines.find((line) =>
+      !/@|https?:\/\//i.test(line) &&
+      !/\d{3,}/.test(line) &&
+      /,/.test(line)
+    ) || '';
+
+  const personalStatement = sections.summary.slice(0, 4).join(' ').trim();
+
+  const skillsText = sections.skills.join(' | ');
+  const skillTokens = skillsText
+    .split(/[|,•]/)
+    .map((s) => cleanLine(s))
+    .filter((s) => s.length > 1)
+    .slice(0, 40);
+  const skills = skillTokens.length
+    ? [{ category: 'Core Skills', skills: skillTokens.join(', ') }]
+    : [];
+
+  const workExperience: ParsedCV['workExperience'] = [];
+  let currentWork: ParsedCV['workExperience'][number] | null = null;
+  for (const rawLine of sections.experience) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const isBullet = /^[-•*]\s+/.test(rawLine);
+    const hasDate = /(20\d{2}|19\d{2}|present|current|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(line);
+
+    if (!currentWork || (!isBullet && hasDate && currentWork.title)) {
+      if (currentWork) workExperience.push(currentWork);
+      currentWork = { dateRange: hasDate ? line : '', title: hasDate ? '' : cleanLine(line), subtitle: '', bullets: [] };
+      continue;
+    }
+
+    if (isBullet) {
+      currentWork.bullets.push(cleanLine(rawLine));
+    } else if (!currentWork.title) {
+      currentWork.title = cleanLine(line);
+    } else if (!currentWork.subtitle) {
+      currentWork.subtitle = cleanLine(line);
+    } else {
+      currentWork.bullets.push(cleanLine(line));
+    }
+  }
+  if (currentWork) workExperience.push(currentWork);
+
+  const education: ParsedCV['education'] = sections.education
+    .filter(Boolean)
+    .slice(0, 6)
+    .map((line) => ({
+      dateRange: pickFirstMatch(line, /(20\d{2}|19\d{2})(\s*[-–]\s*(20\d{2}|19\d{2}|present|current))?/i),
+      degree: cleanLine(line),
+      institution: '',
+    }));
+
+  const projects: ParsedCV['projects'] = sections.projects
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((line) => ({
+      category: 'Project',
+      title: cleanLine(line).slice(0, 80),
+      description: cleanLine(line),
+    }));
+
+  const certifications: ParsedCV['certifications'] = sections.certifications
+    .filter(Boolean)
+    .slice(0, 10)
+    .map((line) => ({ name: cleanLine(line) }));
+
+  return sanitizeParsedCV({
+    personalInfo: {
+      fullName,
+      location,
+      email,
+      phone,
+      linkedin,
+      github,
+      website,
+    },
+    personalStatement,
+    projects,
+    workExperience,
+    education,
+    skills,
+    certifications,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Core parsing function (extracted for queueing)
 // ---------------------------------------------------------------------------
@@ -530,11 +684,35 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Enqueue in AI queue (limits concurrency for 1000+ users) ---
-    const { parsedCv, usedModel } = await aiQueue.enqueue(
-      () => parseCvCore(cvText),
-      'high',
-      25_000 // 25s timeout covers primary (~1-3s) + up to 2 retries
+    const hasAnyProviderCredentials = Boolean(
+      process.env.ZHIPU_API_KEY ||
+      process.env.OPENAI_API_KEY ||
+      process.env.ANTHROPIC_API_KEY ||
+      process.env.GOOGLE_AI_API_KEY ||
+      process.env.ZAI_SDK_FALLBACK === '1'
     );
+
+    let parsedCv: ParsedCV;
+    let usedModel: string;
+
+    if (hasAnyProviderCredentials) {
+      try {
+        const aiParsed = await aiQueue.enqueue(
+          () => parseCvCore(cvText),
+          'high',
+          25_000 // 25s timeout covers primary (~1-3s) + retries
+        );
+        parsedCv = aiParsed.parsedCv;
+        usedModel = aiParsed.usedModel;
+      } catch (aiErr) {
+        console.warn('[parse-cv] AI parse failed, falling back to built-in parser:', aiErr instanceof Error ? aiErr.message : aiErr);
+        parsedCv = parseBuiltIn(cvText);
+        usedModel = 'builtin-parser';
+      }
+    } else {
+      parsedCv = parseBuiltIn(cvText);
+      usedModel = 'builtin-parser';
+    }
 
     // --- Cache the result ---
     parsingCache.set(cacheKey, { parsedCv, usedModel });
