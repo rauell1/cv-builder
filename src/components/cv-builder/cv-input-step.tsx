@@ -894,11 +894,11 @@ export function CvInputStep() {
           ═══════════════════════════════════════════════════ */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="mb-4">
-          <TabsTrigger value="paste" disabled={isAnyLoading} className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none">
+          <TabsTrigger value="paste" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none">
             <FileText className="w-4 h-4 mr-1.5" />
             Paste CV Text
           </TabsTrigger>
-          <TabsTrigger value="upload" disabled={isAnyLoading} className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none">
+          <TabsTrigger value="upload" disabled={isExtracting} className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none">
             <Upload className="w-4 h-4 mr-1.5" />
             Upload File
           </TabsTrigger>
@@ -1042,7 +1042,7 @@ export function CvInputStep() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept={ACCEPTED_EXTENSIONS.join(',')}
+                accept={[...ACCEPTED_EXTENSIONS, ...ACCEPTED_MIME_TYPES].join(',')}
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
