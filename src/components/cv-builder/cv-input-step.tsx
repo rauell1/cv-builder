@@ -48,13 +48,9 @@ import { toast } from '@/hooks/use-toast';
    Constants
    ═══════════════════════════════════════════════════════════ */
 
-const ACCEPTED_EXTENSIONS = ['.pdf', '.txt', '.png', '.jpg', '.jpeg', '.webp', '.docx'];
+const ACCEPTED_EXTENSIONS = ['.txt', '.docx'];
 const ACCEPTED_MIME_TYPES = [
-  'application/pdf',
   'text/plain',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 const AUTO_PARSE_MIN_LENGTH = 50;
@@ -281,7 +277,7 @@ export function CvInputStep() {
       if (!isAcceptedFile(file)) {
         toast({
           title: 'Invalid File',
-          description: 'Please upload a .pdf, .txt, .png, .jpg, .jpeg, .webp, or .docx file.',
+          description: 'Please upload a .txt or .docx file, or paste your CV text directly.',
           variant: 'destructive',
         });
         return;
@@ -1079,8 +1075,6 @@ export function CvInputStep() {
               {/* File type icons in visually appealing pill badges */}
               <div className="flex items-center justify-center gap-2 flex-wrap">
                 {[
-                  { icon: <FileText className="w-3.5 h-3.5" />, label: 'PDF', color: 'text-red-500', bg: 'bg-red-50' },
-                  { icon: <ImageIcon className="w-3.5 h-3.5" />, label: 'PNG/JPG/WEBP', color: 'text-emerald-500', bg: 'bg-emerald-50' },
                   { icon: <File className="w-3.5 h-3.5" />, label: 'TXT', color: 'text-blue-500', bg: 'bg-blue-50' },
                   { icon: <FileText className="w-3.5 h-3.5" />, label: 'DOCX', color: 'text-violet-600', bg: 'bg-violet-50' },
                 ].map((item) => (
