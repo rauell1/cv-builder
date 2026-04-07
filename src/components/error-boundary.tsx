@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Component, createContext, useContext, useCallback, useState } from 'react';
+import React, { Component, createContext, useContext } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { AlertTriangle, RotateCcw } from 'lucide-react';

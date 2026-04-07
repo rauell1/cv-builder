@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PDFDocument, rgb, PDFFont, PDFPage } from 'pdf-lib';
+import { PDFDocument, rgb, PDFFont } from 'pdf-lib';
 import type { CoverLetterData, CoverLetterFormatId } from '@/lib/cv-types';
 import {
   splitTextIntoLines, splitTextIntoWordLines,
-  PAGE_WIDTH, PAGE_HEIGHT, buildContactParts, embedNotoSansFont,
+  PAGE_WIDTH, PAGE_HEIGHT, embedNotoSansFont,
 } from '@/lib/pdf-utils';
 
 // ===== FONT LOADING =====

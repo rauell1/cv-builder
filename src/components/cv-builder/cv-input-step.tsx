@@ -41,7 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useCVBuilderStore } from '@/lib/cv-store';
-import { parseCv, extractFile, type ParseCvResult, type ExtractFileResult } from '@/lib/api-calls';
+import { parseCv, extractFile, type ExtractFileResult } from '@/lib/api-calls';
 import { toast } from '@/hooks/use-toast';
 
 /* ═══════════════════════════════════════════════════════════

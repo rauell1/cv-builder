@@ -9,7 +9,6 @@
  *   const response = await callAI(messages, 'glm-4-plus');
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 import ZAI from 'z-ai-web-dev-sdk';
 
 // ---- Singleton ZAI instance ----
@@ -97,7 +96,7 @@ async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_00
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function callGLMVision(messages: any[], modelId: string, timeoutMs = 35_000): Promise<string | null> {
+async function callGLMVision(messages: any[], modelId: string, _timeoutMs = 35_000): Promise<string | null> {
   try {
     const zai = await getZAI();
     const completion = await zai.chat.completions.createVision({
@@ -270,7 +269,7 @@ const FALLBACK_MODEL_MAP: Record<string, string> = {
 export async function callAIWithFallback(
   messages: AIMessage[],
   modelId: string,
-  complexity?: 'simple' | 'standard' | 'complex'
+  _complexity?: 'simple' | 'standard' | 'complex'
 ): Promise<AIResponse> {
   let content = await callAI(messages, modelId);
   let usedModel = modelId;
