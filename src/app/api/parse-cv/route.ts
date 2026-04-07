@@ -7,6 +7,9 @@ import { parsingCache, hashContent } from '@/lib/response-cache';
 import { checkRateLimit, resolveClientIp } from '@/lib/rate-limit';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------

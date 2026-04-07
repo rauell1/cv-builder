@@ -220,8 +220,7 @@ export function CvInputStep() {
     const t1 = setTimeout(() => setExtractionPhase(2), 1000);
     phaseTimersRef.current.push(t1);
 
-    // Phase 3: Start OCR phase immediately for PDF/image files (no 3s delay)
-    // For text/docx files, this phase is hidden so no need to set it
+    // Phase 3 for OCR-sensitive formats
     if (isPdfOrImage) {
       const t2 = setTimeout(() => setExtractionPhase(3), 2000);
       phaseTimersRef.current.push(t2);

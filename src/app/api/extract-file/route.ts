@@ -22,10 +22,14 @@ import { promisify } from 'util';
 import fsPromises from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import { createRequire } from 'module';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sharp = require('sharp') as typeof import('sharp');
+const cjsRequire = createRequire(import.meta.url);
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 const execAsync = promisify(exec);
@@ -69,6 +73,7 @@ const REQUEST_TIMEOUT_MS = 60_000;
 
 const MAX_OCR_IMAGE_DIMENSION = 1024;
 const MAX_OCR_IMAGE_BYTES = 50_000; // 50KB target
+const MIN_PDF_NATIVE_FALLBACK_LEN = 10;
 
 // =============================================================================
 // Text Quality Validation
@@ -479,35 +484,71 @@ async function resolveStreamBytes(stream: any, _ctx: any): Promise<Uint8Array | 
 }
 
 async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
-  // Use pdfjs-dist for robust Unicode text extraction in real-world PDFs.
-  const pdfjsLib = await import('pdfjs-dist/build/pdf.mjs');
-  const loadingTask = pdfjsLib.getDocument({
-    data: buffer,
-    useSystemFonts: true,
-    isEvalSupported: false,
-  });
-  const pdf = await loadingTask.promise;
-  const MAX_NATIVE_PAGES = 12;
-  const pagesToRead = Math.min(pdf.numPages, MAX_NATIVE_PAGES);
-  const pageTexts: string[] = [];
+  let primaryText = '';
+  try {
+    // Use stable pdf-parse v1 function API in Node runtime.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfParseModule: any = cjsRequire('pdf-parse');
+    const pdfParseFn =
+      typeof pdfParseModule === 'function'
+        ? pdfParseModule
+        : typeof pdfParseModule?.default === 'function'
+          ? pdfParseModule.default
+          : null;
 
-  for (let i = 1; i <= pagesToRead; i++) {
-    try {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((item: any) => (typeof item?.str === 'string' ? item.str : ''))
-        .filter(Boolean)
-        .join(' ')
-        .trim();
-      if (pageText) pageTexts.push(pageText);
-    } catch (e) {
-      console.warn(`[extract-file] pdfjs page ${i} extraction failed:`, e instanceof Error ? e.message : e);
+    if (pdfParseFn) {
+      const parsed = await pdfParseFn(Buffer.from(buffer));
+      primaryText = (parsed?.text || '').trim();
     }
+  } catch (e) {
+    console.warn('[extract-file] pdf-parse CJS extraction failed:', e instanceof Error ? e.message : e);
   }
 
-  return pageTexts.join('\n\n');
+  if (primaryText.length >= MIN_TEXT_LENGTH) {
+    return primaryText;
+  }
+
+  // Fallback to low-level content stream extraction for PDFs that pdfjs fails to decode.
+  try {
+    const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+    const pages = pdfDoc.getPages();
+    const ctx = pdfDoc.context;
+    const fallbackTexts: string[] = [];
+
+    for (const page of pages) {
+      const contentsEntry = page.node.get(PDFName.of('Contents'));
+      if (!contentsEntry) continue;
+
+      const refs: unknown[] = [];
+      if (contentsEntry instanceof PDFArray) {
+        for (let i = 0; i < contentsEntry.size(); i++) {
+          const r = contentsEntry.get(i);
+          if (r) refs.push(r);
+        }
+      } else {
+        refs.push(contentsEntry);
+      }
+
+      for (const ref of refs) {
+        try {
+          const stream = ctx.lookup(ref as PDFRef);
+          if (!stream) continue;
+          const bytes = await resolveStreamBytes(stream, ctx);
+          if (!bytes || bytes.length === 0) continue;
+          const text = extractTextFromContentStream(bytes).trim();
+          if (text) fallbackTexts.push(text);
+        } catch (e) {
+          console.warn('[extract-file] fallback stream read error:', e instanceof Error ? e.message : e);
+        }
+      }
+    }
+
+    const fallbackText = fallbackTexts.join('\n\n').trim();
+    return fallbackText || primaryText;
+  } catch (e) {
+    console.warn('[extract-file] fallback PDF extractor failed:', e instanceof Error ? e.message : e);
+    return primaryText;
+  }
 }
 
 // =============================================================================
@@ -602,6 +643,68 @@ If the page is empty or contains only images, return: [empty page]`
       await Promise.all(files.map(f => fsPromises.unlink(path.join(tmpDir, f))));
       await fsPromises.rmdir(tmpDir);
     } catch { /* best-effort */ }
+  }
+}
+
+async function extractPdfTextWithOpenAI(buffer: ArrayBuffer): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return '';
+
+  try {
+    const fileData = `data:application/pdf;base64,${Buffer.from(buffer).toString('base64')}`;
+    const res = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4.1-mini',
+        input: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'input_file',
+                filename: 'cv.pdf',
+                file_data: fileData,
+              },
+              {
+                type: 'input_text',
+                text: 'Extract all readable text from this CV/resume PDF in natural reading order. Return plain text only with line breaks between sections. No markdown, no commentary.',
+              },
+            ],
+          },
+        ],
+        max_output_tokens: 4000,
+      }),
+    });
+
+    if (!res.ok) {
+      console.warn('[extract-file] OpenAI PDF OCR error:', await res.text());
+      return '';
+    }
+
+    const data = await res.json();
+    const text = (data?.output_text || '').trim();
+    if (text) return text;
+
+    // Fallback parser for responses payload shapes without output_text.
+    const fragments: string[] = [];
+    const output = Array.isArray(data?.output) ? data.output : [];
+    for (const item of output) {
+      const content = Array.isArray(item?.content) ? item.content : [];
+      for (const part of content) {
+        if (typeof part?.text === 'string') {
+          fragments.push(part.text);
+        }
+      }
+    }
+
+    return fragments.join('\n').trim();
+  } catch (err) {
+    console.warn('[extract-file] OpenAI PDF OCR failed:', err instanceof Error ? err.message : err);
+    return '';
   }
 }
 
@@ -829,7 +932,13 @@ export async function POST(request: NextRequest) {
     }
 
     // --- 2. Parse FormData ---
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch (formErr) {
+      console.error('[extract-file] Failed to parse multipart form data:', formErr);
+      return NextResponse.json({ success: false, error: 'Failed to read uploaded file payload. Please retry the upload.' }, { status: 400 });
+    }
     const fastMode = request.nextUrl.searchParams.get('fast') === '1' || formData.get('fast') === '1';
     const shouldParse = request.nextUrl.searchParams.get('parse') === '1' || formData.get('parse') === '1';
     const file = formData.get('file');
@@ -904,20 +1013,7 @@ export async function POST(request: NextRequest) {
         try {
           const pdfDoc = await PDFDocument.load(fileBuffer, { ignoreEncryption: true });
           pageCount = pdfDoc.getPageCount();
-          // First attempt: pdf-parse (usually better on real-world PDFs)
-          try {
-            const { PDFParse } = await import('pdf-parse');
-            const parser = new PDFParse({ data: Buffer.from(fileBuffer) });
-            const parsed = await parser.getText();
-            extractedText = parsed?.text || '';
-            console.log(`[extract-file] pdf-parse extraction: ${extractedText.trim().length} chars`);
-          } catch (parseLibErr) {
-            console.warn('[extract-file] pdf-parse extraction failed, using internal parser:', parseLibErr instanceof Error ? parseLibErr.message : parseLibErr);
-          }
-
-          if (!extractedText.trim()) {
-            extractedText = await extractTextFromPDF(fileBuffer);
-          }
+          extractedText = await extractTextFromPDF(fileBuffer);
           console.log(`[extract-file] Native PDF extraction: ${extractedText.trim().length} chars in ${Date.now() - t0}ms`);
         } catch (e) {
           console.error('[extract-file] Native PDF extraction error:', e);
@@ -940,6 +1036,15 @@ export async function POST(request: NextRequest) {
 
         if (needsOcr && !fastMode) {
           console.warn(`[extract-file] PDF text extraction insufficient (${nativeLen} chars, readability ${readability.toFixed(2)}), using VLM OCR...`);
+          const openAiPdfText = await extractPdfTextWithOpenAI(fileBuffer);
+          if (openAiPdfText.trim().length >= MIN_TEXT_LENGTH) {
+            extractedText = openAiPdfText;
+            warning = 'Text was extracted via AI PDF OCR. Please review for accuracy.';
+            extractionMethod = 'ocr';
+            console.log(`[extract-file] OpenAI PDF OCR fallback: ${extractedText.trim().length} chars in ${Date.now() - t0}ms total`);
+            break;
+          }
+
           try {
             extractedText = await ocrFallbackForPDF(fileBuffer, pageCount || 1);
             warning = 'Text was extracted using AI-powered OCR. Please review for accuracy.';
@@ -947,7 +1052,7 @@ export async function POST(request: NextRequest) {
             console.log(`[extract-file] OCR fallback: ${extractedText.trim().length} chars in ${Date.now() - t0}ms total`);
           } catch (_ocrErr) {
             console.error('[extract-file] OCR fallback failed:', _ocrErr instanceof Error ? _ocrErr.message : _ocrErr);
-            if (nativeLen < MIN_TEXT_LENGTH) {
+            if (nativeLen < 120 || !hasCvSignal(extractedText)) {
               return NextResponse.json({
                 success: false,
                 error: 'Could not extract text from this PDF. It may contain scanned images. Try: 1) Upload as PNG/JPG image, 2) Paste text directly, 3) Re-export as text PDF.',
@@ -987,7 +1092,8 @@ export async function POST(request: NextRequest) {
     if (!validation.valid) {
       const canProceedWithWarning =
         fileType === 'pdf' &&
-        extractedText.trim().length >= 120;
+        extractedText.trim().length >= 120 &&
+        hasCvSignal(extractedText);
 
       if (!canProceedWithWarning) {
         return NextResponse.json({ success: false, error: validation.reason }, { status: 422 });
