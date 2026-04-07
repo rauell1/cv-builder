@@ -125,9 +125,14 @@ function normalizeExtractedText(text: string): string {
   if (!text) return '';
 
   return sanitizeGeneratedText(text)
+    // Remove replacement characters and null bytes
     .replace(/[\uFFFD\u0000]/g, '')
-    .replace(/[│┃┆┊┈┄┐┘└┌├┤┬┴┼╭╮╯╰╱╲═║╔╗╚╝╠╣╦╩╬]/g, ' ')
+    // Remove ALL box drawing characters (common OCR artifacts)
+    .replace(/[│┃┆┊┈┄┐┘└┌├┤┬┴┼╭╮╯╰╱╲═║╔╗╚╝╠╣╦╩╬╟╢╤╧╪╞╡╥╨╫┏┓┗┛┣┫┳┻╋▪▫]/g, ' ')
+    // Remove excessive whitespace but preserve single line breaks
     .replace(/[ \t]{2,}/g, ' ')
+    // Remove multiple consecutive blank lines (keep max 2 line breaks)
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -540,7 +545,27 @@ async function ocrFallbackForPDF(buffer: ArrayBuffer, pageCount: number): Promis
           }
           const dataUrl = `data:image/jpeg;base64,${imgBuf.toString('base64')}`;
           const text = await aiQueue.enqueue(
-            () => callAIVision([{ role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }, { type: 'text', text: `Extract ALL text from page ${i + 1} of a CV/resume. Return only the extracted text. If empty: [empty page]` }] }], 'glm-4v-flash', 30_000),
+            () => callAIVision([{
+              role: 'user',
+              content: [
+                { type: 'image_url', image_url: { url: dataUrl } },
+                {
+                  type: 'text',
+                  text: `You are reading page ${i + 1} of a CV/resume document. Extract ALL text exactly as it appears, preserving the document structure and formatting.
+
+CRITICAL INSTRUCTIONS:
+- Extract text in reading order (top to bottom, left to right)
+- Preserve section headers (e.g., "EXPERIENCE", "EDUCATION", "SKILLS")
+- Keep bullet points and job descriptions together
+- Maintain line breaks between sections
+- Do NOT add boxes, borders, or formatting characters
+- Do NOT add any commentary or explanations
+- Return ONLY the extracted text
+
+If the page is empty or contains only images, return: [empty page]`
+                }
+              ]
+            }], 'glm-4v-flash', 30_000),
             'normal', 35_000
           );
           pageText = text?.trim() || '';
@@ -557,7 +582,15 @@ async function ocrFallbackForPDF(buffer: ArrayBuffer, pageCount: number): Promis
 
     const combined = pageTexts.filter(t => t && t !== '[empty page]').join('\n\n');
     if (!combined.trim()) throw new Error('Vision model could not extract any text from this PDF.');
-    return combined;
+
+    // Post-OCR cleanup: remove any box characters the model might have added
+    const cleaned = combined
+      .replace(/[│┃┆┊┈┄┐┘└┌├┤┬┴┼╭╮╯╰╱╲═║╔╗╚╝╠╣╦╩╬╟╢╤╧╪╞╡╥╨╫┏┓┗┛┣┫┳┻╋▪▫]/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    return cleaned;
   } finally {
     try {
       const files = await fsPromises.readdir(tmpDir);
@@ -587,20 +620,45 @@ async function extractTextFromImage(buffer: ArrayBuffer): Promise<string> {
   const dataUrl = `data:image/jpeg;base64,${compressed.toString('base64')}`;
   let lastErr: Error | null = null;
 
-  for (let attempt = 0; attempt <= 0; attempt++) {
+  // Try up to 2 times with improved prompts
+  for (let attempt = 0; attempt <= 1; attempt++) {
     try {
       const text = await aiQueue.enqueue(
-        () => callAIVision([{ role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }, { type: 'text', text: 'Extract all text from this image. Return only the extracted text, preserving formatting and line breaks. Do not add commentary.' }] }], 'glm-4v-flash', 8_000),
-        'normal', 10_000
+        () => callAIVision([{
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: dataUrl } },
+            {
+              type: 'text',
+              text: `Extract ALL text from this CV/resume image exactly as it appears, preserving the document structure.
+
+CRITICAL INSTRUCTIONS:
+- Read text in natural order (top to bottom, left to right)
+- Preserve section headers exactly (e.g., "WORK EXPERIENCE", "EDUCATION", "SKILLS", "SUMMARY")
+- Keep job titles, company names, and dates together
+- Maintain bullet points and descriptions under their respective positions
+- Include all contact information (email, phone, LinkedIn, GitHub, etc.)
+- Preserve line breaks between sections
+- Do NOT add boxes, borders, tables, or any formatting characters like │ ─ ┼ ║ ═
+- Do NOT add explanations or commentary
+- Return ONLY the extracted text as plain text
+
+If you cannot read any text, return: [unable to read]`
+            }
+          ]
+        }], 'glm-4v-flash', 10_000),
+        'normal', 12_000
       );
-      if (text) return text;
-      lastErr = new Error('Vision model returned no text.');
+      if (text && text.trim() && !text.includes('[unable to read]')) return text;
+      lastErr = new Error('Vision model returned no usable text.');
     } catch (e) {
       lastErr = e instanceof Error ? e : new Error(String(e));
       console.warn(`[extract-file] Image OCR attempt ${attempt + 1} failed:`, lastErr.message);
+      // Wait before retry
+      if (attempt < 1) await new Promise(r => setTimeout(r, 1000));
     }
   }
-  throw lastErr || new Error('Vision model returned no text from the image.');
+  throw lastErr || new Error('Vision model could not extract readable text from the image.');
 }
 
 // =============================================================================
@@ -639,7 +697,9 @@ function calcConfidence(text: string, method: 'native' | 'ocr' | 'direct'): numb
   if (wc > 200) c += 5; if (wc > 500) c += 5;
   if (/[\w.-]+@[\w.-]+\.\w{2,}/.test(text)) c += 3;
   if (/(\+\d{1,3}[\s-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/.test(text)) c += 3;
-  if (/[│┃┆┊┈┄┐┘└┌├┤┬┴┼╭╮╯╰╱╲═║╔╗╚╝╠╣╦╩╬]/.test(text)) c -= 10;
+  // Heavily penalize box drawing characters (indicates poor OCR)
+  const boxChars = (text.match(/[│┃┆┊┈┄┐┘└┌├┤┬┴┼╭╮╯╰╱╲═║╔╗╚╝╠╣╦╩╬╟╢╤╧╪╞╡╥╨╫┏┓┗┛┣┫┳┻╋▪▫]/g) || []).length;
+  if (boxChars > 0) c -= Math.min(30, boxChars * 2); // Penalty up to -30
   return Math.max(0, Math.min(100, c));
 }
 
@@ -861,7 +921,8 @@ export async function POST(request: NextRequest) {
         // Step B: Check if OCR is needed
         const nativeLen = extractedText.trim().length;
         const readability = textReadabilityScore(extractedText);
-        const needsOcr = nativeLen < MIN_TEXT_LENGTH || (nativeLen >= MIN_TEXT_LENGTH && readability < 0.15);
+        // Lower threshold from 0.15 to 0.12 — be more aggressive with OCR for poor extractions
+        const needsOcr = nativeLen < MIN_TEXT_LENGTH || (nativeLen >= MIN_TEXT_LENGTH && readability < 0.12);
         console.log(`[extract-file] PDF readability: ${readability.toFixed(3)}, textLen: ${nativeLen}, needsOcr: ${needsOcr}`);
 
         if (needsOcr && !fastMode) {

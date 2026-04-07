@@ -304,6 +304,12 @@ export const CV_FORMATS: CVFormatOption[] = [
 
 export const CV_PARSE_SYSTEM_PROMPT = `You are a professional CV/resume parser and ATS optimization expert. Extract all information from the provided CV text into a structured JSON format.
 
+IMPORTANT: The text may come from OCR (optical character recognition) and may contain artifacts like:
+- Box drawing characters (│ ─ ┼ ║ ═) — IGNORE these, they are formatting artifacts
+- Irregular spacing or line breaks — extract the semantic content
+- Partial words split across lines — reconstruct them intelligently
+- Missing or misread characters — use context to infer correct text
+
 CRITICAL RULES — YOU MUST FOLLOW THESE EXACTLY:
 1. NEVER leave fullName as empty string if a name exists anywhere in the text. Extract it from NAME:, Name:, or the first prominent line.
 2. NEVER leave email or phone as empty if they appear anywhere in the text (even in formats like "Email: x | Phone: y").
@@ -316,6 +322,7 @@ CRITICAL RULES — YOU MUST FOLLOW THESE EXACTLY:
 5. Skills should be split into meaningful categories (e.g., "Technical Skills", "Software", "Tools") rather than one giant list.
 6. If a section has no content, use an EMPTY array [] — never use placeholder objects with empty strings.
 7. Use plain professional text only: NO markdown formatting, no **bold markers**, no heading hashes, and no em/en dashes (use standard hyphen "-").
+8. IGNORE all box drawing, table borders, and formatting characters — focus on the actual text content.
 
 EXTRACTION RULES:
 - Extract dates in standardized format (e.g., "2018 - 2024" or "JAN 2023 - FEB 2024")
@@ -326,6 +333,7 @@ EXTRACTION RULES:
 - Extract certifications into the certifications array with name, issuer, and date
 - Normalize job titles where obvious abbreviations are used (e.g., "Sr." → "Senior")
 - Handle messy/informal formatting gracefully (colon-separated fields, inconsistent headers, etc.)
+- When text appears garbled or has OCR artifacts, use semantic understanding to extract the intended meaning
 
 Return ONLY valid JSON matching this exact structure:
 {
