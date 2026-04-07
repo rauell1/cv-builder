@@ -39,7 +39,7 @@ const inflateRawAsync = promisify(zlib.inflateRaw);
 // ---- Project infrastructure ----
 import { aiQueue } from '@/lib/request-queue';
 import { extractionCache, hashContent } from '@/lib/response-cache';
-import { callAI, callAIWithFallback, callAIVision } from '@/lib/ai-provider';
+import { callAIWithFallback, callAIVision } from '@/lib/ai-provider';
 import { checkRateLimit, resolveClientIp } from '@/lib/rate-limit';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { sanitizeGeneratedText, sanitizeParsedCV } from '@/lib/text-cleaning';

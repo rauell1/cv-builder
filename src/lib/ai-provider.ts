@@ -24,7 +24,6 @@ async function getZAI() {
   if (_zaiInitPromise) return _zaiInitPromise;
   _zaiInitPromise = (async () => {
     // Dynamic import prevents the SDK from running module-level code during Next.js build.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ZAI = (await import('z-ai-web-dev-sdk')).default;
     _zai = await ZAI.create();
     return _zai;
