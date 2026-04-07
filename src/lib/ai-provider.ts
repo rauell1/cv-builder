@@ -98,7 +98,7 @@ async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs =
     const content = completion.choices?.[0]?.message?.content;
     return content || null;
   } catch (err) {
-    console.warn(`GLM SDK call failed for ${modelId}:`, err instanceof Error ? err.message : err);
+    console.warn('GLM SDK call failed:', err instanceof Error ? err.message : String(err));
     return null;
   }
 }
@@ -107,9 +107,12 @@ async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs =
  * Call GLM via the direct Zhipu AI REST API using ZHIPU_API_KEY.
  * Used as the primary path when deployed outside the Z.ai ecosystem (e.g. Vercel).
  */
-async function callGLMviaAPI(messages: AIMessage[], modelId: string): Promise<string | null> {
+async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
   const apiKey = process.env.ZHIPU_API_KEY;
   if (!apiKey) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
@@ -122,15 +125,20 @@ async function callGLMviaAPI(messages: AIMessage[], modelId: string): Promise<st
         model: modelId,
         messages: messages.map(m => ({ role: m.role, content: m.content })),
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!res.ok) {
-      console.warn(`Zhipu AI REST API ${modelId} error:`, await res.text());
+      let errText = '';
+      try { errText = await res.text(); } catch { /* ignore */ }
+      console.warn(`Zhipu AI REST API error (status ${res.status}):`, errText.substring(0, 200));
       return null;
     }
     const data = await res.json();
     return data.choices?.[0]?.message?.content || null;
   } catch (err) {
-    console.warn(`Zhipu AI REST API model ${modelId} failed:`, err);
+    clearTimeout(timer);
+    console.warn('Zhipu AI REST API call failed:', err instanceof Error ? err.message : String(err));
     return null;
   }
 }
@@ -139,7 +147,7 @@ async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_00
   // Prefer direct REST API when ZHIPU_API_KEY is set (works in all environments).
   const zhipuKey = process.env.ZHIPU_API_KEY;
   if (zhipuKey) {
-    const result = await callGLMviaAPI(messages, modelId);
+    const result = await callGLMviaAPI(messages, modelId, timeoutMs);
     if (result) return result;
     // Fall through to SDK if REST API fails
   }
