@@ -220,7 +220,7 @@ export interface ExtractFileResult {
   extractionMethod: 'native' | 'ocr' | 'direct';
   confidence: number;
   detectedLanguage: string;
-  qualityReport: {
+  qualityReport?: {
     hasEmail: boolean;
     hasPhone: boolean;
     hasEducation: boolean;

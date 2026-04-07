@@ -330,7 +330,7 @@ export function CvInputStep() {
           method: result.extractionMethod,
           confidence: result.confidence,
           language: result.detectedLanguage,
-          qualityReport: result.qualityReport,
+          qualityReport: result.qualityReport ?? null,
           fileName: result.fileName,
         });
 

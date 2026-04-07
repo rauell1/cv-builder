@@ -849,6 +849,93 @@ function calcConfidence(text: string, method: 'native' | 'ocr' | 'direct'): numb
 }
 
 // =============================================================================
+// Quality Report
+// =============================================================================
+
+interface QualityReport {
+  hasEmail: boolean;
+  hasPhone: boolean;
+  hasEducation: boolean;
+  hasExperience: boolean;
+  hasSkills: boolean;
+  hasProjects: boolean;
+  wordCount: number;
+  characterCount: number;
+  sectionCount: number;
+  missingSections: string[];
+  qualityScore: number;
+  suggestions: string[];
+}
+
+function computeQualityReport(text: string): QualityReport {
+  const trimmed = text.trim();
+  const words = (trimmed.match(/[\p{L}\p{N}]{2,}/gu) || []);
+  const wordCount = words.length;
+  const characterCount = trimmed.length;
+
+  const hasEmail = /[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/.test(trimmed);
+  const hasPhone = /(\+?\d[\d\s().-]{7,})/.test(trimmed);
+  const hasEducation = /\b(education|degree|university|college|bachelor|master|phd|diploma|qualification|academic)\b/i.test(trimmed);
+  const hasExperience = /\b(experience|work history|employment|position|career|role|internship|worked at)\b/i.test(trimmed);
+  const hasSkills = /\b(skills|technologies|competencies|expertise|proficiencies|abilities|tools|languages)\b/i.test(trimmed);
+  const hasProjects = /\b(projects|portfolio|work samples|case studies|contributions|github\.com)\b/i.test(trimmed);
+  const hasSummary = /\b(summary|profile|objective|about me|professional summary|personal statement)\b/i.test(trimmed);
+
+  const detectedSections = [
+    hasEmail || hasPhone ? 'contact' : null,
+    hasExperience ? 'experience' : null,
+    hasEducation ? 'education' : null,
+    hasSkills ? 'skills' : null,
+    hasProjects ? 'projects' : null,
+    hasSummary ? 'summary' : null,
+  ].filter(Boolean);
+
+  const sectionCount = detectedSections.length;
+
+  const missingSections: string[] = [];
+  if (!hasEmail && !hasPhone) missingSections.push('Contact Information');
+  if (!hasExperience) missingSections.push('Work Experience');
+  if (!hasEducation) missingSections.push('Education');
+  if (!hasSkills) missingSections.push('Skills');
+
+  let qualityScore = 0;
+  if (hasEmail) qualityScore += 15;
+  if (hasPhone) qualityScore += 10;
+  if (hasExperience) qualityScore += 20;
+  if (hasEducation) qualityScore += 20;
+  if (hasSkills) qualityScore += 15;
+  if (hasProjects) qualityScore += 10;
+  if (hasSummary) qualityScore += 5;
+  if (wordCount >= 200) qualityScore += 3;
+  if (wordCount >= 400) qualityScore += 2;
+
+  const suggestions: string[] = [];
+  if (!hasEmail) suggestions.push('Missing email address — important for recruiters to contact you');
+  if (!hasPhone) suggestions.push('Consider adding a phone number for direct contact');
+  if (!hasExperience) suggestions.push('Work Experience section appears to be missing or not clearly labeled');
+  if (!hasEducation) suggestions.push('Education section appears to be missing or not clearly labeled');
+  if (!hasSkills) suggestions.push('Skills section is missing — add relevant technical and soft skills');
+  if (!hasSummary) suggestions.push('Consider adding a Professional Summary at the top of your CV');
+  if (wordCount < 150) suggestions.push('CV appears very short — consider adding more detail to each section');
+  if (wordCount > 1500) suggestions.push('CV is quite long — consider condensing to 1–2 pages for readability');
+
+  return {
+    hasEmail,
+    hasPhone,
+    hasEducation,
+    hasExperience,
+    hasSkills,
+    hasProjects,
+    wordCount,
+    characterCount,
+    sectionCount,
+    missingSections,
+    qualityScore: Math.min(100, qualityScore),
+    suggestions,
+  };
+}
+
+// =============================================================================
 // LLM CV Parsing with Retry
 // =============================================================================
 
@@ -1161,6 +1248,7 @@ export async function POST(request: NextRequest) {
     }
 
     // --- 8. Build response ---
+    const qualityReport = computeQualityReport(extractedText);
     const response: Record<string, unknown> = {
       success: true,
       text: extractedText,
@@ -1169,6 +1257,7 @@ export async function POST(request: NextRequest) {
       extractionMethod,
       confidence: calcConfidence(extractedText, extractionMethod),
       detectedLanguage: detectLanguage(extractedText),
+      qualityReport,
     };
 
     if (warning) response.warning = warning;
