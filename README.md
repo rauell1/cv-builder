@@ -42,9 +42,9 @@ Use any of these AI models to power your CV generation:
 
 | Provider | Model | Status | Speed |
 |----------|-------|--------|-------|
-| **GLM (Zhipu AI)** | GLM-4 Flash | Built-in, no key needed | Fast |
-| **GLM (Zhipu AI)** | GLM-4 Plus | Built-in, no key needed | Medium |
-| **GLM (Zhipu AI)** | GLM-4 Long | Built-in, no key needed (128K context) | Medium |
+| **GLM (Zhipu AI)** | GLM-4 Flash | Built-in (Z.ai env) / `ZHIPU_API_KEY` (Vercel) | Fast |
+| **GLM (Zhipu AI)** | GLM-4 Plus | Built-in (Z.ai env) / `ZHIPU_API_KEY` (Vercel) | Medium |
+| **GLM (Zhipu AI)** | GLM-4 Long | Built-in (Z.ai env) / `ZHIPU_API_KEY` (Vercel, 128K context) | Medium |
 | **OpenAI** | GPT-4o | API key required | Fast |
 | **OpenAI** | GPT-4o Mini | API key required | Fast |
 | **Anthropic** | Claude 4 Sonnet | API key required | Medium |
@@ -98,12 +98,23 @@ The app will be available at `http://localhost:3000`.
 
 ## AI Model API Keys
 
-GLM models are **built-in** and work out of the box — no configuration needed. For other providers, you need to set their API keys as environment variables.
+All supported providers and the direct links to obtain API keys:
 
-### GLM (Zhipu AI) — Built-in
-No API key needed. GLM models are powered by `z-ai-web-dev-sdk` and work automatically in the development environment.
+| Provider | Get API Key | Documentation | Pricing |
+|----------|-------------|---------------|---------|
+| **GLM (Zhipu AI)** | [open.bigmodel.cn/usercenter/apikeys](https://open.bigmodel.cn/usercenter/apikeys) | [open.bigmodel.cn/dev/api](https://open.bigmodel.cn/dev/api) | [open.bigmodel.cn/pricing](https://open.bigmodel.cn/pricing) |
+| **OpenAI** | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | [platform.openai.com/docs](https://platform.openai.com/docs) | [openai.com/api/pricing](https://openai.com/api/pricing/) |
+| **Anthropic** | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) | [docs.anthropic.com](https://docs.anthropic.com/en/docs) | [anthropic.com/pricing](https://www.anthropic.com/pricing) |
+| **Google AI** | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | [ai.google.dev/docs](https://ai.google.dev/docs) | [ai.google.dev/pricing](https://ai.google.dev/pricing) |
 
-> **Note for production deployment**: GLM models use the `z-ai-web-dev-sdk` which is environment-specific. For deploying outside the Z.ai ecosystem, you'll need your own [Zhipu AI API key](https://open.bigmodel.cn/) and update the API calls to use the direct [Zhipu AI REST API](https://open.bigmodel.cn/dev/api) instead.
+### GLM (Zhipu AI) — GLM-4 Flash, GLM-4 Plus, GLM-4 Long
+- **Z.ai local environment**: No API key needed. GLM models are powered by `z-ai-web-dev-sdk` automatically.
+- **Vercel / external deployments**: Set `ZHIPU_API_KEY` to use the direct Zhipu AI REST API.
+- **Get your API key**: [https://open.bigmodel.cn/usercenter/apikeys](https://open.bigmodel.cn/usercenter/apikeys)
+- **Environment variable**:
+  ```env
+  ZHIPU_API_KEY=your-zhipu-api-key-here
+  ```
 
 ### OpenAI — GPT-4o, GPT-4o Mini
 - **Get your API key**: [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
@@ -137,7 +148,8 @@ No API key needed. GLM models are powered by `z-ai-web-dev-sdk` and work automat
 Create a `.env` file in the project root:
 
 ```env
-# GLM models (built-in via z-ai-web-dev-sdk) — no key needed for dev
+# GLM (Zhipu AI) — required for Vercel/external deployments; not needed in Z.ai local env
+ZHIPU_API_KEY=your-zhipu-api-key-here
 
 # OpenAI
 OPENAI_API_KEY=sk-your-openai-key
@@ -147,6 +159,9 @@ ANTHROPIC_API_KEY=sk-ant-your-key
 
 # Google AI
 GOOGLE_AI_API_KEY=your-google-key
+
+# Database (SQLite — set the path for your environment)
+DATABASE_URL=file:./dev.db
 ```
 
 ---
@@ -237,14 +252,24 @@ prisma/
 ## Deployment Notes
 
 ### GLM Model Portability
-The GLM models use `z-ai-web-dev-sdk` which is specific to the Z.ai development environment. When deploying to production outside Z.ai:
+The app supports GLM models in two ways:
 
-1. Get your own API key from [Zhipu AI Open Platform](https://open.bigmodel.cn/)
-2. Update the API calls in the backend routes to use the [Zhipu AI REST API](https://open.bigmodel.cn/dev/api) directly
-3. The API endpoint format is: `https://open.bigmodel.cn/api/paas/v4/chat/completions`
+- **Z.ai local environment** — `z-ai-web-dev-sdk` is used automatically. No API key required.
+- **Vercel / any external server** — Set the `ZHIPU_API_KEY` environment variable. The app will call the [Zhipu AI REST API](https://open.bigmodel.cn/dev/api) directly.
+  1. Get your API key at [https://open.bigmodel.cn/usercenter/apikeys](https://open.bigmodel.cn/usercenter/apikeys)
+  2. Add `ZHIPU_API_KEY=your-key` to your Vercel environment variables (or `.env` file)
+  3. The REST endpoint used is: `https://open.bigmodel.cn/api/paas/v4/chat/completions`
 
 ### Environment Variables
-Set all required API keys in your deployment environment. Only GLM models work without an API key in the Z.ai sandbox.
+Set all required API keys in your deployment environment (Vercel dashboard → Settings → Environment Variables):
+
+| Variable | Required for |
+|----------|-------------|
+| `ZHIPU_API_KEY` | GLM models on Vercel / non-Z.ai environments |
+| `OPENAI_API_KEY` | GPT-4o, GPT-4o Mini |
+| `ANTHROPIC_API_KEY` | Claude 4 Sonnet, Claude 4 Haiku |
+| `GOOGLE_AI_API_KEY` | Gemini 2.5 Flash, Gemini 2.5 Pro |
+| `DATABASE_URL` | Prisma SQLite database (e.g. `file:./dev.db`) |
 
 ---
 

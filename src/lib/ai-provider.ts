@@ -2,26 +2,34 @@
  * Centralized AI Provider Module
  *
  * Provides a single `callAI()` gateway for all LLM interactions.
- * Uses z-ai-web-dev-sdk directly (no child process spawning).
+ *
+ * GLM models are supported via two methods (in priority order):
+ *   1. z-ai-web-dev-sdk  — works automatically in the Z.ai development environment.
+ *   2. Zhipu AI REST API — used when ZHIPU_API_KEY env var is set (for Vercel / external deployments).
  *
  * Usage:
  *   import { callAI } from '@/lib/ai-provider';
  *   const response = await callAI(messages, 'glm-4-plus');
  */
 
-import ZAI from 'z-ai-web-dev-sdk';
+// ---- Lazy ZAI SDK instance (dynamic import avoids module-level side-effects at build time) ----
 
-// ---- Singleton ZAI instance ----
-
-let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-let _zaiInitPromise: Promise<Awaited<ReturnType<typeof ZAI.create>>> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _zai: any | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _zaiInitPromise: Promise<any> | null = null;
 
 async function getZAI() {
   if (_zai) return _zai;
   if (_zaiInitPromise) return _zaiInitPromise;
-  _zaiInitPromise = ZAI.create();
-  _zai = await _zaiInitPromise;
-  return _zai;
+  _zaiInitPromise = (async () => {
+    // Dynamic import prevents the SDK from running module-level code during Next.js build.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+    _zai = await ZAI.create();
+    return _zai;
+  })();
+  return _zaiInitPromise;
 }
 
 // ---- Type Exports ----
@@ -74,7 +82,7 @@ export function autoSelectModel(complexity: 'simple' | 'standard' | 'complex'): 
 
 // ---- Provider Implementations ----
 
-async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
+async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
   try {
     const zai = await getZAI();
     const controller = new AbortController();
@@ -90,9 +98,62 @@ async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_00
     const content = completion.choices?.[0]?.message?.content;
     return content || null;
   } catch (err) {
-    console.warn(`GLM model ${modelId} failed:`, err instanceof Error ? err.message : err);
+    console.warn('GLM SDK call failed:', err instanceof Error ? err.message : String(err));
     return null;
   }
+}
+
+/**
+ * Call GLM via the direct Zhipu AI REST API using ZHIPU_API_KEY.
+ * Used as the primary path when deployed outside the Z.ai ecosystem (e.g. Vercel).
+ */
+async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
+  const apiKey = process.env.ZHIPU_API_KEY;
+  if (!apiKey) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) {
+      let errText = '';
+      try { errText = await res.text(); } catch { /* ignore */ }
+      console.warn(`Zhipu AI REST API error (status ${res.status}):`, errText.substring(0, 200));
+      return null;
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (err) {
+    clearTimeout(timer);
+    console.warn('Zhipu AI REST API call failed:', err instanceof Error ? err.message : String(err));
+    return null;
+  }
+}
+
+async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
+  // Prefer direct REST API when ZHIPU_API_KEY is set (works in all environments).
+  const zhipuKey = process.env.ZHIPU_API_KEY;
+  if (zhipuKey) {
+    const result = await callGLMviaAPI(messages, modelId, timeoutMs);
+    if (result) return result;
+    // Fall through to SDK if REST API fails
+  }
+
+  // Fall back to z-ai-web-dev-sdk (only works in Z.ai environment).
+  return callGLMviaSDK(messages, modelId, timeoutMs);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
