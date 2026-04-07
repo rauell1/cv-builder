@@ -849,6 +849,95 @@ function calcConfidence(text: string, method: 'native' | 'ocr' | 'direct'): numb
 }
 
 // =============================================================================
+// Quality Report Builder
+// =============================================================================
+
+interface QualityReport {
+  hasEmail: boolean;
+  hasPhone: boolean;
+  hasEducation: boolean;
+  hasExperience: boolean;
+  hasSkills: boolean;
+  hasProjects: boolean;
+  wordCount: number;
+  characterCount: number;
+  sectionCount: number;
+  missingSections: string[];
+  qualityScore: number;
+  suggestions: string[];
+}
+
+function buildQualityReport(text: string): QualityReport {
+  const t = text.trim();
+
+  const hasEmail = /[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/.test(t);
+  // Match phone numbers with at least 7 digits (allowing separators like spaces, dashes, parens)
+  const hasPhone = /\+?[\d][\d\s().-]*[\d]/.test(t) && (t.match(/\d/g) || []).length >= 7;
+  const hasEducation = /\b(education|degree|bachelor|master|phd|diploma|university|college|school|studied)\b/i.test(t);
+  const hasExperience = /\b(experience|work|employment|career|job|position|role|company|employer)\b/i.test(t);
+  const hasSkills = /\b(skills|technologies|tools|languages|frameworks|competencies|expertise)\b/i.test(t);
+  const hasProjects = /\b(projects?|portfolio|github|repository|built|developed|created)\b/i.test(t);
+
+  const words = t.split(/\s+/).filter(w => w.length > 0);
+  const wordCount = words.length;
+  const characterCount = t.length;
+
+  // Count distinct section headers (ALL-CAPS lines or common CV section keywords)
+  // Capped at MAX_SECTION_COUNT to avoid inflating score from decorative caps text
+  const MAX_SECTION_COUNT = 12;
+  const lines = t.split('\n');
+  const sectionHeaderRe = /^(EXPERIENCE|EDUCATION|SKILLS|PROJECTS|SUMMARY|PROFILE|OBJECTIVE|CERTIFICATIONS|LANGUAGES|REFERENCES|WORK|EMPLOYMENT|ACHIEVEMENTS|AWARDS|PUBLICATIONS|INTERESTS|HOBBIES|CONTACT|PERSONAL)\b/i;
+  const capsHeaderRe = /^[A-Z][A-Z\s]{3,}$/;
+  const sectionLines = lines.filter(l => sectionHeaderRe.test(l.trim()) || capsHeaderRe.test(l.trim()));
+  const sectionCount = Math.min(sectionLines.length, MAX_SECTION_COUNT);
+
+  // Determine missing critical sections
+  const missingSections: string[] = [];
+  if (!hasEmail) missingSections.push('email');
+  if (!hasPhone) missingSections.push('phone');
+  if (!hasExperience) missingSections.push('experience');
+  if (!hasEducation) missingSections.push('education');
+  if (!hasSkills) missingSections.push('skills');
+
+  // Compute quality score (0–100)
+  let score = 0;
+  if (hasEmail) score += 15;
+  if (hasPhone) score += 10;
+  if (hasExperience) score += 20;
+  if (hasEducation) score += 20;
+  if (hasSkills) score += 15;
+  if (hasProjects) score += 5;
+  if (wordCount >= 150) score += 5;
+  if (wordCount >= 300) score += 5;
+  if (sectionCount >= 3) score += 5;
+
+  // Build suggestions
+  const suggestions: string[] = [];
+  if (!hasEmail) suggestions.push('Missing email address — add contact email for recruiter visibility.');
+  if (!hasPhone) suggestions.push('Missing phone number — include a contact number to improve reachability.');
+  if (!hasExperience) suggestions.push('Work experience section not detected — ensure it is clearly labelled.');
+  if (!hasEducation) suggestions.push('Education section not detected — add your academic background.');
+  if (!hasSkills) suggestions.push('Skills section not detected — list your technical and soft skills.');
+  if (!hasProjects) suggestions.push('Consider adding a projects section to showcase your practical work.');
+  if (wordCount < 150) suggestions.push('CV text seems short — a detailed CV (150+ words) improves matching accuracy.');
+
+  return {
+    hasEmail,
+    hasPhone,
+    hasEducation,
+    hasExperience,
+    hasSkills,
+    hasProjects,
+    wordCount,
+    characterCount,
+    sectionCount,
+    missingSections,
+    qualityScore: Math.min(100, score),
+    suggestions,
+  };
+}
+
+// =============================================================================
 // LLM CV Parsing with Retry
 // =============================================================================
 
@@ -1161,6 +1250,7 @@ export async function POST(request: NextRequest) {
     }
 
     // --- 8. Build response ---
+    const qualityReport = buildQualityReport(extractedText);
     const response: Record<string, unknown> = {
       success: true,
       text: extractedText,
@@ -1169,6 +1259,7 @@ export async function POST(request: NextRequest) {
       extractionMethod,
       confidence: calcConfidence(extractedText, extractionMethod),
       detectedLanguage: detectLanguage(extractedText),
+      qualityReport,
     };
 
     if (warning) response.warning = warning;
