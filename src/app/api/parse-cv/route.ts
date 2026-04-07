@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { callAI, callAIWithFallback } from '@/lib/ai-provider';
+import { callAIWithFallback } from '@/lib/ai-provider';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
@@ -319,10 +319,16 @@ async function parseCvCore(cvText: string): Promise<ParseResult> {
     return { parsedCv, usedModel };
   }
 
-  // --- Self-healing: up to 2 retries with stricter prompts and different models ---
-  const retryModels = ['glm-4-plus', 'glm-4-long'] as const;
+  // --- Self-healing: retries across multiple providers ---
+  const retryModels = [
+    'gpt-4o-mini',
+    'claude-haiku-4-20250414',
+    'gemini-2.5-flash',
+    'glm-4-plus',
+    'glm-4-long',
+  ] as const;
 
-  for (let retry = 0; retry < MAX_RETRIES && !parsedCv; retry++) {
+  for (let retry = 0; retry < retryModels.length && !parsedCv; retry++) {
     const retryModel = retryModels[retry] || 'glm-4-plus';
     console.warn(
       `[parse-cv] Retry ${retry + 1}/${MAX_RETRIES} with model ${retryModel}...`
@@ -340,7 +346,7 @@ CRITICAL: You MUST return ONLY a raw JSON object.
 CV TEXT TO PARSE:
 ${cvText.substring(0, 10000)}`;
 
-      const retryContent = await callAI(
+      const retryResult = await callAIWithFallback(
         [
           {
             role: 'system',
@@ -354,13 +360,14 @@ ${cvText.substring(0, 10000)}`;
         retryModel
       );
 
+      const retryContent = retryResult.content;
       if (retryContent) {
         parsedCv = tryParseResponse(retryContent);
         if (parsedCv) {
           console.warn(
-            `[parse-cv] Parse succeeded on retry ${retry + 1} with ${retryModel} (${Date.now() - t0}ms)`
+            `[parse-cv] Parse succeeded on retry ${retry + 1} with ${retryResult.model} (${Date.now() - t0}ms)`
           );
-          return { parsedCv, usedModel: retryModel };
+          return { parsedCv, usedModel: retryResult.model };
         }
         console.warn(
           `[parse-cv] Retry ${retry + 1}: model responded but JSON parse failed. ` +

@@ -33,7 +33,7 @@ const inflateRawAsync = promisify(zlib.inflateRaw);
 // ---- Project infrastructure ----
 import { aiQueue } from '@/lib/request-queue';
 import { extractionCache, hashContent } from '@/lib/response-cache';
-import { callAI, callAIVision } from '@/lib/ai-provider';
+import { callAI, callAIWithFallback, callAIVision } from '@/lib/ai-provider';
 import { checkRateLimit, resolveClientIp } from '@/lib/rate-limit';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 
@@ -63,9 +63,6 @@ const MAX_TEXT_FOR_LLM = 12_000;
 
 /** Timeout for the entire request (file processing can be slow) */
 const REQUEST_TIMEOUT_MS = 60_000;
-
-/** Max retries for LLM parsing */
-const LLM_MAX_RETRIES = 2;
 
 const MAX_OCR_IMAGE_DIMENSION = 1024;
 const MAX_OCR_IMAGE_BYTES = 50_000; // 50KB target
@@ -638,14 +635,22 @@ interface ParseResult { parsedCv: ParsedCV; usedModel: string; responseText: str
 async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
   const truncText = cvText.length > MAX_TEXT_FOR_LLM ? cvText.substring(0, MAX_TEXT_FOR_LLM) : cvText;
 
-  // --- Attempt 1: glm-4-flash (fast) ---
-  for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
-    const model = attempt === 0 ? 'glm-4-flash' : 'glm-4-plus';
-    console.log(`[extract-file] LLM parse attempt ${attempt + 1}/${LLM_MAX_RETRIES + 1} using ${model}`);
+  const retryModels = [
+    'glm-4-flash',
+    'gpt-4o-mini',
+    'claude-haiku-4-20250414',
+    'gemini-2.5-flash',
+    'glm-4-plus',
+  ] as const;
+
+  // --- Attempt parsing with provider-aware fallbacks ---
+  for (let attempt = 0; attempt < retryModels.length; attempt++) {
+    const model = retryModels[attempt];
+    console.log(`[extract-file] LLM parse attempt ${attempt + 1}/${retryModels.length} using ${model}`);
 
     try {
-      const responseText = await aiQueue.enqueue(
-        () => callAI(
+      const aiResult = await aiQueue.enqueue(
+        () => callAIWithFallback(
           [
             { role: 'system', content: CV_PARSE_SYSTEM_PROMPT },
             { role: 'user', content: truncText },
@@ -655,6 +660,9 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
         'high',
         20_000
       );
+
+      const responseText = aiResult.content;
+      const usedModel = aiResult.model;
 
       if (!responseText) {
         console.warn(`[extract-file] LLM returned null on attempt ${attempt + 1}`);
@@ -667,8 +675,8 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
         try {
           const fixed = fixJSONIssues(rawJson);
           const parsedCv = validateAndNormalize(JSON.parse(fixed));
-          console.log(`[extract-file] LLM parse succeeded on attempt ${attempt + 1} with ${model}`);
-          return { parsedCv, usedModel: model, responseText };
+          console.log(`[extract-file] LLM parse succeeded on attempt ${attempt + 1} with ${usedModel}`);
+          return { parsedCv, usedModel, responseText };
         } catch (parseErr) {
           console.warn(`[extract-file] JSON parse failed on attempt ${attempt + 1}:`, parseErr instanceof Error ? parseErr.message : parseErr);
         }
@@ -681,7 +689,7 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
         console.log('[extract-file] Trying stricter prompt retry...');
         try {
           const strictResponse = await aiQueue.enqueue(
-            () => callAI(
+            () => callAIWithFallback(
               [
                 { role: 'system', content: 'You are a CV parser. Return ONLY valid JSON. Never leave fullName, email, or phone empty if they exist.' },
                 { role: 'user', content: `You MUST extract information from this CV into EXACTLY this JSON structure. Do NOT leave fullName, email, or phone empty if they exist. Return ONLY the JSON.\n\n${CV_PARSE_SYSTEM_PROMPT}\n\nCV TEXT:\n${truncText}` },
@@ -691,14 +699,14 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
             'high',
             20_000
           );
-          if (strictResponse) {
-            const rawJson2 = extractJSON(strictResponse);
+          if (strictResponse?.content) {
+            const rawJson2 = extractJSON(strictResponse.content);
             if (rawJson2) {
               try {
                 const fixed2 = fixJSONIssues(rawJson2);
                 const parsedCv = validateAndNormalize(JSON.parse(fixed2));
-                console.log('[extract-file] Strict prompt retry succeeded with glm-4-plus');
-                return { parsedCv, usedModel: 'glm-4-plus', responseText: strictResponse };
+                console.log(`[extract-file] Strict prompt retry succeeded with ${strictResponse.model}`);
+                return { parsedCv, usedModel: strictResponse.model, responseText: strictResponse.content };
               } catch { /* continue to next attempt */ }
             }
           }
@@ -708,7 +716,7 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
       console.warn(`[extract-file] LLM call error on attempt ${attempt + 1}:`, err instanceof Error ? err.message : err);
     }
 
-    if (attempt < LLM_MAX_RETRIES) {
+    if (attempt < retryModels.length - 1) {
       await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
   }

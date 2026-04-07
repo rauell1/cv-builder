@@ -327,30 +327,94 @@ const FALLBACK_MODEL_MAP: Record<string, string> = {
   'gemini-2.5-pro': 'glm-4-plus',
 };
 
+const OPENAI_MODELS = ['gpt-4o-mini', 'gpt-4o'] as const;
+const ANTHROPIC_MODELS = ['claude-haiku-4-20250414', 'claude-sonnet-4-20250514'] as const;
+const GOOGLE_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'] as const;
+
+function hasProviderCredentials(provider: AIProvider): boolean {
+  switch (provider) {
+    case 'glm':
+      // GLM can work either with ZHIPU_API_KEY or the Z.ai SDK runtime environment.
+      return true;
+    case 'openai':
+      return Boolean(process.env.OPENAI_API_KEY);
+    case 'anthropic':
+      return Boolean(process.env.ANTHROPIC_API_KEY);
+    case 'google':
+      return Boolean(process.env.GOOGLE_AI_API_KEY);
+    default:
+      return false;
+  }
+}
+
+function getProviderModelFallbacks(provider: AIProvider): string[] {
+  switch (provider) {
+    case 'openai':
+      return [...OPENAI_MODELS];
+    case 'anthropic':
+      return [...ANTHROPIC_MODELS];
+    case 'google':
+      return [...GOOGLE_MODELS];
+    case 'glm':
+      return ['glm-4-flash', 'glm-4-plus'];
+    default:
+      return [];
+  }
+}
+
+function buildFallbackChain(primaryModel: string): string[] {
+  const primaryProvider = getProvider(primaryModel);
+  const chain: string[] = [primaryModel];
+
+  const directFallback = FALLBACK_MODEL_MAP[primaryModel];
+  if (directFallback) chain.push(directFallback);
+
+  for (const model of getProviderModelFallbacks(primaryProvider)) {
+    chain.push(model);
+  }
+
+  if (hasProviderCredentials('openai')) {
+    chain.push(...OPENAI_MODELS);
+  }
+  if (hasProviderCredentials('anthropic')) {
+    chain.push(...ANTHROPIC_MODELS);
+  }
+  if (hasProviderCredentials('google')) {
+    chain.push(...GOOGLE_MODELS);
+  }
+
+  // Always keep GLM as a last-resort path for Z.ai runtime / ZHIPU_API_KEY setups.
+  chain.push('glm-4-flash', 'glm-4-plus');
+
+  return [...new Set(chain)].filter(Boolean);
+}
+
 export async function callAIWithFallback(
   messages: AIMessage[],
   modelId: string,
   _complexity?: 'simple' | 'standard' | 'complex'
 ): Promise<AIResponse> {
-  let content = await callAI(messages, modelId);
-  let usedModel = modelId;
-  let provider = getProvider(modelId);
+  const candidates = buildFallbackChain(modelId);
 
-  if (!content) {
-    const fallback = FALLBACK_MODEL_MAP[modelId] || 'glm-4-plus';
-    console.warn(`[AI] Primary model ${modelId} failed, falling back to ${fallback}`);
-    content = await callAI(messages, fallback);
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    const provider = getProvider(candidate);
+
+    if (!hasProviderCredentials(provider)) {
+      continue;
+    }
+
+    if (i > 0) {
+      console.warn(`[AI] Model ${modelId} failed, trying fallback ${candidate}`);
+    }
+
+    const content = await callAI(messages, candidate);
     if (content) {
-      usedModel = fallback;
-      provider = getProvider(fallback);
+      return { content, model: candidate, provider };
     }
   }
 
-  if (!content) {
-    throw new Error('AI model failed. Please try again.');
-  }
-
-  return { content, model: usedModel, provider };
+  throw new Error('AI model failed. Please try again. Check that at least one provider API key is configured correctly.');
 }
 
 export function getRequiredEnvKey(provider: AIProvider): string | null {
