@@ -313,7 +313,7 @@ export function CvInputStep() {
       setIsPreviewOpen(true);
 
       try {
-        const result = await extractFile(file, { fast: false, parse: true, timeoutMs: 60_000 });
+        const result = await extractFile(file, { fast: false, parse: false, timeoutMs: 90_000 });
 
         // Populate the paste textarea so user can see/edit
         setRawCvText(result.text);
