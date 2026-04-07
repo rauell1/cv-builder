@@ -321,8 +321,8 @@ const FALLBACK_MODEL_MAP: Record<string, string> = {
   'glm-4-long': 'glm-4-plus',
   'gpt-4o': 'glm-4-plus',
   'gpt-4o-mini': 'glm-4-flash',
-  'claude-4-sonnet': 'glm-4-plus',
-  'claude-4-haiku': 'glm-4-flash',
+  'claude-sonnet-4-20250514': 'glm-4-plus',
+  'claude-haiku-4-20250414': 'glm-4-flash',
   'gemini-2.5-flash': 'glm-4-flash',
   'gemini-2.5-pro': 'glm-4-plus',
 };
