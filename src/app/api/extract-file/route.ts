@@ -838,9 +838,9 @@ export async function POST(request: NextRequest) {
           pageCount = pdfDoc.getPageCount();
           // First attempt: pdf-parse (usually better on real-world PDFs)
           try {
-            const pdfParseModule = await import('pdf-parse');
-            const pdfParse = (pdfParseModule as { default: (input: Buffer) => Promise<{ text?: string }> }).default;
-            const parsed = await pdfParse(Buffer.from(fileBuffer));
+            const { PDFParse } = await import('pdf-parse');
+            const parser = new PDFParse({ data: Buffer.from(fileBuffer) });
+            const parsed = await parser.getText();
             extractedText = parsed?.text || '';
             console.log(`[extract-file] pdf-parse extraction: ${extractedText.trim().length} chars`);
           } catch (parseLibErr) {
