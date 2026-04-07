@@ -871,7 +871,8 @@ function buildQualityReport(text: string): QualityReport {
   const t = text.trim();
 
   const hasEmail = /[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/.test(t);
-  const hasPhone = /(\+?\d[\d\s().-]{7,}\d)/.test(t);
+  // Match phone numbers with at least 7 digits (allowing separators like spaces, dashes, parens)
+  const hasPhone = /\+?[\d][\d\s().-]*[\d]/.test(t) && (t.match(/\d/g) || []).length >= 7;
   const hasEducation = /\b(education|degree|bachelor|master|phd|diploma|university|college|school|studied)\b/i.test(t);
   const hasExperience = /\b(experience|work|employment|career|job|position|role|company|employer)\b/i.test(t);
   const hasSkills = /\b(skills|technologies|tools|languages|frameworks|competencies|expertise)\b/i.test(t);
@@ -882,11 +883,13 @@ function buildQualityReport(text: string): QualityReport {
   const characterCount = t.length;
 
   // Count distinct section headers (ALL-CAPS lines or common CV section keywords)
+  // Capped at MAX_SECTION_COUNT to avoid inflating score from decorative caps text
+  const MAX_SECTION_COUNT = 12;
   const lines = t.split('\n');
   const sectionHeaderRe = /^(EXPERIENCE|EDUCATION|SKILLS|PROJECTS|SUMMARY|PROFILE|OBJECTIVE|CERTIFICATIONS|LANGUAGES|REFERENCES|WORK|EMPLOYMENT|ACHIEVEMENTS|AWARDS|PUBLICATIONS|INTERESTS|HOBBIES|CONTACT|PERSONAL)\b/i;
   const capsHeaderRe = /^[A-Z][A-Z\s]{3,}$/;
   const sectionLines = lines.filter(l => sectionHeaderRe.test(l.trim()) || capsHeaderRe.test(l.trim()));
-  const sectionCount = Math.min(sectionLines.length, 12);
+  const sectionCount = Math.min(sectionLines.length, MAX_SECTION_COUNT);
 
   // Determine missing critical sections
   const missingSections: string[] = [];
