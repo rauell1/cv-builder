@@ -306,14 +306,14 @@ async function parseCvCore(cvText: string): Promise<ParseResult> {
     'simple'
   );
   const { content: responseText, model: usedModel } = aiResult;
-  console.log(
+  console.warn(
     `[parse-cv] Primary LLM call completed in ${Date.now() - t0}ms (model: ${usedModel})`
   );
 
   // Try to parse the primary response
   let parsedCv = tryParseResponse(responseText);
   if (parsedCv) {
-    console.log(
+    console.warn(
       `[parse-cv] Parse succeeded on attempt 1 (${Date.now() - t0}ms)`
     );
     return { parsedCv, usedModel };
@@ -324,7 +324,7 @@ async function parseCvCore(cvText: string): Promise<ParseResult> {
 
   for (let retry = 0; retry < MAX_RETRIES && !parsedCv; retry++) {
     const retryModel = retryModels[retry] || 'glm-4-plus';
-    console.log(
+    console.warn(
       `[parse-cv] Retry ${retry + 1}/${MAX_RETRIES} with model ${retryModel}...`
     );
 
@@ -357,7 +357,7 @@ ${cvText.substring(0, 10000)}`;
       if (retryContent) {
         parsedCv = tryParseResponse(retryContent);
         if (parsedCv) {
-          console.log(
+          console.warn(
             `[parse-cv] Parse succeeded on retry ${retry + 1} with ${retryModel} (${Date.now() - t0}ms)`
           );
           return { parsedCv, usedModel: retryModel };
@@ -478,7 +478,7 @@ export async function POST(request: NextRequest) {
       | null;
 
     if (cached) {
-      console.log(
+      console.warn(
         '[parse-cv] Cache hit for CV text hash:',
         cacheKey.substring(0, 12)
       );
@@ -564,7 +564,7 @@ export async function POST(request: NextRequest) {
       sessionIdResponse = sessionId;
     }
 
-    console.log(
+    console.warn(
       `[parse-cv] Total request time: ${Date.now() - requestStart}ms`
     );
     clearTimeout(timeoutTimer);

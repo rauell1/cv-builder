@@ -8,7 +8,9 @@
  * Usage: bun run watchdog.ts
  */
 
-const DEV_SERVER_CMD = "npx next start -p 3000 -H 0.0.0.0";
+import { spawnSync, spawn, execSync } from "child_process";
+import { existsSync } from "fs";
+
 const HEALTH_URL = "http://localhost:3000/";
 const CHECK_INTERVAL = 5000;   // Check every 5 seconds
 const STARTUP_WAIT = 15000;     // Wait 15 seconds after starting
@@ -24,7 +26,6 @@ async function isAlive(): Promise<boolean> {
 
 async function killExisting(): Promise<void> {
   try {
-    const { spawnSync } = require("child_process");
     spawnSync("pkill", ["-f", "next-server"], { stdio: "ignore" });
     spawnSync("pkill", ["-f", "next dev"], { stdio: "ignore" });
     await new Promise((r) => setTimeout(r, 1000));
@@ -35,7 +36,6 @@ async function killExisting(): Promise<void> {
 
 function startServer(): void {
   console.log(`[${new Date().toISOString()}] Starting dev server...`);
-  const { spawn } = require("child_process");
   
   const child = spawn("npx", ["next", "start", "-p", "3000", "-H", "0.0.0.0"], {
     cwd: "/home/z/my-project",
@@ -90,10 +90,8 @@ async function main(): Promise<void> {
 
       // Rebuild if .next is missing (don't delete it!)
       try {
-        const { existsSync } = require("fs");
         if (!existsSync("/home/z/my-project/.next/BUILD_ID")) {
           console.log(`[${new Date().toISOString()}] No build found, running next build...`);
-          const { execSync } = require("child_process");
           execSync("cd /home/z/my-project && npx next build", { stdio: "inherit", timeout: 120000 });
         }
       } catch {

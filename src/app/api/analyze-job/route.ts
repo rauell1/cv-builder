@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     const cacheKey = `job:${hashContent(jobDescText.trim())}`;
     const cached = parsingCache.get(cacheKey) as { jobAnalysis: JobAnalysis; usedModel: string } | null;
     if (cached) {
-      console.log('[analyze-job] Cache hit for job desc hash:', cacheKey.substring(0, 12));
+      console.warn('[analyze-job] Cache hit for job desc hash:', cacheKey.substring(0, 12));
       if (sessionId) {
         try {
           await db.cVSession.update({
