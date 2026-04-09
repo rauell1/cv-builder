@@ -53,11 +53,32 @@ const PROVIDER_KEY_ALIASES: Record<AIProvider, string[]> = {
   google: ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
 };
 
+type ResolvedEnv = { value: string; source: string } | null;
+
+function resolveEnvValue(key: string): ResolvedEnv {
+  const env = typeof process !== 'undefined' ? process.env : undefined;
+  if (!env) return null;
+
+  const candidates: { name: string; value: string | undefined }[] = [
+    { name: key, value: env[key] },
+    { name: `NEXT_PUBLIC_${key}`, value: env[`NEXT_PUBLIC_${key}`] },
+    { name: key.toLowerCase(), value: env[key.toLowerCase()] },
+    { name: `next_public_${key.toLowerCase()}`, value: env[`next_public_${key.toLowerCase()}`] },
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate.value) continue;
+    const trimmed = candidate.value.trim();
+    if (trimmed.length > 0) {
+      return { value: trimmed, source: candidate.name };
+    }
+  }
+  return null;
+}
+
 function readEnvValue(key: string): string | null {
-  const raw = process.env[key];
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  const resolved = resolveEnvValue(key);
+  return resolved ? resolved.value : null;
 }
 
 export function getProviderApiKey(provider: AIProvider): string | null {
@@ -89,6 +110,35 @@ export function getProviderCredentialStatus(): Record<AIProvider, boolean> {
     openai: Boolean(getProviderApiKey('openai')),
     anthropic: Boolean(getProviderApiKey('anthropic')),
     google: Boolean(getProviderApiKey('google')),
+  };
+}
+
+export function getProviderCredentialDetails(): {
+  anyConfigured: boolean;
+  status: Record<AIProvider, boolean>;
+  sources: Record<AIProvider, string[]>;
+  zaiSdkFallback: boolean;
+} {
+  const status = getProviderCredentialStatus();
+  const sources = {} as Record<AIProvider, string[]>;
+
+  (Object.keys(PROVIDER_KEY_ALIASES) as AIProvider[]).forEach((provider) => {
+    const aliases = PROVIDER_KEY_ALIASES[provider] || [];
+    const found: string[] = [];
+    for (const alias of aliases) {
+      const resolved = resolveEnvValue(alias);
+      if (resolved) {
+        found.push(resolved.source);
+      }
+    }
+    sources[provider] = Array.from(new Set(found));
+  });
+
+  return {
+    anyConfigured: hasAnyProviderCredentials(),
+    status,
+    sources,
+    zaiSdkFallback: process.env.ZAI_SDK_FALLBACK === '1',
   };
 }
 
