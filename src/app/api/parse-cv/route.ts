@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { callAIWithFallback, getNextRotatingModel } from '@/lib/ai-provider';
+import { callAIWithFallback, getNextRotatingModel, hasAnyProviderCredentials } from '@/lib/ai-provider';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
@@ -684,18 +684,12 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Enqueue in AI queue (limits concurrency for 1000+ users) ---
-    const hasAnyProviderCredentials = Boolean(
-      process.env.ZHIPU_API_KEY ||
-      process.env.OPENAI_API_KEY ||
-      process.env.ANTHROPIC_API_KEY ||
-      process.env.GOOGLE_AI_API_KEY ||
-      process.env.ZAI_SDK_FALLBACK === '1'
-    );
+    const hasAnyProviderCredentialsFlag = hasAnyProviderCredentials();
 
     let parsedCv: ParsedCV;
     let usedModel: string;
 
-    if (hasAnyProviderCredentials) {
+    if (hasAnyProviderCredentialsFlag) {
       try {
         const aiParsed = await aiQueue.enqueue(
           () => parseCvCore(cvText),

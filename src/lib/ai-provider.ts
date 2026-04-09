@@ -46,6 +46,52 @@ export interface AIResponse {
   provider: AIProvider;
 }
 
+const PROVIDER_KEY_ALIASES: Record<AIProvider, string[]> = {
+  glm: ['ZHIPU_API_KEY', 'GLM_API_KEY', 'BIGMODEL_API_KEY'],
+  openai: ['OPENAI_API_KEY', 'OPENAI_KEY'],
+  anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
+  google: ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
+};
+
+function readEnvValue(key: string): string | null {
+  const raw = process.env[key];
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function getProviderApiKey(provider: AIProvider): string | null {
+  const keys = PROVIDER_KEY_ALIASES[provider] || [];
+  for (const key of keys) {
+    const value = readEnvValue(key);
+    if (value) return value;
+  }
+  return null;
+}
+
+export function getProviderKeyNames(provider: AIProvider): string[] {
+  return PROVIDER_KEY_ALIASES[provider] || [];
+}
+
+export function hasAnyProviderCredentials(): boolean {
+  return (
+    Boolean(getProviderApiKey('glm')) ||
+    Boolean(getProviderApiKey('openai')) ||
+    Boolean(getProviderApiKey('anthropic')) ||
+    Boolean(getProviderApiKey('google')) ||
+    process.env.ZAI_SDK_FALLBACK === '1'
+  );
+}
+
+export function getProviderCredentialStatus(): Record<AIProvider, boolean> {
+  return {
+    glm: Boolean(getProviderApiKey('glm') || process.env.ZAI_SDK_FALLBACK === '1'),
+    openai: Boolean(getProviderApiKey('openai')),
+    anthropic: Boolean(getProviderApiKey('anthropic')),
+    google: Boolean(getProviderApiKey('google')),
+  };
+}
+
 // ---- Utility Functions ----
 
 export function getProvider(modelId: string): AIProvider {
@@ -107,7 +153,7 @@ async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs =
  * Used as the primary path when deployed outside the Z.ai ecosystem (e.g. Vercel).
  */
 async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
-  const apiKey = process.env.ZHIPU_API_KEY;
+  const apiKey = getProviderApiKey('glm');
   if (!apiKey) return null;
 
   const controller = new AbortController();
@@ -144,7 +190,7 @@ async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs =
 
 async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
   // Prefer direct REST API when ZHIPU_API_KEY is set (works in all environments).
-  const zhipuKey = process.env.ZHIPU_API_KEY;
+  const zhipuKey = getProviderApiKey('glm');
   if (zhipuKey) {
     const result = await callGLMviaAPI(messages, modelId, timeoutMs);
     if (result) return result;
@@ -173,7 +219,7 @@ async function callGLMVision(messages: any[], modelId: string, _timeoutMs = 35_0
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function callOpenAIVision(messages: any[], modelId: string, timeoutMs = 30_000): Promise<string | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = getProviderApiKey('openai');
   if (!apiKey) return null;
 
   const controller = new AbortController();
@@ -211,7 +257,7 @@ async function callOpenAIVision(messages: any[], modelId: string, timeoutMs = 30
 }
 
 async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = getProviderApiKey('openai');
   if (!apiKey) return null;
 
   try {
@@ -236,7 +282,7 @@ async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 
 }
 
 async function callAnthropic(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = getProviderApiKey('anthropic');
   if (!apiKey) return null;
 
   try {
@@ -283,7 +329,7 @@ async function callAnthropic(messages: AIMessage[], modelId: string, temperature
 }
 
 async function callGemini(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
+  const apiKey = getProviderApiKey('google');
   if (!apiKey) return null;
 
   try {
@@ -396,13 +442,13 @@ function hasProviderCredentials(provider: AIProvider): boolean {
   switch (provider) {
     case 'glm':
       // GLM works with ZHIPU_API_KEY, or explicitly enabled SDK fallback.
-      return Boolean(process.env.ZHIPU_API_KEY || process.env.ZAI_SDK_FALLBACK === '1');
+      return Boolean(getProviderApiKey('glm') || process.env.ZAI_SDK_FALLBACK === '1');
     case 'openai':
-      return Boolean(process.env.OPENAI_API_KEY);
+      return Boolean(getProviderApiKey('openai'));
     case 'anthropic':
-      return Boolean(process.env.ANTHROPIC_API_KEY);
+      return Boolean(getProviderApiKey('anthropic'));
     case 'google':
-      return Boolean(process.env.GOOGLE_AI_API_KEY);
+      return Boolean(getProviderApiKey('google'));
     default:
       return false;
   }

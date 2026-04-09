@@ -90,7 +90,7 @@ const steps = [
   {
     step: 3,
     title: 'Choose AI Model',
-    description: 'Select from GLM, GPT, Claude, or Gemini. GLM models are free and built-in.',
+    description: 'Select from GLM, GPT, Claude, or Gemini. GLM models are built-in in Z.ai and key-based on external hosting.',
     icon: Cpu,
   },
   {

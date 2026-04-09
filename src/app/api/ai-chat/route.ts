@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callAIWithFallback, getProvider, type AIMessage } from '@/lib/ai-provider';
+import {
+  callAIWithFallback,
+  getProvider,
+  getProviderCredentialStatus,
+  hasAnyProviderCredentials,
+  type AIMessage,
+} from '@/lib/ai-provider';
 
 interface AiChatRequest {
   messages: { role: string; content: string }[];
@@ -62,19 +68,15 @@ export async function POST(request: NextRequest) {
     // Detect provider from model ID
     const provider = getProvider(model);
 
-    const hasAnyConfiguredProvider = Boolean(
-      process.env.ZHIPU_API_KEY ||
-      process.env.OPENAI_API_KEY ||
-      process.env.ANTHROPIC_API_KEY ||
-      process.env.GOOGLE_AI_API_KEY ||
-      process.env.ZAI_SDK_FALLBACK === '1'
-    );
+    const hasAnyConfiguredProvider = hasAnyProviderCredentials();
 
     if (!hasAnyConfiguredProvider) {
+      const providerStatus = getProviderCredentialStatus();
       return NextResponse.json(
         {
           success: false,
-          error: 'No AI provider is configured. Set ZHIPU_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_AI_API_KEY.',
+          error: 'No AI provider is configured. Set one of: ZHIPU_API_KEY (or GLM_API_KEY/BIGMODEL_API_KEY), OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY (or GOOGLE_API_KEY/GEMINI_API_KEY).',
+          providerStatus,
         },
         { status: 503 }
       );

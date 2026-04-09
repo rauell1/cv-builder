@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { callAIWithFallback, getNextRotatingModel } from '@/lib/ai-provider';
+import {
+  callAIWithFallback,
+  getNextRotatingModel,
+  getProviderCredentialStatus,
+  hasAnyProviderCredentials,
+} from '@/lib/ai-provider';
 import { JOB_ANALYSIS_SYSTEM_PROMPT, type JobAnalysis } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
@@ -86,6 +91,17 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Enqueue in AI queue (limits concurrency for 1000+ users) ---
+    if (!hasAnyProviderCredentials()) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'No AI provider is configured. Set one of: ZHIPU_API_KEY (or GLM_API_KEY/BIGMODEL_API_KEY), OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY (or GOOGLE_API_KEY/GEMINI_API_KEY).',
+          providerStatus: getProviderCredentialStatus(),
+        },
+        { status: 503 }
+      );
+    }
+
     const { content: responseText, model: usedModel } = await aiQueue.enqueue(
       () => callAIWithFallback(
         [
@@ -164,6 +180,17 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Analyze job error:', error);
+
+    if (error instanceof Error && error.message.includes('AI model failed')) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message,
+          providerStatus: getProviderCredentialStatus(),
+        },
+        { status: 503 }
+      );
+    }
 
     // Handle queue timeout
     if (error instanceof Error && error.message.includes('timed out')) {

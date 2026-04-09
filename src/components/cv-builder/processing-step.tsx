@@ -275,7 +275,7 @@ export function ProcessingStep() {
                   <Settings className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="text-xl font-light text-foreground mb-1 tracking-tight">Choose AI Model</h3>
-                <p className="text-sm text-muted-foreground font-light">Select an AI model to restructure your CV. GLM models are built-in and free to use.</p>
+                <p className="text-sm text-muted-foreground font-light">Select an AI model to restructure your CV. GLM models are built-in in Z.ai and may require an API key on external hosting.</p>
               </div>
 
               {/* Provider-grouped model cards */}
@@ -288,7 +288,7 @@ export function ProcessingStep() {
                       <h4 className="text-sm font-normal text-foreground">{group.provider.name}</h4>
                       {!group.models.some((m) => m.requiresApiKey) && (
                         <Badge className="text-[10px] px-1.5 py-0 rounded-[4px] bg-[rgba(21,190,83,0.2)] text-[#108c3d] border border-[rgba(21,190,83,0.4)] h-5">
-                          Built-in
+                          Built-in (Z.ai)
                         </Badge>
                       )}
                       {group.models.some((m) => m.requiresApiKey) && (
@@ -358,7 +358,7 @@ export function ProcessingStep() {
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline" className="text-[10px] text-[#108c3d] border-[rgba(21,190,83,0.4)] rounded-[4px] h-5">
-                                    Built-in
+                                    Built-in (Z.ai)
                                   </Badge>
                                 )}
                               </div>
@@ -664,7 +664,7 @@ export function ProcessingStep() {
                                 <span className="flex items-center gap-2">
                                   {model.name}
                                   {!model.requiresApiKey && (
-                                    <span className="text-[10px] text-[#15be53]">(built-in)</span>
+                                    <span className="text-[10px] text-[#15be53]">(built-in in Z.ai)</span>
                                   )}
                                 </span>
                               </SelectItem>
@@ -688,9 +688,9 @@ export function ProcessingStep() {
                   <CardContent className="p-5">
                     <h4 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1.5">
                       <Zap className="w-4 h-4 text-[#15be53]" />
-                      GLM models are always available
+                      GLM models are available when configured
                     </h4>
-                    <p className="text-xs text-muted-foreground mb-4 font-light">No API key needed — click a model below to retry instantly</p>
+                    <p className="text-xs text-muted-foreground mb-4 font-light">Use ZHIPU_API_KEY (or GLM_API_KEY/BIGMODEL_API_KEY) on hosted deployments, then retry below</p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       {glmFallbackModels.map((model, idx) => {
                         const speed = getSpeedLabel(model.speed);

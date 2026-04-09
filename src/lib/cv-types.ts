@@ -101,7 +101,7 @@ export interface AIModelConfig {
 export type AIModelProvider = 'glm' | 'openai' | 'anthropic' | 'google' | 'custom';
 
 export const AI_PROVIDERS: { id: AIModelProvider; name: string; description: string; icon: string }[] = [
-  { id: 'glm', name: 'GLM (Z.ai)', description: 'Zhipu AI models - built-in, no API key needed', icon: '🤖' },
+  { id: 'glm', name: 'GLM (Z.ai)', description: 'Zhipu AI models - built-in in Z.ai; API key required on external hosting', icon: '🤖' },
   { id: 'openai', name: 'OpenAI', description: 'ChatGPT, GPT-4, GPT-4o - industry leading', icon: '⚡' },
   { id: 'anthropic', name: 'Anthropic', description: 'Claude models - safety-focused AI', icon: '🧠' },
   { id: 'google', name: 'Google', description: 'Gemini models - multimodal AI by Google', icon: '💎' },
