@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { aiQueue, requestQueue } from '@/lib/request-queue';
 import { extractionCache, parsingCache } from '@/lib/response-cache';
-import { getProviderCredentialStatus, hasAnyProviderCredentials } from '@/lib/ai-provider';
+import { getProviderCredentialDetails, getProviderCredentialStatus, hasAnyProviderCredentials } from '@/lib/ai-provider';
 
 export async function GET() {
   const aiMetrics = aiQueue.getMetrics();
@@ -23,6 +23,7 @@ export async function GET() {
     providers: {
       anyConfigured: hasAnyProviderCredentials(),
       status: getProviderCredentialStatus(),
+      details: getProviderCredentialDetails(),
     },
   });
 }

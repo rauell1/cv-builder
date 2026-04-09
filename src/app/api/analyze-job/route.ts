@@ -3,12 +3,15 @@ import { db } from '@/lib/db';
 import {
   callAIWithFallback,
   getNextRotatingModel,
+  getProviderCredentialDetails,
   getProviderCredentialStatus,
   hasAnyProviderCredentials,
 } from '@/lib/ai-provider';
 import { JOB_ANALYSIS_SYSTEM_PROMPT, type JobAnalysis } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
+
+export const runtime = 'nodejs';
 
 // ---------------------------------------------------------------------------
 // Robust JSON extraction from LLM responses
@@ -97,6 +100,7 @@ export async function POST(request: NextRequest) {
           success: false,
           error: 'No AI provider is configured. Set one of: ZHIPU_API_KEY (or GLM_API_KEY/BIGMODEL_API_KEY), OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY (or GOOGLE_API_KEY/GEMINI_API_KEY).',
           providerStatus: getProviderCredentialStatus(),
+          providerDetails: getProviderCredentialDetails(),
         },
         { status: 503 }
       );
@@ -187,6 +191,7 @@ export async function POST(request: NextRequest) {
           success: false,
           error: error.message,
           providerStatus: getProviderCredentialStatus(),
+          providerDetails: getProviderCredentialDetails(),
         },
         { status: 503 }
       );
