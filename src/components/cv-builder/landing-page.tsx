@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
   FileText,
   Download,
@@ -121,6 +121,18 @@ const testimonials = [
   },
 ];
 
+const footerProductLinks: { label: string; sectionId: string }[] = [
+  { label: 'Features', sectionId: 'features' },
+  { label: 'AI Models', sectionId: 'models' },
+  { label: 'How It Works', sectionId: 'how-it-works' },
+];
+
+const footerResourceLinks: { label: string; sectionId: string }[] = [
+  { label: 'CV Tips', sectionId: 'features' },
+  { label: 'ATS Guide', sectionId: 'features' },
+  { label: 'Support', sectionId: 'how-it-works' },
+];
+
 /* ── Models ────────────────────────────────────────────────── */
 
 function getModelCount() {
@@ -162,6 +174,23 @@ const fadeUp = {
 
 export function LandingPage() {
   const setStep = useCVBuilderStore((s) => s.setStep);
+  const prefersReducedMotion = useReducedMotion();
+
+  const scrollToSection = (sectionId: string) => {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+
+    section.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+  };
+
+  const sectionAnimationProps = prefersReducedMotion
+    ? {}
+    : {
+        initial: 'hidden' as const,
+        whileInView: 'visible' as const,
+        viewport: { once: true, margin: '-80px' },
+        variants: containerVariants,
+      };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -186,7 +215,7 @@ export function LandingPage() {
               href="#features"
               onClick={(e) => {
                 e.preventDefault();
-                document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+                scrollToSection('features');
               }}
               aria-label="Navigate to Features section"
               className="text-xs text-muted-foreground hover:text-primary transition-all duration-200 hover:-translate-y-px"
@@ -197,7 +226,7 @@ export function LandingPage() {
               href="#how-it-works"
               onClick={(e) => {
                 e.preventDefault();
-                document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+                scrollToSection('how-it-works');
               }}
               aria-label="Navigate to How It Works section"
               className="text-xs text-muted-foreground hover:text-primary transition-all duration-200 hover:-translate-y-px"
@@ -208,7 +237,7 @@ export function LandingPage() {
               href="#models"
               onClick={(e) => {
                 e.preventDefault();
-                document.getElementById('models')?.scrollIntoView({ behavior: 'smooth' });
+                scrollToSection('models');
               }}
               aria-label="Navigate to AI Models section"
               className="text-xs text-muted-foreground hover:text-primary transition-all duration-200 hover:-translate-y-px"
@@ -238,9 +267,9 @@ export function LandingPage() {
             ═══════════════════════════════════════════ */}
         <motion.section
           className="relative overflow-hidden"
-          initial="hidden"
-          animate="visible"
-          variants={containerVariants}
+          initial={prefersReducedMotion ? undefined : 'hidden'}
+          animate={prefersReducedMotion ? undefined : 'visible'}
+          variants={prefersReducedMotion ? undefined : containerVariants}
           aria-labelledby="hero-heading"
         >
           {/* Background gradient mesh */}
@@ -304,10 +333,7 @@ export function LandingPage() {
               <Button
                 size="lg"
                 variant="ghost"
-                onClick={() => {
-                  const el = document.getElementById('how-it-works');
-                  el?.scrollIntoView({ behavior: 'smooth' });
-                }}
+                onClick={() => scrollToSection('how-it-works')}
                 className="h-13 px-7 text-sm text-foreground rounded-xl font-medium hover:bg-secondary transition-all duration-200"
               >
                 See How It Works
@@ -340,10 +366,7 @@ export function LandingPage() {
         <motion.section
           id="features"
           className="relative px-4 sm:px-6 py-16 md:py-24"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-80px' }}
-          variants={containerVariants}
+          {...sectionAnimationProps}
           aria-labelledby="features-heading"
         >
           <div className="absolute inset-0 bg-section-gradient pointer-events-none" role="img" aria-hidden="true" />
@@ -409,10 +432,7 @@ export function LandingPage() {
         <motion.section
           id="how-it-works"
           className="px-4 sm:px-6 py-16 md:py-24"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-80px' }}
-          variants={containerVariants}
+          {...sectionAnimationProps}
           aria-labelledby="how-it-works-heading"
         >
           <motion.div variants={fadeUp} className="text-center mb-12">
@@ -489,10 +509,7 @@ export function LandingPage() {
         <motion.section
           id="models"
           className="relative px-4 sm:px-6 py-16 md:py-24"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-80px' }}
-          variants={containerVariants}
+          {...sectionAnimationProps}
           aria-labelledby="models-heading"
         >
           <div className="absolute inset-0 bg-mesh-pattern pointer-events-none" role="img" aria-hidden="true" />
@@ -578,10 +595,7 @@ export function LandingPage() {
             ═══════════════════════════════════════════ */}
         <motion.section
           className="relative px-4 sm:px-6 py-16 md:py-24 bg-muted"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-80px' }}
-          variants={containerVariants}
+          {...sectionAnimationProps}
           aria-labelledby="testimonials-heading"
         >
           {/* Subtle background pattern */}
@@ -606,8 +620,8 @@ export function LandingPage() {
           </motion.div>
 
           <div className="relative max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
-            {testimonials.map((t, i) => (
-              <motion.div key={i} variants={itemVariants}>
+            {testimonials.map((t) => (
+              <motion.div key={t.author} variants={itemVariants}>
                 <Card className="h-full border-border rounded-2xl bg-white hover-lift hover:shadow-stripe-sm transition-all duration-300">
                   <CardContent className="p-6 relative">
                     {/* Decorative quote mark */}
@@ -647,10 +661,7 @@ export function LandingPage() {
             ═══════════════════════════════════════════ */}
         <motion.section
           className="px-4 sm:px-6 py-16 md:py-20"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-80px' }}
-          variants={containerVariants}
+          {...sectionAnimationProps}
           aria-labelledby="trust-heading"
         >
           <div className="max-w-5xl mx-auto">
@@ -708,12 +719,24 @@ export function LandingPage() {
                 Multi-model AI-powered CV builder with intelligent parsing, job-matching, and professional PDF generation.
               </p>
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white border border-border flex items-center justify-center hover:border-[#b9b9f9] hover:text-primary transition-all duration-200 text-muted-foreground cursor-pointer hover:-translate-y-0.5" aria-label="GitHub">
+                <a
+                  href="https://github.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-lg bg-white border border-border flex items-center justify-center hover:border-[#b9b9f9] hover:text-primary transition-all duration-200 text-muted-foreground hover:-translate-y-0.5"
+                  aria-label="Visit GitHub"
+                >
                   <Github className="w-4 h-4" />
-                </div>
-                <div className="w-8 h-8 rounded-lg bg-white border border-border flex items-center justify-center hover:border-[#b9b9f9] hover:text-primary transition-all duration-200 text-muted-foreground cursor-pointer hover:-translate-y-0.5" aria-label="Twitter">
+                </a>
+                <a
+                  href="https://x.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-lg bg-white border border-border flex items-center justify-center hover:border-[#b9b9f9] hover:text-primary transition-all duration-200 text-muted-foreground hover:-translate-y-0.5"
+                  aria-label="Visit X"
+                >
                   <Twitter className="w-4 h-4" />
-                </div>
+                </a>
               </div>
             </div>
 
@@ -723,11 +746,15 @@ export function LandingPage() {
                 Product
               </h4>
               <ul className="space-y-2.5">
-                {['Features', 'AI Models', 'CV Formats', 'Cover Letters'].map((item) => (
-                  <li key={item}>
-                    <span className="text-xs text-muted-foreground hover:text-primary cursor-pointer transition-colors duration-200 link-underline">
-                      {item}
-                    </span>
+                {footerProductLinks.map((item) => (
+                  <li key={item.label}>
+                    <button
+                      type="button"
+                      onClick={() => scrollToSection(item.sectionId)}
+                      className="text-xs text-muted-foreground hover:text-primary transition-colors duration-200 link-underline"
+                    >
+                      {item.label}
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -739,11 +766,15 @@ export function LandingPage() {
                 Resources
               </h4>
               <ul className="space-y-2.5">
-                {['CV Tips', 'ATS Guide', 'API Docs', 'Support'].map((item) => (
-                  <li key={item}>
-                    <span className="text-xs text-muted-foreground hover:text-primary cursor-pointer transition-colors duration-200 link-underline">
-                      {item}
-                    </span>
+                {footerResourceLinks.map((item) => (
+                  <li key={item.label}>
+                    <button
+                      type="button"
+                      onClick={() => scrollToSection(item.sectionId)}
+                      className="text-xs text-muted-foreground hover:text-primary transition-colors duration-200 link-underline"
+                    >
+                      {item.label}
+                    </button>
                   </li>
                 ))}
               </ul>

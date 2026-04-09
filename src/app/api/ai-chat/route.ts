@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callAI, getProvider, getRequiredEnvKey, type AIMessage } from '@/lib/ai-provider';
+import { callAIWithFallback, getProvider, type AIMessage } from '@/lib/ai-provider';
 
 interface AiChatRequest {
   messages: { role: string; content: string }[];
@@ -9,6 +9,8 @@ interface AiChatRequest {
 }
 
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
+
   try {
     const body: AiChatRequest = await request.json();
     const { messages, temperature } = body;
@@ -60,51 +62,63 @@ export async function POST(request: NextRequest) {
     // Detect provider from model ID
     const provider = getProvider(model);
 
-    // For non-GLM providers, check API key availability first
-    const requiredKey = getRequiredEnvKey(provider);
-    if (requiredKey && !process.env[requiredKey]) {
+    const hasAnyConfiguredProvider = Boolean(
+      process.env.ZHIPU_API_KEY ||
+      process.env.OPENAI_API_KEY ||
+      process.env.ANTHROPIC_API_KEY ||
+      process.env.GOOGLE_AI_API_KEY ||
+      process.env.ZAI_SDK_FALLBACK === '1'
+    );
+
+    if (!hasAnyConfiguredProvider) {
       return NextResponse.json(
         {
           success: false,
-          error: `The API key for the selected model is not configured. Please set the ${requiredKey} environment variable.`,
-          missingKey: requiredKey,
+          error: 'No AI provider is configured. Set ZHIPU_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_AI_API_KEY.',
         },
-        { status: 400 }
+        { status: 503 }
       );
     }
 
-    // Route to the central AI gateway
-    let content: string;
     try {
-      const result = await callAI(
+      const result = await callAIWithFallback(
         messages as AIMessage[],
         model,
+        'standard',
         temperature
       );
-      if (!result) {
-        return NextResponse.json(
-          { success: false, error: 'The AI model returned an empty response. Please try again.' },
-          { status: 500 }
-        );
-      }
-      content = result;
+      const durationMs = Date.now() - startedAt;
+      console.warn('[ai-chat] request succeeded', {
+        model,
+        resolvedModel: result.model,
+        provider: result.provider,
+        durationMs,
+      });
+
+      return NextResponse.json({
+        success: true,
+        content: result.content,
+        model: result.model,
+        provider: result.provider,
+      });
     } catch (providerError: unknown) {
       const message = providerError instanceof Error ? providerError.message : 'An error occurred with the AI provider';
-      console.error(`[ai-chat] ${provider} provider error for model ${model}:`, message);
+      console.error('[ai-chat] provider fallback failed', {
+        model,
+        provider,
+        durationMs: Date.now() - startedAt,
+        message,
+      });
       return NextResponse.json(
         { success: false, error: message },
-        { status: 500 }
+        { status: 503 }
       );
     }
-
-    return NextResponse.json({
-      success: true,
-      content,
-      model,
-      provider,
-    });
   } catch (error: unknown) {
-    console.error('[ai-chat] Unexpected error:', error);
+    console.error('[ai-chat] Unexpected error:', {
+      durationMs: Date.now() - startedAt,
+      error,
+    });
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';
     return NextResponse.json(
       { success: false, error: message },

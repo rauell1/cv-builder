@@ -468,7 +468,8 @@ export function getNextRotatingModel(preferredModel?: string): string {
 export async function callAIWithFallback(
   messages: AIMessage[],
   modelId: string,
-  _complexity?: 'simple' | 'standard' | 'complex'
+  _complexity?: 'simple' | 'standard' | 'complex',
+  temperature?: number
 ): Promise<AIResponse> {
   const candidates = buildFallbackChain(modelId);
   const failedProviders = new Set<AIProvider>();
@@ -489,7 +490,7 @@ export async function callAIWithFallback(
       console.warn(`[AI] Model ${modelId} failed, trying fallback ${candidate}`);
     }
 
-    const content = await callAI(messages, candidate);
+    const content = await callAI(messages, candidate, temperature);
     if (content) {
       return { content, model: candidate, provider };
     }

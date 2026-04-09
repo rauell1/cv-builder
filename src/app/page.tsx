@@ -12,10 +12,13 @@ import { Cpu, ArrowLeft, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
+const BUILDER_STEPS = ['cv-input', 'job-desc', 'processing', 'output'] as const;
+
 export default function Home() {
   const step = useCVBuilderStore((s) => s.step);
   const setStep = useCVBuilderStore((s) => s.setStep);
   const isLanding = step === 'landing';
+  const currentStepNumber = BUILDER_STEPS.indexOf(step as (typeof BUILDER_STEPS)[number]) + 1;
 
   if (isLanding) {
     return (
@@ -54,7 +57,7 @@ export default function Home() {
             </div>
           </div>
           <span className="text-xs text-muted-foreground hidden sm:inline">
-            Step {['cv-input', 'job-desc', 'processing', 'output'].indexOf(step) + 1} of 4
+            Step {currentStepNumber} of {BUILDER_STEPS.length}
           </span>
         </div>
       </header>
