@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   callAIWithFallback,
   getProvider,
+  getProviderCredentialDetails,
   getProviderCredentialStatus,
   hasAnyProviderCredentials,
   type AIMessage,
 } from '@/lib/ai-provider';
+
+export const runtime = 'nodejs';
 
 interface AiChatRequest {
   messages: { role: string; content: string }[];
@@ -71,12 +74,12 @@ export async function POST(request: NextRequest) {
     const hasAnyConfiguredProvider = hasAnyProviderCredentials();
 
     if (!hasAnyConfiguredProvider) {
-      const providerStatus = getProviderCredentialStatus();
       return NextResponse.json(
         {
           success: false,
           error: 'No AI provider is configured. Set one of: ZHIPU_API_KEY (or GLM_API_KEY/BIGMODEL_API_KEY), OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY (or GOOGLE_API_KEY/GEMINI_API_KEY).',
-          providerStatus,
+          providerStatus: getProviderCredentialStatus(),
+          providerDetails: getProviderCredentialDetails(),
         },
         { status: 503 }
       );
@@ -116,7 +119,11 @@ export async function POST(request: NextRequest) {
           success: false,
           error: message,
           providerStatus: getProviderCredentialStatus(),
+<<<<<<< HEAD
           diagnostics: (providerError as any)?.diagnostics,
+=======
+          providerDetails: getProviderCredentialDetails(),
+>>>>>>> 256cfe0b7c49ce864ba9b242ff7c2b5e089ab08c
         },
         { status: 503 }
       );
