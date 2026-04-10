@@ -187,6 +187,7 @@ export async function POST(request: NextRequest) {
           success: false,
           error: error.message,
           providerStatus: getProviderCredentialStatus(),
+          diagnostics: (error as any)?.diagnostics,
         },
         { status: 503 }
       );

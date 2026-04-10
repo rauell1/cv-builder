@@ -46,6 +46,42 @@ export interface AIResponse {
   provider: AIProvider;
 }
 
+export type AIProviderFailureKind =
+  | 'missing_key'
+  | 'http_error'
+  | 'timeout'
+  | 'network_error'
+  | 'provider_error'
+  | 'unknown_error';
+
+export interface AIProviderFailureDiagnostic {
+  provider: AIProvider;
+  model: string;
+  kind: AIProviderFailureKind;
+  status?: number;
+  message: string;
+}
+
+class AIProviderError extends Error {
+  readonly diagnostic: AIProviderFailureDiagnostic;
+
+  constructor(diagnostic: AIProviderFailureDiagnostic) {
+    super(`[${diagnostic.provider}:${diagnostic.model}] ${diagnostic.kind}: ${diagnostic.message}`);
+    this.name = 'AIProviderError';
+    this.diagnostic = diagnostic;
+  }
+}
+
+export class AIModelFailedError extends Error {
+  readonly diagnostics: AIProviderFailureDiagnostic[];
+
+  constructor(diagnostics: AIProviderFailureDiagnostic[]) {
+    super('AI model failed. Please try again. Check that at least one provider API key is configured correctly.');
+    this.name = 'AIModelFailedError';
+    this.diagnostics = diagnostics;
+  }
+}
+
 const PROVIDER_KEY_ALIASES: Record<AIProvider, string[]> = {
   glm: ['ZHIPU_API_KEY', 'GLM_API_KEY', 'BIGMODEL_API_KEY'],
   openai: ['OPENAI_API_KEY', 'OPENAI_KEY'],
@@ -154,7 +190,14 @@ async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs =
  */
 async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
   const apiKey = getProviderApiKey('glm');
-  if (!apiKey) return null;
+  if (!apiKey) {
+    throw new AIProviderError({
+      provider: 'glm',
+      model: modelId,
+      kind: 'missing_key',
+      message: 'Missing GLM API key',
+    });
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -176,15 +219,27 @@ async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs =
     if (!res.ok) {
       let errText = '';
       try { errText = await res.text(); } catch { /* ignore */ }
-      console.warn(`Zhipu AI REST API error (status ${res.status}):`, errText.substring(0, 200));
-      return null;
+      const snippet = errText.substring(0, 400);
+      throw new AIProviderError({
+        provider: 'glm',
+        model: modelId,
+        kind: 'http_error',
+        status: res.status,
+        message: snippet || `HTTP ${res.status}`,
+      });
     }
     const data = await res.json();
     return data.choices?.[0]?.message?.content || null;
   } catch (err) {
     clearTimeout(timer);
-    console.warn('Zhipu AI REST API call failed:', err instanceof Error ? err.message : String(err));
-    return null;
+    if (err instanceof AIProviderError) throw err;
+    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+    throw new AIProviderError({
+      provider: 'glm',
+      model: modelId,
+      kind: isTimeout ? 'timeout' : 'network_error',
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -192,9 +247,13 @@ async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_00
   // Prefer direct REST API when ZHIPU_API_KEY is set (works in all environments).
   const zhipuKey = getProviderApiKey('glm');
   if (zhipuKey) {
-    const result = await callGLMviaAPI(messages, modelId, timeoutMs);
-    if (result) return result;
-    // Fall through to SDK if REST API fails
+    try {
+      const result = await callGLMviaAPI(messages, modelId, timeoutMs);
+      if (result) return result;
+    } catch (err) {
+      // Fall through to SDK if REST API fails
+      console.warn('Zhipu AI REST API call failed:', err instanceof Error ? err.message : String(err));
+    }
   }
 
   // Fall back to z-ai-web-dev-sdk (only works in Z.ai environment).
@@ -220,7 +279,14 @@ async function callGLMVision(messages: any[], modelId: string, _timeoutMs = 35_0
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function callOpenAIVision(messages: any[], modelId: string, timeoutMs = 30_000): Promise<string | null> {
   const apiKey = getProviderApiKey('openai');
-  if (!apiKey) return null;
+  if (!apiKey) {
+    throw new AIProviderError({
+      provider: 'openai',
+      model: modelId,
+      kind: 'missing_key',
+      message: 'Missing OpenAI API key',
+    });
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -243,22 +309,41 @@ async function callOpenAIVision(messages: any[], modelId: string, timeoutMs = 30
     clearTimeout(timer);
 
     if (!res.ok) {
-      console.warn(`OpenAI Vision ${modelId} error:`, await res.text());
-      return null;
+      const errText = await res.text();
+      throw new AIProviderError({
+        provider: 'openai',
+        model: modelId,
+        kind: 'http_error',
+        status: res.status,
+        message: errText.substring(0, 400) || `HTTP ${res.status}`,
+      });
     }
 
     const data = await res.json();
     return data.choices?.[0]?.message?.content || null;
   } catch (err) {
     clearTimeout(timer);
-    console.warn(`OpenAI Vision model ${modelId} failed:`, err instanceof Error ? err.message : String(err));
-    return null;
+    if (err instanceof AIProviderError) throw err;
+    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+    throw new AIProviderError({
+      provider: 'openai',
+      model: modelId,
+      kind: isTimeout ? 'timeout' : 'network_error',
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
 async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
   const apiKey = getProviderApiKey('openai');
-  if (!apiKey) return null;
+  if (!apiKey) {
+    throw new AIProviderError({
+      provider: 'openai',
+      model: modelId,
+      kind: 'missing_key',
+      message: 'Missing OpenAI API key',
+    });
+  }
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -270,20 +355,39 @@ async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 
       body: JSON.stringify({ model: modelId, messages, temperature }),
     });
     if (!res.ok) {
-      console.warn(`OpenAI ${modelId} error:`, await res.text());
-      return null;
+      const errText = await res.text();
+      throw new AIProviderError({
+        provider: 'openai',
+        model: modelId,
+        kind: 'http_error',
+        status: res.status,
+        message: errText.substring(0, 400) || `HTTP ${res.status}`,
+      });
     }
     const data = await res.json();
     return data.choices?.[0]?.message?.content || null;
   } catch (err) {
-    console.warn(`OpenAI model ${modelId} failed:`, err);
-    return null;
+    if (err instanceof AIProviderError) throw err;
+    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+    throw new AIProviderError({
+      provider: 'openai',
+      model: modelId,
+      kind: isTimeout ? 'timeout' : 'network_error',
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
 async function callAnthropic(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
   const apiKey = getProviderApiKey('anthropic');
-  if (!apiKey) return null;
+  if (!apiKey) {
+    throw new AIProviderError({
+      provider: 'anthropic',
+      model: modelId,
+      kind: 'missing_key',
+      message: 'Missing Anthropic API key',
+    });
+  }
 
   try {
     let systemContent = '';
@@ -317,20 +421,39 @@ async function callAnthropic(messages: AIMessage[], modelId: string, temperature
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      console.warn(`Anthropic ${modelId} error:`, await res.text());
-      return null;
+      const errText = await res.text();
+      throw new AIProviderError({
+        provider: 'anthropic',
+        model: modelId,
+        kind: 'http_error',
+        status: res.status,
+        message: errText.substring(0, 400) || `HTTP ${res.status}`,
+      });
     }
     const data = await res.json();
     return data.content?.[0]?.text || null;
   } catch (err) {
-    console.warn(`Anthropic model ${modelId} failed:`, err);
-    return null;
+    if (err instanceof AIProviderError) throw err;
+    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+    throw new AIProviderError({
+      provider: 'anthropic',
+      model: modelId,
+      kind: isTimeout ? 'timeout' : 'network_error',
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
 async function callGemini(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
   const apiKey = getProviderApiKey('google');
-  if (!apiKey) return null;
+  if (!apiKey) {
+    throw new AIProviderError({
+      provider: 'google',
+      model: modelId,
+      kind: 'missing_key',
+      message: 'Missing Google AI API key',
+    });
+  }
 
   try {
     let systemInstruction: string | undefined;
@@ -363,14 +486,26 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
       }
     );
     if (!res.ok) {
-      console.warn(`Gemini ${modelId} error:`, await res.text());
-      return null;
+      const errText = await res.text();
+      throw new AIProviderError({
+        provider: 'google',
+        model: modelId,
+        kind: 'http_error',
+        status: res.status,
+        message: errText.substring(0, 400) || `HTTP ${res.status}`,
+      });
     }
     const data = await res.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (err) {
-    console.warn(`Gemini model ${modelId} failed:`, err);
-    return null;
+    if (err instanceof AIProviderError) throw err;
+    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+    throw new AIProviderError({
+      provider: 'google',
+      model: modelId,
+      kind: isTimeout ? 'timeout' : 'network_error',
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -381,13 +516,19 @@ export async function callAI(
   modelId: string,
   temperature?: number
 ): Promise<string | null> {
-  const provider = getProvider(modelId);
-  switch (provider) {
-    case 'glm': return callGLM(messages, modelId);
-    case 'openai': return callOpenAI(messages, modelId, temperature);
-    case 'anthropic': return callAnthropic(messages, modelId, temperature);
-    case 'google': return callGemini(messages, modelId, temperature);
-    default: return callGLM(messages, modelId);
+  try {
+    const provider = getProvider(modelId);
+    switch (provider) {
+      case 'glm': return callGLM(messages, modelId);
+      case 'openai': return callOpenAI(messages, modelId, temperature);
+      case 'anthropic': return callAnthropic(messages, modelId, temperature);
+      case 'google': return callGemini(messages, modelId, temperature);
+      default: return callGLM(messages, modelId);
+    }
+  } catch (err) {
+    // Keep existing behavior for direct callers: failures collapse to null.
+    console.warn(`AI call failed for ${modelId}:`, err instanceof Error ? err.message : String(err));
+    return null;
   }
 }
 
@@ -519,6 +660,7 @@ export async function callAIWithFallback(
 ): Promise<AIResponse> {
   const candidates = buildFallbackChain(modelId);
   const failedProviders = new Set<AIProvider>();
+  const diagnostics: AIProviderFailureDiagnostic[] = [];
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
@@ -536,15 +678,53 @@ export async function callAIWithFallback(
       console.warn(`[AI] Model ${modelId} failed, trying fallback ${candidate}`);
     }
 
-    const content = await callAI(messages, candidate, temperature);
-    if (content) {
-      return { content, model: candidate, provider };
-    }
+    try {
+      // Call provider functions without swallowing errors so we can surface diagnostics.
+      let content: string | null = null;
+      switch (provider) {
+        case 'glm':
+          content = await callGLM(messages, candidate);
+          break;
+        case 'openai':
+          content = await callOpenAI(messages, candidate, temperature);
+          break;
+        case 'anthropic':
+          content = await callAnthropic(messages, candidate, temperature);
+          break;
+        case 'google':
+          content = await callGemini(messages, candidate, temperature);
+          break;
+        default:
+          content = await callGLM(messages, candidate);
+      }
 
-    failedProviders.add(provider);
+      if (content) {
+        return { content, model: candidate, provider };
+      }
+
+      diagnostics.push({
+        provider,
+        model: candidate,
+        kind: 'provider_error',
+        message: 'Empty response',
+      });
+      failedProviders.add(provider);
+    } catch (err) {
+      if (err instanceof AIProviderError) {
+        diagnostics.push(err.diagnostic);
+      } else {
+        diagnostics.push({
+          provider,
+          model: candidate,
+          kind: 'unknown_error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+      failedProviders.add(provider);
+    }
   }
 
-  throw new Error('AI model failed. Please try again. Check that at least one provider API key is configured correctly.');
+  throw new AIModelFailedError(diagnostics);
 }
 
 export function getRequiredEnvKey(provider: AIProvider): string | null {

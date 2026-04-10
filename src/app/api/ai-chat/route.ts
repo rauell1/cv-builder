@@ -112,7 +112,12 @@ export async function POST(request: NextRequest) {
         message,
       });
       return NextResponse.json(
-        { success: false, error: message },
+        {
+          success: false,
+          error: message,
+          providerStatus: getProviderCredentialStatus(),
+          diagnostics: (providerError as any)?.diagnostics,
+        },
         { status: 503 }
       );
     }
