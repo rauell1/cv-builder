@@ -301,13 +301,27 @@ async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_00
       const result = await callGLMviaAPI(messages, modelId, timeoutMs);
       if (result) return result;
     } catch (err) {
-      // Fall through to SDK if REST API fails
-      console.warn('Zhipu AI REST API call failed:', err instanceof Error ? err.message : String(err));
+      // Only fall through to SDK when explicitly enabled; otherwise surface diagnostics.
+      if (process.env.ZAI_SDK_FALLBACK === '1') {
+        console.warn('Zhipu AI REST API call failed, falling back to Z.ai SDK:', err instanceof Error ? err.message : String(err));
+      } else {
+        throw err;
+      }
     }
   }
 
   // Fall back to z-ai-web-dev-sdk (only works in Z.ai environment).
-  return callGLMviaSDK(messages, modelId, timeoutMs);
+  if (process.env.ZAI_SDK_FALLBACK === '1') {
+    return callGLMviaSDK(messages, modelId, timeoutMs);
+  }
+
+  // No REST key and no SDK fallback: surface a clear diagnostic.
+  throw new AIProviderError({
+    provider: 'glm',
+    model: modelId,
+    kind: 'missing_key',
+    message: 'Missing GLM API key and ZAI_SDK_FALLBACK is not enabled',
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
