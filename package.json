@@ -10,7 +10,10 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "map:update": "node tools/update-codebase-map.mjs",
+    "map:check-parity": "node tools/check-middleware-ai-parity.mjs",
+    "prepare": "husky"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
@@ -79,6 +82,7 @@
     "bun-types": "^1.3.4",
     "eslint": "^9",
     "eslint-config-next": "^16.1.1",
+    "husky": "^9.1.7",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.5",
     "typescript": "^5"

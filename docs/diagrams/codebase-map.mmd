@@ -1,0 +1,26 @@
+flowchart LR
+  subgraph client["Browser"]
+    Page["app/page.tsx"]
+    Store["cv-store"]
+    ApiCalls["api-calls.ts"]
+    Page --> Store
+    Page --> ApiCalls
+  end
+  subgraph edge["Edge"]
+    MW["middleware.ts"]
+  end
+  subgraph server["Node_Server"]
+    Routes["app/api/*/route.ts"]
+    AI["ai-provider.ts"]
+    Queue["request-queue"]
+    Cache["response-cache"]
+    DB["Prisma"]
+    PDF["pdf-utils"]
+  end
+  ApiCalls -->|HTTP| MW
+  MW --> Routes
+  Routes --> AI
+  Routes --> Queue
+  Routes --> Cache
+  Routes --> DB
+  Routes --> PDF

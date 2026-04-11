@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAIRateLimitPath } from '@/lib/ai-rate-limit-paths';
 import { aiRateLimit, generalRateLimit } from '@/lib/rate-limiter';
 
 /**
@@ -35,17 +36,7 @@ export function middleware(request: NextRequest) {
   const ip = getClientIP(request);
   const path = request.nextUrl.pathname;
 
-  // Use stricter limits for AI-heavy endpoints
-  const isAIEndpoint =
-    path === '/api/extract-file' ||
-    path === '/api/parse-cv' ||
-    path === '/api/analyze-job' ||
-    path === '/api/restructure-cv' ||
-    path === '/api/generate-insights' ||
-    path === '/api/generate-cover-letter' ||
-    path === '/api/score-cv' ||
-    path === '/api/enhance-achievements' ||
-    path === '/api/ai-chat';
+  const isAIEndpoint = isAIRateLimitPath(path);
 
   const limiter = isAIEndpoint ? aiRateLimit : generalRateLimit;
   const result = limiter.check(ip);

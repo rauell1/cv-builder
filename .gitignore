@@ -35,3 +35,6 @@ screenshot-*.png
 .DS_Store
 Thumbs.db
 .vscode/
+
+# codebase map incremental cache
+.codebase-map-cache.json

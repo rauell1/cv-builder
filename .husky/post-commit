@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+_files=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null) || exit 0
+echo "$_files" | grep -qE '^(src/|prisma/|middleware\.ts|next\.config\.ts|package\.json|package-lock\.json|tools/)' || exit 0
+node tools/update-codebase-map.mjs
