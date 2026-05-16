@@ -6,19 +6,13 @@
  *   - OpenAI          (OPENAI_API_KEY)
  *   - Anthropic       (ANTHROPIC_API_KEY)
  *   - Google Gemini   (GOOGLE_AI_API_KEY / GEMINI_API_KEY)
- *   - NVIDIA NIM      (NVIDIA_API_KEY)  ← NEW
+ *   - NVIDIA NIM      (NVIDIA_API_KEY)
  *
- * NVIDIA NIM uses an OpenAI-compatible endpoint so we reuse the same HTTP
- * pattern – just swap base URL and model IDs.
- *
- * Auto-rotation:
- *   callAIWithFallback() tries each candidate in priority order.
- *   When a provider/key is unhealthy it is skipped for COOLDOWN_MS then
- *   automatically re-enabled by the background health-check timer.
- *
- * Usage:
- *   import { callAIWithFallback } from '@/lib/ai-provider';
- *   const { content, model, provider } = await callAIWithFallback(messages, 'auto');
+ * Speed optimizations:
+ *   - callAIRace(): fires top-N models in parallel, returns first winner
+ *   - Per-model timeouts tuned to each provider's actual p95 latency
+ *   - Non-blocking background DB / cache writes throughout
+ *   - NVIDIA gets individual per-model health (not whole-provider blackout)
  */
 
 // ---- Lazy ZAI SDK instance ----
@@ -88,8 +82,6 @@ export class AIModelFailedError extends Error {
 }
 
 // ---- Key health tracking ----
-// Keys are marked "down" for COOLDOWN_MS after a non-retryable error.
-// A background interval re-enables them so rotation can retry.
 
 const COOLDOWN_MS = 5 * 60_000; // 5 minutes
 
@@ -99,8 +91,10 @@ interface KeyHealth {
   downSince?: number;
 }
 
-// provider → list of keys with their health
 const keyHealthMap = new Map<AIProvider, KeyHealth[]>();
+
+// Per-NVIDIA-model health (model id → down timestamp)
+const nvidiaModelHealth = new Map<string, number>();
 
 function initKeyHealth(provider: AIProvider, keys: string[]): void {
   if (!keyHealthMap.has(provider)) {
@@ -111,7 +105,6 @@ function initKeyHealth(provider: AIProvider, keys: string[]): void {
 function pickHealthyKey(provider: AIProvider): string | null {
   const pool = keyHealthMap.get(provider) ?? [];
   const now = Date.now();
-  // Re-enable keys that have cooled down
   for (const entry of pool) {
     if (entry.status === 'down' && entry.downSince && now - entry.downSince >= COOLDOWN_MS) {
       entry.status = 'healthy';
@@ -119,21 +112,30 @@ function pickHealthyKey(provider: AIProvider): string | null {
   }
   const healthy = pool.filter((e) => e.status === 'healthy');
   if (healthy.length === 0) return null;
-  // Round-robin among healthy keys
-  const idx = Math.floor(Math.random() * healthy.length);
-  return healthy[idx].key;
+  return healthy[Math.floor(Math.random() * healthy.length)].key;
 }
 
 function markKeyDown(provider: AIProvider, key: string): void {
   const pool = keyHealthMap.get(provider) ?? [];
   const entry = pool.find((e) => e.key === key);
-  if (entry) {
-    entry.status = 'down';
-    entry.downSince = Date.now();
-  }
+  if (entry) { entry.status = 'down'; entry.downSince = Date.now(); }
 }
 
-// Background healer – re-enables cooled-down keys every 60 s (server-side only)
+function isNvidiaModelHealthy(modelId: string): boolean {
+  const downSince = nvidiaModelHealth.get(modelId);
+  if (!downSince) return true;
+  if (Date.now() - downSince >= COOLDOWN_MS) {
+    nvidiaModelHealth.delete(modelId);
+    return true;
+  }
+  return false;
+}
+
+function markNvidiaModelDown(modelId: string): void {
+  nvidiaModelHealth.set(modelId, Date.now());
+}
+
+// Background healer
 if (typeof setInterval !== 'undefined' && typeof window === 'undefined') {
   setInterval(() => {
     const now = Date.now();
@@ -143,6 +145,9 @@ if (typeof setInterval !== 'undefined' && typeof window === 'undefined') {
           entry.status = 'healthy';
         }
       }
+    }
+    for (const [id, downSince] of nvidiaModelHealth.entries()) {
+      if (now - downSince >= COOLDOWN_MS) nvidiaModelHealth.delete(id);
     }
   }, 60_000);
 }
@@ -179,12 +184,6 @@ function readEnvValue(key: string): string | null {
   return resolveEnvValue(key)?.value ?? null;
 }
 
-/**
- * Returns ALL configured values for a provider (supports multi-key rotation).
- * Keys are deduplicated and empty strings are stripped.
- * Supports comma-separated list in a single env var:
- *   NVIDIA_API_KEY=nvapi-key1,nvapi-key2,nvapi-key3
- */
 export function getAllProviderKeys(provider: AIProvider): string[] {
   const aliases = PROVIDER_KEY_ALIASES[provider] ?? [];
   const found: string[] = [];
@@ -197,7 +196,6 @@ export function getAllProviderKeys(provider: AIProvider): string[] {
     }
   }
   const unique = [...new Set(found)];
-  // Register keys into health tracker on first access
   initKeyHealth(provider, unique);
   return unique;
 }
@@ -264,7 +262,6 @@ export function getProvider(modelId: string): AIProvider {
   if (modelId.startsWith('gpt-'))        return 'openai';
   if (modelId.startsWith('claude-'))     return 'anthropic';
   if (modelId.startsWith('gemini-'))     return 'google';
-  // NVIDIA NIM models (all served via integrate.api.nvidia.com)
   if (
     modelId.startsWith('mistralai/') ||
     modelId.startsWith('deepseek-ai/') ||
@@ -290,12 +287,12 @@ export function estimateComplexity(
 }
 
 export function autoSelectModel(complexity: 'simple' | 'standard' | 'complex'): string {
-  // Prefer NVIDIA if key is present, otherwise fall back to GLM
   if (getProviderApiKey('nvidia')) {
     switch (complexity) {
       case 'complex':  return 'mistralai/mistral-medium-3.5-128b';
-      case 'standard': return 'deepseek-ai/deepseek-r1-0528';
-      case 'simple':   return 'nvidia/llama-3.3-nemotron-super-49b-v1';
+      // ↓ Use a fast NVIDIA model for standard tasks to cut latency
+      case 'standard': return 'nvidia/llama-3.3-nemotron-super-49b-v1';
+      case 'simple':   return 'meta/llama-3.3-70b-instruct';
     }
   }
   switch (complexity) {
@@ -306,25 +303,33 @@ export function autoSelectModel(complexity: 'simple' | 'standard' | 'complex'): 
 }
 
 // ---- NVIDIA NIM model registry ----
-// Models sourced from build.nvidia.com (free-endpoint tier).
-// baseScore drives priority in fallback chain (higher = preferred).
 
 export interface NvidiaModelEntry {
-  id: string;               // model string sent to the API
+  id: string;
   displayName: string;
-  baseScore: number;        // 0–1, higher = preferred
+  baseScore: number;
   contextWindow?: number;
   tags: string[];
+  /** Typical cold-start latency bucket – used to tune per-model timeouts */
+  speed: 'fast' | 'medium' | 'slow';
 }
 
 export const NVIDIA_MODELS: NvidiaModelEntry[] = [
-  // --- Top-tier reasoning / coding ---
   {
-    id: 'mistralai/mistral-medium-3.5-128b',
-    displayName: 'Mistral Medium 3.5 128b',
-    baseScore: 0.95,
+    id: 'meta/llama-3.3-70b-instruct',
+    displayName: 'Llama 3.3 70b Instruct',
+    baseScore: 0.82,
     contextWindow: 128_000,
-    tags: ['coding', 'agentic', 'cv'],
+    tags: ['general', 'cv', 'fast'],
+    speed: 'fast',
+  },
+  {
+    id: 'nvidia/llama-3.3-nemotron-super-49b-v1',
+    displayName: 'Nemotron Super 49b',
+    baseScore: 0.85,
+    contextWindow: 128_000,
+    tags: ['fast', 'cv'],
+    speed: 'fast',
   },
   {
     id: 'deepseek-ai/deepseek-r1-0528',
@@ -332,6 +337,15 @@ export const NVIDIA_MODELS: NvidiaModelEntry[] = [
     baseScore: 0.93,
     contextWindow: 64_000,
     tags: ['reasoning', 'coding', 'cv'],
+    speed: 'medium',
+  },
+  {
+    id: 'mistralai/mistral-medium-3.5-128b',
+    displayName: 'Mistral Medium 3.5 128b',
+    baseScore: 0.95,
+    contextWindow: 128_000,
+    tags: ['coding', 'agentic', 'cv'],
+    speed: 'medium',
   },
   {
     id: 'moonshotai/kimi-k2-instruct',
@@ -339,6 +353,7 @@ export const NVIDIA_MODELS: NvidiaModelEntry[] = [
     baseScore: 0.91,
     contextWindow: 128_000,
     tags: ['multimodal', 'coding', 'cv'],
+    speed: 'medium',
   },
   {
     id: '01-ai/yi-large',
@@ -346,21 +361,7 @@ export const NVIDIA_MODELS: NvidiaModelEntry[] = [
     baseScore: 0.88,
     contextWindow: 32_000,
     tags: ['general', 'cv'],
-  },
-  // --- Fast / efficient ---
-  {
-    id: 'nvidia/llama-3.3-nemotron-super-49b-v1',
-    displayName: 'Nemotron Super 49b',
-    baseScore: 0.85,
-    contextWindow: 128_000,
-    tags: ['fast', 'cv'],
-  },
-  {
-    id: 'meta/llama-3.3-70b-instruct',
-    displayName: 'Llama 3.3 70b Instruct',
-    baseScore: 0.82,
-    contextWindow: 128_000,
-    tags: ['general', 'cv'],
+    speed: 'medium',
   },
   {
     id: 'qwen/qwen3-235b-a22b',
@@ -368,8 +369,25 @@ export const NVIDIA_MODELS: NvidiaModelEntry[] = [
     baseScore: 0.80,
     contextWindow: 32_000,
     tags: ['reasoning', 'cv'],
+    speed: 'slow',
   },
 ];
+
+/** Timeout per model speed bucket */
+function modelTimeout(modelId: string): number {
+  const entry = NVIDIA_MODELS.find((m) => m.id === modelId);
+  if (entry) {
+    if (entry.speed === 'fast')   return 15_000;
+    if (entry.speed === 'medium') return 25_000;
+    return 40_000; // slow
+  }
+  // Defaults for non-NVIDIA models
+  if (modelId.startsWith('gpt-'))     return 20_000;
+  if (modelId.startsWith('claude-'))  return 25_000;
+  if (modelId.startsWith('gemini-'))  return 20_000;
+  if (modelId.startsWith('glm-'))     return 15_000;
+  return 30_000;
+}
 
 // ---- Provider call implementations ----
 
@@ -394,7 +412,6 @@ async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs =
 async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
   const apiKey = getProviderApiKey('glm');
   if (!apiKey) throw new AIProviderError({ provider: 'glm', model: modelId, kind: 'missing_key', message: 'Missing GLM API key' });
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -439,15 +456,20 @@ async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_00
   throw new AIProviderError({ provider: 'glm', model: modelId, kind: 'missing_key', message: 'Missing GLM API key and ZAI_SDK_FALLBACK is not enabled' });
 }
 
-async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
   const apiKey = getProviderApiKey('openai');
   if (!apiKey) throw new AIProviderError({ provider: 'openai', model: modelId, kind: 'missing_key', message: 'Missing OpenAI API key' });
+  const timeout = modelTimeout(modelId);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: modelId, messages, temperature }),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!res.ok) {
       const errText = await res.text();
       if (res.status === 401 || res.status === 403) markKeyDown('openai', apiKey);
@@ -456,15 +478,19 @@ async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 
     const data = await res.json();
     return data.choices?.[0]?.message?.content || null;
   } catch (err) {
+    clearTimeout(timer);
     if (err instanceof AIProviderError) throw err;
     const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
     throw new AIProviderError({ provider: 'openai', model: modelId, kind: isTimeout ? 'timeout' : 'network_error', message: err instanceof Error ? err.message : String(err) });
   }
 }
 
-async function callAnthropic(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+async function callAnthropic(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
   const apiKey = getProviderApiKey('anthropic');
   if (!apiKey) throw new AIProviderError({ provider: 'anthropic', model: modelId, kind: 'missing_key', message: 'Missing Anthropic API key' });
+  const timeout = modelTimeout(modelId);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
   try {
     let systemContent = '';
     const anthropicMessages: { role: string; content: string }[] = [];
@@ -481,7 +507,9 @@ async function callAnthropic(messages: AIMessage[], modelId: string, temperature
       method: 'POST',
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!res.ok) {
       const errText = await res.text();
       if (res.status === 401 || res.status === 403) markKeyDown('anthropic', apiKey);
@@ -490,15 +518,19 @@ async function callAnthropic(messages: AIMessage[], modelId: string, temperature
     const data = await res.json();
     return data.content?.[0]?.text || null;
   } catch (err) {
+    clearTimeout(timer);
     if (err instanceof AIProviderError) throw err;
     const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
     throw new AIProviderError({ provider: 'anthropic', model: modelId, kind: isTimeout ? 'timeout' : 'network_error', message: err instanceof Error ? err.message : String(err) });
   }
 }
 
-async function callGemini(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+async function callGemini(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
   const apiKey = getProviderApiKey('google');
   if (!apiKey) throw new AIProviderError({ provider: 'google', model: modelId, kind: 'missing_key', message: 'Missing Google AI API key' });
+  const timeout = modelTimeout(modelId);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
   try {
     let systemInstruction: string | undefined;
     const contents: { role: string; parts: { text: string }[] }[] = [];
@@ -510,8 +542,9 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
     if (systemInstruction) body.systemInstruction = { parts: [{ text: systemInstruction }] };
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal }
     );
+    clearTimeout(timer);
     if (!res.ok) {
       const errText = await res.text();
       if (res.status === 401 || res.status === 403) markKeyDown('google', apiKey);
@@ -520,24 +553,35 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
     const data = await res.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (err) {
+    clearTimeout(timer);
     if (err instanceof AIProviderError) throw err;
     const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
     throw new AIProviderError({ provider: 'google', model: modelId, kind: isTimeout ? 'timeout' : 'network_error', message: err instanceof Error ? err.message : String(err) });
   }
 }
 
-/**
- * Call NVIDIA NIM via their OpenAI-compatible API.
- * Endpoint: https://integrate.api.nvidia.com/v1/chat/completions
- * Auth: Bearer <NVIDIA_API_KEY>
- * Docs: https://docs.api.nvidia.com/nim/reference/
- */
-async function callNvidia(messages: AIMessage[], modelId: string, temperature = 0.5, timeoutMs = 30_000): Promise<string | null> {
+async function callNvidia(
+  messages: AIMessage[],
+  modelId: string,
+  temperature = 0.3,
+  timeoutMs?: number
+): Promise<string | null> {
+  // Per-model health check (NVIDIA models are independent)
+  if (!isNvidiaModelHealthy(modelId)) {
+    throw new AIProviderError({
+      provider: 'nvidia',
+      model: modelId,
+      kind: 'provider_error',
+      message: `Model ${modelId} is in cooldown`,
+    });
+  }
+
   const apiKey = getProviderApiKey('nvidia');
   if (!apiKey) throw new AIProviderError({ provider: 'nvidia', model: modelId, kind: 'missing_key', message: 'Missing NVIDIA API key (set NVIDIA_API_KEY in Vercel env vars)' });
 
+  const timeout = timeoutMs ?? modelTimeout(modelId);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
     const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
@@ -558,8 +602,13 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
 
     if (!res.ok) {
       const errText = await res.text();
-      // 401/403 = key invalid → mark it down so rotation picks the next one
-      if (res.status === 401 || res.status === 403) markKeyDown('nvidia', apiKey);
+      if (res.status === 401 || res.status === 403) {
+        markKeyDown('nvidia', apiKey);
+        markNvidiaModelDown(modelId);
+      } else if (res.status === 429 || res.status >= 500) {
+        // Rate-limited or server error → cool down just this model
+        markNvidiaModelDown(modelId);
+      }
       throw new AIProviderError({
         provider: 'nvidia',
         model: modelId,
@@ -575,6 +624,7 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
     clearTimeout(timer);
     if (err instanceof AIProviderError) throw err;
     const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+    if (isTimeout) markNvidiaModelDown(modelId); // timed-out model gets cooled down too
     throw new AIProviderError({
       provider: 'nvidia',
       model: modelId,
@@ -672,41 +722,57 @@ function hasProviderCredentials(provider: AIProvider): boolean {
   }
 }
 
-// Priority order: NVIDIA first (free + high quality), then OpenAI, Anthropic, Gemini, GLM
-const NVIDIA_MODEL_IDS = [...NVIDIA_MODELS].sort((a, b) => b.baseScore - a.baseScore).map((m) => m.id);
+// Sorted fast-first: fast NVIDIA models first, then medium, then slow, then others
+const NVIDIA_MODEL_IDS_FAST_FIRST = [...NVIDIA_MODELS]
+  .sort((a, b) => {
+    const speedOrder = { fast: 0, medium: 1, slow: 2 };
+    const speedDiff = speedOrder[a.speed] - speedOrder[b.speed];
+    return speedDiff !== 0 ? speedDiff : b.baseScore - a.baseScore;
+  })
+  .map((m) => m.id);
+
+// Score-first (quality priority) for complex tasks
+const NVIDIA_MODEL_IDS_QUALITY_FIRST = [...NVIDIA_MODELS]
+  .sort((a, b) => b.baseScore - a.baseScore)
+  .map((m) => m.id);
+
 const OPENAI_MODELS    = ['gpt-4o-mini', 'gpt-4o'] as const;
 const ANTHROPIC_MODELS = ['claude-haiku-4-20250414', 'claude-sonnet-4-20250514'] as const;
 const GOOGLE_MODELS    = ['gemini-2.5-flash', 'gemini-2.5-pro'] as const;
 
 const FALLBACK_MODEL_MAP: Record<string, string> = {
-  // NVIDIA → NVIDIA fallbacks
   'mistralai/mistral-medium-3.5-128b': 'deepseek-ai/deepseek-r1-0528',
   'deepseek-ai/deepseek-r1-0528':      'moonshotai/kimi-k2-instruct',
   'moonshotai/kimi-k2-instruct':       'nvidia/llama-3.3-nemotron-super-49b-v1',
-  // GLM fallbacks
   'glm-4-flash': 'glm-4-plus',
   'glm-4-plus':  'glm-4-flash',
   'glm-4-long':  'glm-4-plus',
-  // Cross-provider
   'gpt-4o':                    'mistralai/mistral-medium-3.5-128b',
-  'gpt-4o-mini':               'deepseek-ai/deepseek-r1-0528',
+  'gpt-4o-mini':               'nvidia/llama-3.3-nemotron-super-49b-v1',
   'claude-sonnet-4-20250514':  'mistralai/mistral-medium-3.5-128b',
-  'claude-haiku-4-20250414':   'deepseek-ai/deepseek-r1-0528',
-  'gemini-2.5-flash':          'deepseek-ai/deepseek-r1-0528',
+  'claude-haiku-4-20250414':   'nvidia/llama-3.3-nemotron-super-49b-v1',
+  'gemini-2.5-flash':          'nvidia/llama-3.3-nemotron-super-49b-v1',
   'gemini-2.5-pro':            'mistralai/mistral-medium-3.5-128b',
 };
 
-function buildFallbackChain(primaryModel: string): string[] {
+function buildFallbackChain(
+  primaryModel: string,
+  complexity: 'simple' | 'standard' | 'complex' = 'standard'
+): string[] {
   const chain: string[] = [primaryModel];
   const directFallback = FALLBACK_MODEL_MAP[primaryModel];
   if (directFallback) chain.push(directFallback);
 
-  // Always add all NVIDIA models (they are free + high quality)
-  if (hasProviderCredentials('nvidia'))    chain.push(...NVIDIA_MODEL_IDS);
+  // For complex tasks, prefer quality; for simple/standard prefer speed
+  const nvidiaOrder =
+    complexity === 'complex'
+      ? NVIDIA_MODEL_IDS_QUALITY_FIRST
+      : NVIDIA_MODEL_IDS_FAST_FIRST;
+
+  if (hasProviderCredentials('nvidia'))    chain.push(...nvidiaOrder);
   if (hasProviderCredentials('openai'))    chain.push(...OPENAI_MODELS);
   if (hasProviderCredentials('anthropic')) chain.push(...ANTHROPIC_MODELS);
   if (hasProviderCredentials('google'))    chain.push(...GOOGLE_MODELS);
-  // GLM is last-resort
   chain.push('glm-4-flash', 'glm-4-plus');
 
   return [...new Set(chain)].filter(Boolean);
@@ -714,7 +780,8 @@ function buildFallbackChain(primaryModel: string): string[] {
 
 let modelRotationIndex = 0;
 const MODEL_ROTATION_ORDER: string[] = [
-  ...NVIDIA_MODEL_IDS,
+  // Fast NVIDIA first in rotation
+  ...NVIDIA_MODEL_IDS_FAST_FIRST,
   ...OPENAI_MODELS,
   ...ANTHROPIC_MODELS,
   ...GOOGLE_MODELS,
@@ -724,7 +791,7 @@ const MODEL_ROTATION_ORDER: string[] = [
 ];
 
 export function getNextRotatingModel(preferredModel?: string): string {
-  const seed = preferredModel || 'mistralai/mistral-medium-3.5-128b';
+  const seed = preferredModel || 'nvidia/llama-3.3-nemotron-super-49b-v1';
   const pool = [...MODEL_ROTATION_ORDER, ...buildFallbackChain(seed)];
   const enabled = [...new Set(pool)].filter((m) => hasProviderCredentials(getProvider(m)));
   if (enabled.length === 0) return seed;
@@ -733,15 +800,90 @@ export function getNextRotatingModel(preferredModel?: string): string {
   return enabled[idx];
 }
 
+/**
+ * Race the top-N fastest available models in parallel.
+ * Returns the first non-empty response. Falls back to sequential chain on
+ * total failure.
+ *
+ * @param raceCount  How many models to race simultaneously (default 2)
+ */
+export async function callAIRace(
+  messages: AIMessage[],
+  primaryModel: string,
+  complexity: 'simple' | 'standard' | 'complex' = 'standard',
+  raceCount = 2,
+  temperature?: number
+): Promise<AIResponse> {
+  const chain = buildFallbackChain(primaryModel, complexity);
+  const eligible = chain.filter((m) => {
+    const p = getProvider(m);
+    if (!hasProviderCredentials(p)) return false;
+    if (p === 'nvidia' && !isNvidiaModelHealthy(m)) return false;
+    return true;
+  });
+
+  if (eligible.length === 0) {
+    throw new AIModelFailedError([{ provider: getProvider(primaryModel), model: primaryModel, kind: 'missing_key', message: 'No eligible models' }]);
+  }
+
+  // Only race up to raceCount models
+  const racers = eligible.slice(0, Math.min(raceCount, eligible.length));
+
+  const racePromises = racers.map((modelId) => {
+    const provider = getProvider(modelId);
+    const callFn = async (): Promise<AIResponse> => {
+      let content: string | null = null;
+      switch (provider) {
+        case 'nvidia':    content = await callNvidia(messages, modelId, temperature); break;
+        case 'openai':    content = await callOpenAI(messages, modelId, temperature); break;
+        case 'anthropic': content = await callAnthropic(messages, modelId, temperature); break;
+        case 'google':    content = await callGemini(messages, modelId, temperature); break;
+        default:          content = await callGLM(messages, modelId); break;
+      }
+      if (!content) throw new Error(`Empty response from ${modelId}`);
+      return { content, model: modelId, provider };
+    };
+    return callFn();
+  });
+
+  try {
+    // Promise.any() returns the first fulfilled promise
+    return await Promise.any(racePromises);
+  } catch {
+    // All racers failed – fall back to sequential chain starting after the racers
+    const remaining = eligible.slice(racers.length);
+    const diagnostics: AIProviderFailureDiagnostic[] = [];
+    for (const modelId of remaining) {
+      const provider = getProvider(modelId);
+      try {
+        let content: string | null = null;
+        switch (provider) {
+          case 'nvidia':    content = await callNvidia(messages, modelId, temperature); break;
+          case 'openai':    content = await callOpenAI(messages, modelId, temperature); break;
+          case 'anthropic': content = await callAnthropic(messages, modelId, temperature); break;
+          case 'google':    content = await callGemini(messages, modelId, temperature); break;
+          default:          content = await callGLM(messages, modelId); break;
+        }
+        if (content) return { content, model: modelId, provider };
+        diagnostics.push({ provider, model: modelId, kind: 'provider_error', message: 'Empty response' });
+      } catch (err) {
+        if (err instanceof AIProviderError) diagnostics.push(err.diagnostic);
+        else diagnostics.push({ provider, model: modelId, kind: 'unknown_error', message: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    throw new AIModelFailedError(diagnostics);
+  }
+}
+
 export async function callAIWithFallback(
   messages: AIMessage[],
   modelId: string,
-  _complexity?: 'simple' | 'standard' | 'complex',
+  complexity?: 'simple' | 'standard' | 'complex',
   temperature?: number
 ): Promise<AIResponse> {
-  // 'auto' → pick best model based on provider availability
-  const resolved = modelId === 'auto' ? autoSelectModel('standard') : modelId;
-  const candidates = buildFallbackChain(resolved);
+  const resolved = modelId === 'auto' ? autoSelectModel(complexity ?? 'standard') : modelId;
+  const effectiveComplexity = complexity ?? 'standard';
+  const candidates = buildFallbackChain(resolved, effectiveComplexity);
   const failedProviders = new Set<AIProvider>();
   const diagnostics: AIProviderFailureDiagnostic[] = [];
 
@@ -750,10 +892,11 @@ export async function callAIWithFallback(
     const provider = getProvider(candidate);
 
     if (!hasProviderCredentials(provider)) continue;
-    // For NVIDIA: each model is independent so don't skip the whole provider
-    // after one model fails – just try the next model in the chain.
     if (provider !== 'nvidia' && failedProviders.has(provider)) continue;
-    if (provider === 'nvidia' && !getProviderApiKey('nvidia')) continue;
+    if (provider === 'nvidia') {
+      if (!getProviderApiKey('nvidia')) continue;
+      if (!isNvidiaModelHealthy(candidate)) continue;
+    }
 
     if (i > 0) console.warn(`[AI] Falling back from ${resolved} → ${candidate}`);
 
