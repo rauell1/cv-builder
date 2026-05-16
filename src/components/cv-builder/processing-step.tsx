@@ -1,33 +1,57 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
-  Cpu,
   CheckCircle2,
   AlertCircle,
   RotateCcw,
   Zap,
-  Play,
-  Settings,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useCVBuilderStore } from '@/lib/cv-store';
 import { restructureCv } from '@/lib/api-calls';
-import { AVAILABLE_MODELS, AI_PROVIDERS } from '@/lib/cv-types';
+import { AVAILABLE_MODELS } from '@/lib/cv-types';
 import type { AIModelConfig } from '@/lib/cv-types';
 import { toast } from '@/hooks/use-toast';
+
+/* ---------- Model priority list (highest = best) ---------- */
+// Each entry is [modelId, scoreWhenKeyIsAvailable]
+// Models without requiresApiKey are always available.
+const MODEL_PRIORITY: { id: string; score: number }[] = [
+  { id: 'claude-sonnet-4-20250514', score: 100 },  // Best quality
+  { id: 'gpt-4o',                  score: 95  },
+  { id: 'gemini-2.5-pro',          score: 90  },
+  { id: 'gemini-2.5-flash',        score: 85  },
+  { id: 'gpt-4o-mini',             score: 80  },
+  { id: 'claude-haiku-4-20250414', score: 75  },
+  { id: 'glm-4-plus',              score: 60  },   // built-in, always works
+  { id: 'glm-4-long',              score: 55  },
+  { id: 'glm-4-flash',             score: 50  },
+];
+
+/**
+ * Picks the best model that is likely to have a working key.
+ * On the server Vercel exposes env vars; on the client we can only
+ * check whether NEXT_PUBLIC_ vars exist. We therefore make a lightweight
+ * /api/available-models probe or, more simply, try models in priority order
+ * and let the backend failover handle the rest.  The frontend just chooses
+ * the top-priority model from the list — the backend ai-provider.ts will
+ * automatically rotate to the next healthy key if it fails.
+ */
+function pickBestModel(): AIModelConfig {
+  for (const entry of MODEL_PRIORITY) {
+    const model = AVAILABLE_MODELS.find((m) => m.id === entry.id);
+    if (model) return model;
+  }
+  // Absolute fallback
+  return AVAILABLE_MODELS[0];
+}
 
 /* ---------- helpers ---------- */
 
@@ -41,41 +65,20 @@ const baseProgressSteps = [
   'Finalizing tailored CV...',
 ];
 
-function getSpeedLabel(speed: AIModelConfig['speed']) {
-  switch (speed) {
-    case 'fast': return { label: 'Fast', color: 'text-[#15be53]', dotColor: 'bg-[#15be53]' };
-    case 'medium': return { label: 'Medium', color: 'text-[#9b6829]', dotColor: 'bg-[#9b6829]' };
-    case 'slow': return { label: 'Slow', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' };
-  }
-}
-
-function groupModelsByProvider() {
-  const groups: { provider: (typeof AI_PROVIDERS)[number]; models: AIModelConfig[] }[] = [];
-  for (const provider of AI_PROVIDERS) {
-    const models = AVAILABLE_MODELS.filter((m) => m.provider === provider.id);
-    if (models.length > 0) {
-      groups.push({ provider, models });
-    }
-  }
-  return groups;
-}
-
-const modelGroups = groupModelsByProvider();
-
 /* Confetti particle config for success state */
 const confettiParticles = [
   { color: '#15be53', x: -50, y: -30 },
-  { color: '#533afd', x: 45, y: -35 },
-  { color: '#f59e0b', x: -55, y: 25 },
-  { color: '#ec4899', x: 50, y: 20 },
+  { color: '#533afd', x: 45,  y: -35 },
+  { color: '#f59e0b', x: -55, y: 25  },
+  { color: '#ec4899', x: 50,  y: 20  },
   { color: '#06b6d4', x: -30, y: -50 },
-  { color: '#8b5cf6', x: 35, y: -50 },
-  { color: '#f97316', x: -60, y: 0 },
-  { color: '#10b981', x: 60, y: 5 },
-  { color: '#6366f1', x: 0, y: -55 },
-  { color: '#f43f5e', x: -20, y: 45 },
-  { color: '#14b8a6', x: 25, y: 45 },
-  { color: '#a855f7', x: 0, y: 50 },
+  { color: '#8b5cf6', x: 35,  y: -50 },
+  { color: '#f97316', x: -60, y: 0   },
+  { color: '#10b981', x: 60,  y: 5   },
+  { color: '#6366f1', x: 0,   y: -55 },
+  { color: '#f43f5e', x: -20, y: 45  },
+  { color: '#14b8a6', x: 25,  y: 45  },
+  { color: '#a855f7', x: 0,   y: 50  },
 ];
 
 /* ---------- component ---------- */
@@ -89,7 +92,6 @@ export function ProcessingStep() {
     restructureError,
     restructureProgress,
     modelUsed,
-    selectedModel,
     setIsRestructuring,
     setRestructureError,
     setRestructureProgress,
@@ -99,48 +101,51 @@ export function ProcessingStep() {
     setSelectedModel,
   } = useCVBuilderStore();
 
-  const progressIndexRef = useRef(0);
+  const progressIndexRef   = useRef(0);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [hasStarted, setHasStarted] = useState(false);
+  const [hasStarted, setHasStarted]     = useState(false);
   const [progressIndex, setProgressIndex] = useState(0);
-  const [localSelectedId, setLocalSelectedId] = useState<string>(selectedModel.id);
+  const [activeModel, setActiveModel]   = useState<AIModelConfig>(pickBestModel);
+  // Track which model IDs have already been tried so retry avoids repeats
+  const triedModelsRef = useRef<Set<string>>(new Set());
 
-  // Cleanup interval on unmount to prevent memory leak
+  // Cleanup interval on unmount
   useEffect(() => {
     return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      }
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     };
   }, []);
 
-  // Full progress steps with connecting step
-  const progressSteps = useMemo(() => {
-    const modelName = AVAILABLE_MODELS.find((m) => m.id === localSelectedId)?.name || localSelectedId;
-    return [`Connecting to ${modelName}...`, ...baseProgressSteps];
-  }, [localSelectedId]);
+  // Auto-start as soon as the component mounts (job analysis is ready)
+  useEffect(() => {
+    if (!hasStarted && parsedCv && analyzedJob) {
+      const best = pickBestModel();
+      setActiveModel(best);
+      setSelectedModel(best);
+      startRestructuring(best.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const startRestructuring = useCallback(
     async (modelId: string) => {
       if (!parsedCv || !analyzedJob) return;
 
+      const modelConfig = AVAILABLE_MODELS.find((m) => m.id === modelId) ?? AVAILABLE_MODELS[0];
+      setActiveModel(modelConfig);
+      setSelectedModel(modelConfig);
       setIsRestructuring(true);
       setRestructureError(null);
       setModelUsed(modelId);
       progressIndexRef.current = 0;
       setHasStarted(true);
+      triedModelsRef.current.add(modelId);
 
-      const modelName = AVAILABLE_MODELS.find((m) => m.id === modelId)?.name || modelId;
-      const steps = [`Connecting to ${modelName}...`, ...baseProgressSteps];
+      const steps = [`Connecting to ${modelConfig.name}...`, ...baseProgressSteps];
       setRestructureProgress(steps[0]);
 
-      // Simulate progress updates
       progressIntervalRef.current = setInterval(() => {
-        progressIndexRef.current = Math.min(
-          progressIndexRef.current + 1,
-          steps.length - 1
-        );
+        progressIndexRef.current = Math.min(progressIndexRef.current + 1, steps.length - 1);
         setProgressIndex(progressIndexRef.current);
         setRestructureProgress(steps[progressIndexRef.current]);
       }, 3000);
@@ -155,15 +160,8 @@ export function ProcessingStep() {
         setTailoredCv(result.cv);
         setModelUsed(result.model);
         setRestructureProgress('CV tailored successfully!');
-        toast({
-          title: 'CV Restructured!',
-          description: 'Your CV has been tailored for the target role.',
-        });
-
-        // Auto-advance to output step after a brief delay
-        setTimeout(() => {
-          setStep('output');
-        }, 1200);
+        toast({ title: 'CV Restructured!', description: 'Your CV has been tailored for the target role.' });
+        setTimeout(() => setStep('output'), 1200);
       } catch (err) {
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
@@ -172,66 +170,49 @@ export function ProcessingStep() {
         const message = err instanceof Error ? err.message : 'Failed to restructure CV';
         setRestructureError(message);
         setIsRestructuring(false);
-        toast({
-          title: 'Restructuring Error',
-          description: message,
-          variant: 'destructive',
-        });
+        toast({ title: 'Restructuring Error', description: message, variant: 'destructive' });
       }
     },
-    [parsedCv, analyzedJob, jobDescText, setIsRestructuring, setRestructureError, setRestructureProgress, setModelUsed, setTailoredCv, setStep]
+    [parsedCv, analyzedJob, jobDescText, setIsRestructuring, setRestructureError, setRestructureProgress, setModelUsed, setTailoredCv, setStep, setSelectedModel]
   );
 
+  /** Retry with the next untried model in the priority list */
+  const handleAutoRetry = useCallback(() => {
+    const next = MODEL_PRIORITY.find(
+      (entry) => !triedModelsRef.current.has(entry.id) && AVAILABLE_MODELS.some((m) => m.id === entry.id)
+    );
+    const nextModel = next
+      ? AVAILABLE_MODELS.find((m) => m.id === next.id)!
+      : AVAILABLE_MODELS.find((m) => m.id === 'glm-4-plus')!; // ultimate fallback
+
+    setRestructureError(null);
+    setHasStarted(false);
+    startRestructuring(nextModel.id);
+  }, [startRestructuring, setRestructureError]);
+
+  /** Manual retry with the same model */
+  const handleRetrySame = useCallback(() => {
+    const currentId = modelUsed ?? activeModel.id;
+    triedModelsRef.current.delete(currentId); // allow retry of same
+    setRestructureError(null);
+    setHasStarted(false);
+    startRestructuring(currentId);
+  }, [modelUsed, activeModel.id, startRestructuring, setRestructureError]);
+
   // Determine current phase
-  const phase: 'idle' | 'processing' | 'success' | 'error' = isRestructuring
+  const phase: 'processing' | 'success' | 'error' = isRestructuring
     ? 'processing'
     : restructureError
       ? 'error'
-      : hasStarted && modelUsed
-        ? 'success'
-        : 'idle';
+      : 'success';
 
   const progressPercent = (() => {
     if (phase === 'success') return 100;
     if (phase === 'processing') {
-      return Math.min(Math.round(((progressIndex + 1) / progressSteps.length) * 100), 95);
+      return Math.min(Math.round(((progressIndex + 1) / (baseProgressSteps.length + 1)) * 100), 95);
     }
     return 0;
   })();
-
-  // Selected model config
-  const activeModelConfig = AVAILABLE_MODELS.find((m) => m.id === localSelectedId) || selectedModel;
-
-  // Models in the same provider group as the selected model
-  const sameProviderModels = useMemo(() => {
-    return AVAILABLE_MODELS.filter((m) => m.provider === activeModelConfig.provider);
-  }, [activeModelConfig.provider]);
-
-  // GLM fallback models (always available)
-  const glmFallbackModels = useMemo(() => {
-    return AVAILABLE_MODELS.filter((m) => m.provider === 'glm');
-  }, []);
-
-  const handleSelectAndStart = () => {
-    const model = AVAILABLE_MODELS.find((m) => m.id === localSelectedId);
-    if (model) {
-      setSelectedModel(model);
-      startRestructuring(model.id);
-    }
-  };
-
-  const handleSelectModel = (modelId: string) => {
-    setLocalSelectedId(modelId);
-    const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
-    if (model) {
-      setSelectedModel(model);
-    }
-  };
-
-  const handleRetryWithDifferent = () => {
-    setRestructureError(null);
-    setHasStarted(false);
-  };
 
   /* ---------- render ---------- */
 
@@ -260,165 +241,8 @@ export function ProcessingStep() {
 
       <div className="max-w-2xl mx-auto">
         <AnimatePresence mode="wait">
-          {/* ==================== IDLE: Model Selection Panel ==================== */}
-          {phase === 'idle' && (
-            <motion.div
-              key="model-selection"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.35 }}
-            >
-              {/* Title */}
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-[8px] bg-primary mb-4 shadow-stripe-sm">
-                  <Settings className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-xl font-light text-foreground mb-1 tracking-tight">Choose AI Model</h3>
-                <p className="text-sm text-muted-foreground font-light">Select an AI model to restructure your CV. GLM models are built-in in Z.ai and may require an API key on external hosting.</p>
-              </div>
 
-              {/* Provider-grouped model cards */}
-              <div className="space-y-6">
-                {modelGroups.map((group) => (
-                  <div key={group.provider.id}>
-                    {/* Provider header */}
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-base">{group.provider.icon}</span>
-                      <h4 className="text-sm font-normal text-foreground">{group.provider.name}</h4>
-                      {!group.models.some((m) => m.requiresApiKey) && (
-                        <Badge className="text-[10px] px-1.5 py-0 rounded-[4px] bg-[rgba(21,190,83,0.2)] text-[#108c3d] border border-[rgba(21,190,83,0.4)] h-5">
-                          Built-in (Z.ai)
-                        </Badge>
-                      )}
-                      {group.models.some((m) => m.requiresApiKey) && (
-                        <Badge className="text-[10px] px-1.5 py-0 rounded-[4px] bg-muted text-muted-foreground border border-border h-5">
-                          Requires Key
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-3 ml-7 font-light">{group.provider.description}</p>
-
-                    {/* Model cards grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {group.models.map((model) => {
-                        const speed = getSpeedLabel(model.speed);
-                        const isSelected = localSelectedId === model.id;
-
-                        return (
-                          <Card
-                            key={model.id}
-                            className={`cursor-pointer transition-all duration-200 ${
-                              isSelected
-                                ? 'ring-2 ring-primary border-[#b9b9f9] bg-secondary shadow-stripe-sm'
-                                : 'border-border hover:border-[#b9b9f9] hover:shadow-stripe-sm bg-white'
-                            } rounded-[6px]`}
-                            onClick={() => handleSelectModel(model.id)}
-                          >
-                            <CardContent className="p-4">
-                              <div className="flex items-start gap-2 mb-2">
-                                {/* Radio-dot indicator */}
-                                <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors duration-200 ${
-                                  isSelected ? 'border-primary' : 'border-border'
-                                }`}>
-                                  {isSelected && (
-                                    <motion.div
-                                      className="w-2 h-2 rounded-full bg-primary"
-                                      initial={{ scale: 0 }}
-                                      animate={{ scale: 1 }}
-                                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                    />
-                                  )}
-                                </div>
-                                <h5 className="text-sm font-normal text-foreground leading-tight flex-1">
-                                  {model.name}
-                                </h5>
-                                <Badge className={`text-[10px] border rounded-[4px] shrink-0 ${model.badgeColor}`}>
-                                  {model.badge}
-                                </Badge>
-                              </div>
-
-                              <p className="text-xs text-muted-foreground leading-relaxed mb-3 line-clamp-2 font-light pl-6">
-                                {model.description}
-                              </p>
-
-                              <div className="flex items-center justify-between pl-6">
-                                {/* Speed indicator */}
-                                <div className="flex items-center gap-1.5">
-                                  <div className={`w-1.5 h-1.5 rounded-full ${speed.dotColor}`} />
-                                  <span className={`text-[10px] font-normal ${speed.color}`}>
-                                    {speed.label}
-                                  </span>
-                                </div>
-
-                                {/* Built-in / API key badge */}
-                                {model.requiresApiKey ? (
-                                  <Badge variant="outline" className="text-[10px] text-muted-foreground border-border rounded-[4px] h-5">
-                                    Needs Key
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-[10px] text-[#108c3d] border-[rgba(21,190,83,0.4)] rounded-[4px] h-5">
-                                    Built-in (Z.ai)
-                                  </Badge>
-                                )}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* API key warning — visually distinct with left accent border */}
-              {activeModelConfig.requiresApiKey && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-5"
-                >
-                  <Card className="border-l-4 border-l-[#9b6829] border-border bg-amber-50/60 rounded-[6px]">
-                    <CardContent className="p-4 flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[rgba(155,104,41,0.12)] flex items-center justify-center shrink-0 mt-0.5">
-                        <AlertCircle className="w-4 h-4 text-[#9b6829]" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">
-                          API Key Required
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1 font-light leading-relaxed">
-                          {activeModelConfig.name} requires the{' '}
-                          <code className="bg-border px-1 py-0.5 rounded-[4px] text-[11px] font-mono">
-                            {activeModelConfig.apiEnvKey}
-                          </code>{' '}
-                          environment variable. If not set, the request will fail.
-                          Consider using a GLM model instead.
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )}
-
-              {/* Start Processing button */}
-              <div className="mt-6 flex flex-col items-center">
-                <Button
-                  size="lg"
-                  className="bg-primary hover:bg-[#4434d4] text-white rounded-[4px] shadow-stripe-sm px-8 font-normal transition-all duration-200"
-                  onClick={handleSelectAndStart}
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Start Processing with {activeModelConfig.name}
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2 font-light">
-                  Your CV and job description will be sent to the selected AI model
-                </p>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ==================== PROCESSING: Animated Progress ==================== */}
+          {/* ==================== PROCESSING ==================== */}
           {phase === 'processing' && (
             <motion.div
               key="processing"
@@ -427,10 +251,25 @@ export function ProcessingStep() {
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
             >
+              {/* Auto-select banner */}
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center justify-center gap-2 mb-5"
+              >
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span className="text-xs text-muted-foreground font-light">
+                  Auto-selected best available model
+                </span>
+                <Badge variant="outline" className="border-[#b9b9f9] text-primary rounded-[4px] text-[10px] h-5">
+                  {activeModel.name}
+                </Badge>
+              </motion.div>
+
               <Card className="border-border rounded-[8px] shadow-stripe">
                 <CardContent className="py-10">
                   <div className="flex flex-col items-center text-center">
-                    {/* Animated AI icon — rotating gradient border */}
+                    {/* Animated AI icon */}
                     <div className="relative mb-6">
                       <motion.div
                         className="p-[3px] rounded-[8px]"
@@ -449,13 +288,11 @@ export function ProcessingStep() {
                       Restructuring your CV to match the target role
                     </p>
 
-                    {/* Model badge showing selected model */}
                     <Badge variant="outline" className="mb-6 border-[#b9b9f9] text-primary rounded-[4px]">
                       <Zap className="w-3 h-3 mr-1" />
-                      {activeModelConfig.name}
+                      {activeModel.name}
                     </Badge>
 
-                    {/* Progress text with animation */}
                     <motion.p
                       key={restructureProgress}
                       initial={{ opacity: 0, y: 5 }}
@@ -465,7 +302,7 @@ export function ProcessingStep() {
                       {restructureProgress}
                     </motion.p>
 
-                    {/* Progress bar — with shimmer overlay */}
+                    {/* Progress bar */}
                     <div className="w-full max-w-xs">
                       <div className="h-2 rounded-[4px] bg-border overflow-hidden relative">
                         <motion.div
@@ -474,7 +311,6 @@ export function ProcessingStep() {
                           animate={{ width: `${progressPercent}%` }}
                           transition={{ duration: 0.5, ease: 'easeOut' }}
                         />
-                        {/* Shimmer animation overlay */}
                         <motion.div
                           className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent"
                           animate={{ x: ['-200%', '200%'] }}
@@ -482,55 +318,18 @@ export function ProcessingStep() {
                         />
                       </div>
                     </div>
+
+                    <p className="text-[10px] text-muted-foreground mt-4 font-light">
+                      If this model is unavailable, the system will automatically try the next best option.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Model info cards */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="mt-6"
-              >
-                <p className="text-xs text-muted-foreground mb-3 text-center font-light">
-                  Available {activeModelConfig.provider.charAt(0).toUpperCase() + activeModelConfig.provider.slice(1)} Models
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {sameProviderModels.map((model) => {
-                    const isActive = modelUsed === model.id;
-                    return (
-                      <Card
-                        key={model.id}
-                        className={`rounded-[6px] transition-all duration-200 ${
-                          isActive
-                            ? 'border-primary bg-secondary shadow-stripe-sm'
-                            : 'border-border opacity-60'
-                        }`}
-                      >
-                        <CardContent className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={`w-2 h-2 rounded-full ${
-                                isActive ? 'bg-primary animate-pulse' : 'bg-border'
-                              }`}
-                            />
-                            <span className="text-xs font-normal text-foreground">{model.name}</span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed font-light">
-                            {model.description}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </motion.div>
             </motion.div>
           )}
 
-          {/* ==================== SUCCESS: Brief state ==================== */}
-          {phase === 'success' && (
+          {/* ==================== SUCCESS ==================== */}
+          {phase === 'success' && hasStarted && (
             <motion.div
               key="success"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -541,7 +340,6 @@ export function ProcessingStep() {
               <Card className="border-[rgba(21,190,83,0.4)] bg-[rgba(21,190,83,0.05)] rounded-[8px]">
                 <CardContent className="py-10">
                   <div className="flex flex-col items-center text-center">
-                    {/* Checkmark with confetti particles */}
                     <div className="relative flex items-center justify-center mb-4">
                       <motion.div
                         initial={{ scale: 0 }}
@@ -550,38 +348,22 @@ export function ProcessingStep() {
                       >
                         <CheckCircle2 className="w-16 h-16 text-[#15be53]" />
                       </motion.div>
-
-                      {/* Confetti-like particle dots */}
                       {confettiParticles.map((particle, i) => (
                         <motion.div
                           key={i}
                           className="absolute w-2 h-2 rounded-full"
                           style={{ background: particle.color }}
                           initial={{ opacity: 0, scale: 0, x: 0, y: 0 }}
-                          animate={{
-                            opacity: [0, 1, 1, 0],
-                            scale: [0, 1.2, 1, 0.5],
-                            x: particle.x,
-                            y: particle.y,
-                          }}
-                          transition={{
-                            duration: 2,
-                            delay: 0.3 + i * 0.06,
-                            ease: 'easeOut',
-                          }}
+                          animate={{ opacity: [0, 1, 1, 0], scale: [0, 1.2, 1, 0.5], x: particle.x, y: particle.y }}
+                          transition={{ duration: 2, delay: 0.3 + i * 0.06, ease: 'easeOut' }}
                         />
                       ))}
                     </div>
-
-                    <h3 className="text-xl font-light text-foreground mb-2 tracking-tight">
-                      CV Tailored Successfully!
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-4 font-light">
-                      Your CV has been optimized for the target role
-                    </p>
+                    <h3 className="text-xl font-light text-foreground mb-2 tracking-tight">CV Tailored Successfully!</h3>
+                    <p className="text-sm text-muted-foreground mb-4 font-light">Your CV has been optimized for the target role</p>
                     <Badge className="bg-secondary text-primary border border-[#b9b9f9] rounded-[4px]">
                       <Zap className="w-3 h-3 mr-1" />
-                      Model: {modelUsed || activeModelConfig.name}
+                      Model: {modelUsed || activeModel.name}
                     </Badge>
                     <p className="text-xs text-muted-foreground mt-4 font-light">Redirecting to output...</p>
                   </div>
@@ -590,7 +372,7 @@ export function ProcessingStep() {
             </motion.div>
           )}
 
-          {/* ==================== ERROR: Model Selector with Retry ==================== */}
+          {/* ==================== ERROR ==================== */}
           {phase === 'error' && (
             <motion.div
               key="error"
@@ -606,158 +388,54 @@ export function ProcessingStep() {
                       <AlertCircle className="w-10 h-10 text-[#ea2261]" />
                     </div>
                     <h3 className="text-xl font-light text-foreground mb-2 tracking-tight">Processing Failed</h3>
-                    <p className="text-sm text-muted-foreground max-w-md mb-2 font-light">{restructureError}</p>
+                    <p className="text-sm text-muted-foreground max-w-md mb-1 font-light">{restructureError}</p>
                     <p className="text-xs text-muted-foreground font-light">
-                      Try a different model or retry with the same one
+                      Failed model: <span className="font-medium text-foreground">{activeModel.name}</span>
                     </p>
                   </div>
 
-                  {/* Retry with same model */}
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-6">
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    {/* Try next best model automatically */}
+                    <Button
+                      className="bg-primary hover:bg-[#4434d4] text-white rounded-[4px] font-normal shadow-stripe-sm"
+                      onClick={handleAutoRetry}
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Try Next Best Model
+                    </Button>
+
+                    {/* Retry same */}
                     <Button
                       variant="ghost"
                       className="border border-[#ea2261]/30 text-[#ea2261] hover:bg-[#ea2261]/10 rounded-[4px] font-normal"
-                      onClick={() => {
-                        setHasStarted(false);
-                        setRestructureError(null);
-                        startRestructuring(modelUsed || localSelectedId);
-                      }}
+                      onClick={handleRetrySame}
                     >
                       <RotateCcw className="w-4 h-4 mr-2" />
-                      Retry with {AVAILABLE_MODELS.find((m) => m.id === (modelUsed || localSelectedId))?.name || 'Same Model'}
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      className="border border-border text-foreground hover:bg-muted rounded-[4px] font-normal"
-                      onClick={handleRetryWithDifferent}
-                    >
-                      <Cpu className="w-4 h-4 mr-2" />
-                      Try Different Model
+                      Retry {activeModel.name}
                     </Button>
                   </div>
 
-                  {/* Quick dropdown selector */}
-                  <div className="flex flex-col items-center gap-2">
-                    <label className="text-xs font-normal text-muted-foreground">
-                      Quick Switch:
-                    </label>
-                    <Select
-                      value={localSelectedId}
-                      onValueChange={(val) => {
-                        setLocalSelectedId(val);
-                        const m = AVAILABLE_MODELS.find((x) => x.id === val);
-                        if (m) setSelectedModel(m);
-                      }}
-                    >
-                      <SelectTrigger className="w-64 rounded-[4px] border-border">
-                        <SelectValue placeholder="Choose a model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {modelGroups.map((group) => (
-                          <div key={group.provider.id}>
-                            <SelectItem value={`__group-${group.provider.id}`} disabled className="text-xs font-normal text-muted-foreground bg-muted pointer-events-none">
-                              ── {group.provider.icon} {group.provider.name} ──
-                            </SelectItem>
-                            {group.models.map((model) => (
-                              <SelectItem key={model.id} value={model.id} className="pl-6">
-                                <span className="flex items-center gap-2">
-                                  {model.name}
-                                  {!model.requiresApiKey && (
-                                    <span className="text-[10px] text-[#15be53]">(built-in in Z.ai)</span>
-                                  )}
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </div>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Fallback suggestion — improved visual hierarchy */}
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="mt-4"
-              >
-                <Card className="border-border bg-muted rounded-[6px]">
-                  <CardContent className="p-5">
-                    <h4 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1.5">
-                      <Zap className="w-4 h-4 text-[#15be53]" />
-                      GLM models are available when configured
-                    </h4>
-                    <p className="text-xs text-muted-foreground mb-4 font-light">Use ZHIPU_API_KEY (or GLM_API_KEY/BIGMODEL_API_KEY) on hosted deployments, then retry below</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {glmFallbackModels.map((model, idx) => {
-                        const speed = getSpeedLabel(model.speed);
-                        const isSelected = localSelectedId === model.id;
+                  {/* Show remaining untried models */}
+                  <div className="mt-5 text-center">
+                    <p className="text-[10px] text-muted-foreground font-light mb-2">Remaining models in queue:</p>
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {MODEL_PRIORITY.filter(
+                        (e) => !triedModelsRef.current.has(e.id) && AVAILABLE_MODELS.some((m) => m.id === e.id)
+                      ).map((e) => {
+                        const m = AVAILABLE_MODELS.find((x) => x.id === e.id)!;
                         return (
-                          <Card
-                            key={model.id}
-                            className={`cursor-pointer transition-all duration-200 rounded-[6px] ${
-                              isSelected
-                                ? 'ring-2 ring-primary border-[#b9b9f9] bg-secondary shadow-stripe-sm'
-                                : 'border-border hover:border-[#b9b9f9] hover:shadow-stripe-sm bg-white'
-                            }`}
-                            onClick={() => {
-                              handleSelectModel(model.id);
-                              setHasStarted(false);
-                              setRestructureError(null);
-                              startRestructuring(model.id);
-                            }}
-                          >
-                            <CardContent className="p-4">
-                              <div className="flex items-start gap-2 mb-2">
-                                {/* Radio-dot for consistency */}
-                                <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors duration-200 ${
-                                  isSelected ? 'border-primary' : 'border-border'
-                                }`}>
-                                  {isSelected && (
-                                    <motion.div
-                                      className="w-2 h-2 rounded-full bg-primary"
-                                      initial={{ scale: 0 }}
-                                      animate={{ scale: 1 }}
-                                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                    />
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between gap-1">
-                                    <span className="text-xs font-semibold text-foreground truncate">{model.name}</span>
-                                    <Badge className={`text-[9px] border rounded-[4px] shrink-0 ${model.badgeColor}`}>
-                                      {model.badge}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              </div>
-                              <p className="text-[10px] text-muted-foreground line-clamp-1 mb-2 font-light pl-6">
-                                {model.bestFor}
-                              </p>
-                              <div className="flex items-center justify-between pl-6">
-                                <div className="flex items-center gap-1">
-                                  <div className={`w-1.5 h-1.5 rounded-full ${speed.dotColor}`} />
-                                  <span className={`text-[10px] font-normal ${speed.color}`}>{speed.label}</span>
-                                </div>
-                                {idx === 0 && (
-                                  <Badge className="text-[9px] bg-[rgba(21,190,83,0.15)] text-[#108c3d] border border-[rgba(21,190,83,0.3)] rounded-[4px] h-4">
-                                    Recommended
-                                  </Badge>
-                                )}
-                              </div>
-                            </CardContent>
-                          </Card>
+                          <Badge key={e.id} variant="outline" className="text-[10px] rounded-[4px] border-border text-muted-foreground">
+                            {m.name}
+                          </Badge>
                         );
                       })}
                     </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
+                  </div>
+                </CardContent>
+              </Card>
             </motion.div>
           )}
+
         </AnimatePresence>
       </div>
     </motion.div>
