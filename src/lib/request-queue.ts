@@ -1,10 +1,9 @@
 /**
  * Request Queue — limits concurrent AI calls to prevent cold-start avalanches.
  *
- * Changes vs original:
- *   - Default concurrency bumped from 1 → 3 so multiple users don't block each other
- *   - Priority support: NVIDIA/fast calls get a "high" lane that skips the queue
- *   - Queue timeout: requests waiting > 20 s are rejected rather than piling up
+ * Concurrency bumped to 6 so multiple simultaneous users do not queue-block each other.
+ * Queue timeout raised to 30 s (gives the AI race + sequential fallback enough headroom).
+ * Priority support: high-priority callers (parse-cv, extract-file) jump the queue.
  */
 
 type Task<T> = () => Promise<T>;
@@ -23,9 +22,14 @@ class RequestQueue {
   private queue: QueueEntry<unknown>[] = [];
   private readonly queueTimeoutMs: number;
 
-  constructor(concurrency = 3, queueTimeoutMs = 20_000) {
+  constructor(concurrency = 6, queueTimeoutMs = 30_000) {
     this.concurrency    = concurrency;
     this.queueTimeoutMs = queueTimeoutMs;
+  }
+
+  /** Enqueue with optional priority and per-item timeout. */
+  enqueue<T>(task: Task<T>, priority: 'high' | 'normal' = 'normal', _itemTimeoutMs?: number): Promise<T> {
+    return this.add(task, priority);
   }
 
   add<T>(task: Task<T>, priority: 'high' | 'normal' = 'normal'): Promise<T> {
@@ -38,7 +42,6 @@ class RequestQueue {
         enqueuedAt: Date.now(),
       };
 
-      // High-priority tasks jump to the front of the queue
       if (priority === 'high') {
         this.queue.unshift(entry);
       } else {
@@ -53,7 +56,6 @@ class RequestQueue {
     while (this.running < this.concurrency && this.queue.length > 0) {
       const entry = this.queue.shift()!;
 
-      // Drop tasks that have been waiting too long
       if (Date.now() - entry.enqueuedAt > this.queueTimeoutMs) {
         entry.reject(new Error('Request queue timeout: too many concurrent requests'));
         continue;
@@ -62,12 +64,8 @@ class RequestQueue {
       this.running++;
       entry
         .task()
-        .then((result) => {
-          entry.resolve(result);
-        })
-        .catch((err: unknown) => {
-          entry.reject(err);
-        })
+        .then((result) => entry.resolve(result))
+        .catch((err: unknown) => entry.reject(err))
         .finally(() => {
           this.running--;
           this.drain();
@@ -75,20 +73,13 @@ class RequestQueue {
     }
   }
 
-  get pendingCount(): number {
-    return this.queue.length;
-  }
+  get pendingCount(): number { return this.queue.length; }
+  get runningCount(): number { return this.running; }
 
-  get runningCount(): number {
-    return this.running;
-  }
-
-  /** Dynamically adjust concurrency (e.g. back-off on 429s) */
   setConcurrency(n: number): void {
     this.concurrency = Math.max(1, n);
     this.drain();
   }
 }
 
-// Singleton queue used by all AI route handlers
-export const aiQueue = new RequestQueue(3, 20_000);
+export const aiQueue = new RequestQueue(6, 30_000);
