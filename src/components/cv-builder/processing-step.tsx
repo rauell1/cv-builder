@@ -20,36 +20,50 @@ import { AVAILABLE_MODELS } from '@/lib/cv-types';
 import type { AIModelConfig } from '@/lib/cv-types';
 import { toast } from '@/hooks/use-toast';
 
-/* ---------- Model priority list (highest = best) ---------- */
-// Each entry is [modelId, scoreWhenKeyIsAvailable]
-// Models without requiresApiKey are always available.
+/* ---------- Model priority list (highest score = best, tried first) ----------
+ *
+ * Scoring bands:
+ *  100-90  Premium paid models (Claude, GPT-4o, Gemini Pro)
+ *   89-65  NVIDIA NIM free models (best → fastest)
+ *   64-50  GLM built-in fallbacks (always available)
+ *
+ * The list intentionally interleaves NVIDIA free models between the paid
+ * premium tier and the GLM always-on fallbacks so the system uses the best
+ * free option before giving up on the NVIDIA tier entirely.
+ */
 const MODEL_PRIORITY: { id: string; score: number }[] = [
-  { id: 'claude-sonnet-4-20250514', score: 100 },  // Best quality
-  { id: 'gpt-4o',                  score: 95  },
-  { id: 'gemini-2.5-pro',          score: 90  },
-  { id: 'gemini-2.5-flash',        score: 85  },
-  { id: 'gpt-4o-mini',             score: 80  },
-  { id: 'claude-haiku-4-20250414', score: 75  },
-  { id: 'glm-4-plus',              score: 60  },   // built-in, always works
-  { id: 'glm-4-long',              score: 55  },
-  { id: 'glm-4-flash',             score: 50  },
+  // ── Premium paid ──────────────────────────────────────────────────────────
+  { id: 'claude-sonnet-4-20250514',                   score: 100 }, // Best quality
+  { id: 'gpt-4o',                                     score: 95  },
+  { id: 'gemini-2.5-pro',                             score: 90  },
+  // ── NVIDIA NIM free tier (ranked by quality) ───────────────────────────────
+  { id: 'mistralai/mistral-medium-3.5-128b',          score: 89  }, // Top NVIDIA pick
+  { id: 'deepseek-ai/deepseek-r1-0528',               score: 86  }, // Reasoning
+  { id: 'moonshotai/kimi-k2-instruct',                score: 83  }, // Long context
+  { id: 'gemini-2.5-flash',                           score: 81  },
+  { id: 'gpt-4o-mini',                                score: 78  },
+  { id: 'claude-haiku-4-20250414',                    score: 75  },
+  { id: 'qwen/qwen3-235b-a22b',                       score: 72  }, // Deep reasoning
+  { id: 'nvidia/llama-3.3-nemotron-super-49b-v1',     score: 70  }, // Fast
+  { id: 'meta/llama-3.3-70b-instruct',                score: 68  }, // Reliable general
+  { id: '01-ai/yi-large',                             score: 65  }, // Light tasks
+  // ── GLM always-on fallbacks ────────────────────────────────────────────────
+  { id: 'glm-4-plus',                                 score: 60  },
+  { id: 'glm-4-long',                                 score: 55  },
+  { id: 'glm-4-flash',                                score: 50  },
 ];
 
 /**
- * Picks the best model that is likely to have a working key.
- * On the server Vercel exposes env vars; on the client we can only
- * check whether NEXT_PUBLIC_ vars exist. We therefore make a lightweight
- * /api/available-models probe or, more simply, try models in priority order
- * and let the backend failover handle the rest.  The frontend just chooses
- * the top-priority model from the list — the backend ai-provider.ts will
- * automatically rotate to the next healthy key if it fails.
+ * Picks the best model available by walking MODEL_PRIORITY top-to-bottom and
+ * returning the first entry that exists in AVAILABLE_MODELS.
+ * The backend ai-provider.ts handles per-key health and rotation — the
+ * frontend just needs to nominate a starting model.
  */
 function pickBestModel(): AIModelConfig {
   for (const entry of MODEL_PRIORITY) {
     const model = AVAILABLE_MODELS.find((m) => m.id === entry.id);
     if (model) return model;
   }
-  // Absolute fallback
   return AVAILABLE_MODELS[0];
 }
 
@@ -103,9 +117,9 @@ export function ProcessingStep() {
 
   const progressIndexRef   = useRef(0);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [hasStarted, setHasStarted]     = useState(false);
+  const [hasStarted, setHasStarted]       = useState(false);
   const [progressIndex, setProgressIndex] = useState(0);
-  const [activeModel, setActiveModel]   = useState<AIModelConfig>(pickBestModel);
+  const [activeModel, setActiveModel]     = useState<AIModelConfig>(pickBestModel);
   // Track which model IDs have already been tried so retry avoids repeats
   const triedModelsRef = useRef<Set<string>>(new Set());
 
@@ -116,7 +130,7 @@ export function ProcessingStep() {
     };
   }, []);
 
-  // Auto-start as soon as the component mounts (job analysis is ready)
+  // Auto-start as soon as the component mounts (job analysis is ready by Step 3)
   useEffect(() => {
     if (!hasStarted && parsedCv && analyzedJob) {
       const best = pickBestModel();
@@ -181,9 +195,10 @@ export function ProcessingStep() {
     const next = MODEL_PRIORITY.find(
       (entry) => !triedModelsRef.current.has(entry.id) && AVAILABLE_MODELS.some((m) => m.id === entry.id)
     );
+    // Absolute fallback: glm-4-plus is always in AVAILABLE_MODELS
     const nextModel = next
       ? AVAILABLE_MODELS.find((m) => m.id === next.id)!
-      : AVAILABLE_MODELS.find((m) => m.id === 'glm-4-plus')!; // ultimate fallback
+      : AVAILABLE_MODELS.find((m) => m.id === 'glm-4-plus')!;
 
     setRestructureError(null);
     setHasStarted(false);
@@ -193,7 +208,7 @@ export function ProcessingStep() {
   /** Manual retry with the same model */
   const handleRetrySame = useCallback(() => {
     const currentId = modelUsed ?? activeModel.id;
-    triedModelsRef.current.delete(currentId); // allow retry of same
+    triedModelsRef.current.delete(currentId);
     setRestructureError(null);
     setHasStarted(false);
     startRestructuring(currentId);

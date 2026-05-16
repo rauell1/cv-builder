@@ -98,18 +98,19 @@ export interface AIModelConfig {
   apiEnvKey?: string;
 }
 
-export type AIModelProvider = 'glm' | 'openai' | 'anthropic' | 'google' | 'custom';
+export type AIModelProvider = 'glm' | 'openai' | 'anthropic' | 'google' | 'nvidia' | 'custom';
 
 export const AI_PROVIDERS: { id: AIModelProvider; name: string; description: string; icon: string }[] = [
   { id: 'glm', name: 'GLM (Z.ai)', description: 'Zhipu AI models - built-in in Z.ai; API key required on external hosting', icon: '🤖' },
   { id: 'openai', name: 'OpenAI', description: 'ChatGPT, GPT-4, GPT-4o - industry leading', icon: '⚡' },
   { id: 'anthropic', name: 'Anthropic', description: 'Claude models - safety-focused AI', icon: '🧠' },
   { id: 'google', name: 'Google', description: 'Gemini models - multimodal AI by Google', icon: '💎' },
+  { id: 'nvidia', name: 'NVIDIA NIM', description: 'Free hosted inference on leading open models via NVIDIA build.nvidia.com', icon: '🟢' },
   { id: 'custom', name: 'Custom / Other', description: 'Bring your own OpenAI-compatible API', icon: '🔧' },
 ];
 
 export const AVAILABLE_MODELS: AIModelConfig[] = [
-  // GLM Models (built-in)
+  // ─── GLM Models (built-in / always available) ──────────────────────────────
   {
     id: 'glm-4-flash',
     name: 'GLM-4 Flash',
@@ -152,7 +153,8 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
     speed: 'medium',
     requiresApiKey: false,
   },
-  // OpenAI Models
+
+  // ─── OpenAI Models ──────────────────────────────────────────────────────────
   {
     id: 'gpt-4o',
     name: 'GPT-4o',
@@ -183,7 +185,8 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
     requiresApiKey: true,
     apiEnvKey: 'OPENAI_API_KEY',
   },
-  // Anthropic Claude Models
+
+  // ─── Anthropic Claude Models ────────────────────────────────────────────────
   {
     id: 'claude-sonnet-4-20250514',
     name: 'Claude 4 Sonnet',
@@ -214,7 +217,8 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
     requiresApiKey: true,
     apiEnvKey: 'ANTHROPIC_API_KEY',
   },
-  // Google Gemini Models
+
+  // ─── Google Gemini Models ───────────────────────────────────────────────────
   {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
@@ -244,6 +248,115 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
     speed: 'medium',
     requiresApiKey: true,
     apiEnvKey: 'GOOGLE_AI_API_KEY',
+  },
+
+  // ─── NVIDIA NIM Models (free-tier, hosted inference) ───────────────────────
+  // All served via https://integrate.api.nvidia.com/v1/chat/completions
+  // Requires NVIDIA_API_KEY in Vercel env vars (free at build.nvidia.com)
+  {
+    id: 'mistralai/mistral-medium-3.5-128b',
+    name: 'Mistral Medium 3.5 (NVIDIA)',
+    provider: 'nvidia',
+    description: 'High-performing 128b model for text generation, coding, and agentic use cases — hosted free on NVIDIA NIM',
+    bestFor: 'Complex CV restructuring, detailed content generation, long-context tasks',
+    badge: 'Free · 128K',
+    badgeColor: 'bg-lime-100 text-lime-700 border-lime-200',
+    iconColor: 'text-lime-600',
+    supportsStructuredOutput: true,
+    maxContextTokens: 128000,
+    speed: 'medium',
+    requiresApiKey: true,
+    apiEnvKey: 'NVIDIA_API_KEY',
+  },
+  {
+    id: 'deepseek-ai/deepseek-r1-0528',
+    name: 'DeepSeek-R1 (NVIDIA)',
+    provider: 'nvidia',
+    description: 'DeepSeek R1 reasoning model — strong logical analysis and structured output, hosted free on NVIDIA NIM',
+    bestFor: 'Job analysis, keyword mapping, logical restructuring',
+    badge: 'Free · Reasoning',
+    badgeColor: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+    iconColor: 'text-cyan-600',
+    supportsStructuredOutput: true,
+    maxContextTokens: 64000,
+    speed: 'medium',
+    requiresApiKey: true,
+    apiEnvKey: 'NVIDIA_API_KEY',
+  },
+  {
+    id: 'moonshotai/kimi-k2-instruct',
+    name: 'Kimi K2 (NVIDIA)',
+    provider: 'nvidia',
+    description: '1T MoE model for long-horizon tasks and document understanding — hosted free on NVIDIA NIM',
+    bestFor: 'Long CV documents, comprehensive analysis, agentic tasks',
+    badge: 'Free · 128K',
+    badgeColor: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200',
+    iconColor: 'text-fuchsia-600',
+    supportsStructuredOutput: true,
+    maxContextTokens: 128000,
+    speed: 'slow',
+    requiresApiKey: true,
+    apiEnvKey: 'NVIDIA_API_KEY',
+  },
+  {
+    id: 'nvidia/llama-3.3-nemotron-super-49b-v1',
+    name: 'Nemotron Super 49b (NVIDIA)',
+    provider: 'nvidia',
+    description: 'NVIDIA-tuned Llama 3.3 49b — fast and capable for structured generation, hosted free on NVIDIA NIM',
+    bestFor: 'Fast CV generation, quick structured output, efficient restructuring',
+    badge: 'Free · Fast',
+    badgeColor: 'bg-green-100 text-green-700 border-green-200',
+    iconColor: 'text-green-600',
+    supportsStructuredOutput: true,
+    maxContextTokens: 128000,
+    speed: 'fast',
+    requiresApiKey: true,
+    apiEnvKey: 'NVIDIA_API_KEY',
+  },
+  {
+    id: 'meta/llama-3.3-70b-instruct',
+    name: 'Llama 3.3 70b (NVIDIA)',
+    provider: 'nvidia',
+    description: 'Meta Llama 3.3 70b instruction-tuned model hosted free on NVIDIA NIM — reliable general-purpose fallback',
+    bestFor: 'General CV tasks, reliable fallback, wide instruction coverage',
+    badge: 'Free · General',
+    badgeColor: 'bg-blue-100 text-blue-700 border-blue-200',
+    iconColor: 'text-blue-600',
+    supportsStructuredOutput: true,
+    maxContextTokens: 128000,
+    speed: 'fast',
+    requiresApiKey: true,
+    apiEnvKey: 'NVIDIA_API_KEY',
+  },
+  {
+    id: 'qwen/qwen3-235b-a22b',
+    name: 'Qwen3 235b (NVIDIA)',
+    provider: 'nvidia',
+    description: 'Alibaba Qwen3 235b MoE with strong reasoning — hosted free on NVIDIA NIM',
+    bestFor: 'Deep reasoning, multilingual CVs, comprehensive analysis',
+    badge: 'Free · Reasoning',
+    badgeColor: 'bg-purple-100 text-purple-700 border-purple-200',
+    iconColor: 'text-purple-600',
+    supportsStructuredOutput: true,
+    maxContextTokens: 32000,
+    speed: 'slow',
+    requiresApiKey: true,
+    apiEnvKey: 'NVIDIA_API_KEY',
+  },
+  {
+    id: '01-ai/yi-large',
+    name: 'Yi Large (NVIDIA)',
+    provider: 'nvidia',
+    description: '01.ai Yi Large model hosted free on NVIDIA NIM — solid general text generation',
+    bestFor: 'General text generation, content rewriting, light restructuring',
+    badge: 'Free · General',
+    badgeColor: 'bg-rose-100 text-rose-700 border-rose-200',
+    iconColor: 'text-rose-600',
+    supportsStructuredOutput: true,
+    maxContextTokens: 32000,
+    speed: 'medium',
+    requiresApiKey: true,
+    apiEnvKey: 'NVIDIA_API_KEY',
   },
 ];
 
