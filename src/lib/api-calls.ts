@@ -73,8 +73,10 @@ export async function parseCv(cvText: string, sessionId?: string): Promise<Parse
 }
 
 export async function analyzeJob(jobDescText: string): Promise<JobAnalysis> {
+  // Job analysis feeds multiple later steps, so we allow a bit more time here
+  // to let the server-side provider fallback chain complete before timing out.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20_000); // 20s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 45_000); // 45s timeout (was 20s)
 
   try {
     const response = await fetch('/api/analyze-job', {
@@ -108,7 +110,8 @@ export async function analyzeJob(jobDescText: string): Promise<JobAnalysis> {
   } catch (err) {
     clearTimeout(timeoutId);
     if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('Job analysis timed out. The server may be busy — please try again.');
+      // Surface a friendlier message that matches the UI error copy
+      throw new Error('Job analysis timed out before the AI could finish. The server may be busy — please try again in a few seconds.');
     }
     throw err;
   }
