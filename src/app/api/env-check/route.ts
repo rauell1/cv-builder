@@ -1,14 +1,15 @@
 /**
- * GET /api/env-check
+ * GET /api/env-check?token=<HEALTH_DEBUG_TOKEN>
  *
  * Live diagnostic endpoint — shows which environment variables are found
  * and how many keys are available per NVIDIA slot, WITHOUT exposing
  * the actual key values.
  *
+ * Requires HEALTH_DEBUG_TOKEN env var to be set and matched.
  * Visit this URL after every Vercel deployment to verify your env vars
  * are being picked up correctly.
  */
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   getProviderCredentialDetails,
   getNvidiaSlotDiagnostics,
@@ -18,7 +19,12 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const token = request.nextUrl.searchParams.get('token') ?? request.nextUrl.searchParams.get('debug');
+  const expectedToken = process.env.HEALTH_DEBUG_TOKEN;
+  if (!expectedToken || !token || token !== expectedToken) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const details = getProviderCredentialDetails();
   const nvidiaSlots = getNvidiaSlotDiagnostics();
 

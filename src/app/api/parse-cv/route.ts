@@ -15,7 +15,7 @@ import { sanitizeParsedCV } from '@/lib/text-cleaning';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 45;
+export const maxDuration = 60;
 
 const MAX_CV_LENGTH = 50_000;
 
