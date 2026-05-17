@@ -104,7 +104,7 @@ async function generateSingleSectionInsight(
 
   try {
     const { content: responseText } = await aiQueue.enqueue(
-      () => callAIRaceForTask('analyze', messages, 1, 0.4),
+      () => callAIRaceForTask('score', messages, 2, 0.4),
       'normal',
     );
 

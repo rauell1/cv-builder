@@ -83,7 +83,7 @@ export class AIModelFailedError extends Error {
 
 // ---- Key health tracking ----
 
-const COOLDOWN_MS = 5 * 60_000; // 5 minutes
+const COOLDOWN_MS = 2 * 60_000; // 2 minutes — models re-enter rotation faster
 
 interface KeyHealth {
   key: string;
@@ -742,22 +742,30 @@ const GOOGLE_MODELS    = ['gemini-2.5-flash', 'gemini-2.5-pro'] as const;
 
 // ---- Task-specific model routing ----
 
-export type AITaskType = 'parse' | 'analyze' | 'restructure' | 'general';
+export type AITaskType = 'parse' | 'analyze' | 'score' | 'restructure' | 'cover_letter' | 'general';
 
 /**
- * Preferred model order per task type — filter to available providers at call time.
+ * Preferred model order per task type — filtered to available providers at call time.
  *
- * parse       → speed first: fast JSON extraction, low latency
- * analyze     → reasoning + speed: keyword/requirement analysis
- * restructure → quality first: professional CV writing
- * general     → balanced default
+ * parse        → speed first: fast JSON extraction from raw CV text
+ * analyze      → speed + structure: job keyword/requirement extraction
+ * score        → lightweight: ATS scoring, insights, achievement rewrites
+ * restructure  → quality + speed: professional CV rewrite (NVIDIA fast models race first)
+ * cover_letter → quality + tone: cover letter prose (similar to restructure, tuned for writing)
+ * general      → balanced default
+ *
+ * Rotation strategy:
+ *  - Within each chain, models are ordered so the fastest reliable option comes first.
+ *  - callAIRaceForTask fires the top N simultaneously; whoever responds first wins.
+ *  - Models on cooldown (< 2 min since last failure) are automatically skipped.
+ *  - GLM safety-net models are appended unconditionally so there is always a fallback.
  */
 export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   parse: [
-    // Fast NVIDIA models with reliable structured output
+    // Fast NVIDIA models first — reliable structured JSON output, low latency
     'meta/llama-3.3-70b-instruct',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'glm-4-flash',                            // always-on fast fallback
+    'glm-4-flash',
     'gemini-2.5-flash',
     'gpt-4o-mini',
     'claude-haiku-4-20250414',
@@ -765,7 +773,7 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'glm-4-plus',
   ],
   analyze: [
-    // Fast models first — job analysis is structured JSON extraction, not reasoning
+    // Fast structured-output models — job analysis is JSON extraction, not reasoning
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'meta/llama-3.3-70b-instruct',
     'glm-4-plus',
@@ -775,23 +783,52 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'moonshotai/kimi-k2-instruct',
     'claude-haiku-4-20250414',
     'glm-4-flash',
-    'deepseek-ai/deepseek-r1-0528',  // slow reasoning model — last resort only
+    'deepseek-ai/deepseek-r1-0528',  // slow reasoning — last resort
+  ],
+  score: [
+    // Lightweight scoring tasks: ATS scoring, section insights, bullet rewrites
+    // Use smallest/fastest models — quality requirements are lower
+    'meta/llama-3.3-70b-instruct',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'glm-4-flash',
+    'gemini-2.5-flash',
+    'gpt-4o-mini',
+    'glm-4-plus',
+    'claude-haiku-4-20250414',
+    'mistralai/mistral-medium-3.5-128b',
   ],
   restructure: [
-    // Quality writing models first — latency tradeoff is justified here
-    'claude-sonnet-4-20250514',
-    'gpt-4o',
-    'mistralai/mistral-medium-3.5-128b',      // best free-tier quality
-    'gemini-2.5-pro',
-    'moonshotai/kimi-k2-instruct',            // long context, quality
-    'deepseek-ai/deepseek-r1-0528',
+    // CV rewrite — quality matters but fast NVIDIA models come first so we get
+    // results in ~12s instead of waiting ~22s for Claude/GPT cold starts.
+    // callAIRaceForTask fires top 3 simultaneously; fastest good response wins.
+    'mistralai/mistral-medium-3.5-128b',      // NVIDIA NIM — ~10-15s, excellent CV quality
+    'moonshotai/kimi-k2-instruct',            // NVIDIA NIM — ~10-15s, long context
+    'claude-sonnet-4-20250514',               // Anthropic — ~20-25s, best prose quality
+    'gpt-4o',                                 // OpenAI — ~15-20s, reliable
+    'gemini-2.5-pro',                         // Google — ~15-20s, strong writing
     'gemini-2.5-flash',
     'gpt-4o-mini',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'claude-haiku-4-20250414',
     'meta/llama-3.3-70b-instruct',
+    'deepseek-ai/deepseek-r1-0528',           // slow — last resort
     'glm-4-plus',
     'glm-4-long',
+    'glm-4-flash',
+  ],
+  cover_letter: [
+    // Cover letter prose — similar to restructure but tone/voice matters more than
+    // strict JSON structure, so Anthropic/OpenAI models are ranked slightly higher.
+    'mistralai/mistral-medium-3.5-128b',      // NVIDIA NIM — fast, fluent prose
+    'moonshotai/kimi-k2-instruct',            // NVIDIA NIM — fast, long context
+    'claude-sonnet-4-20250514',               // Anthropic — best tone control
+    'gpt-4o',                                 // OpenAI — strong writing
+    'gemini-2.5-pro',                         // Google — solid prose
+    'gemini-2.5-flash',
+    'gpt-4o-mini',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'claude-haiku-4-20250414',
+    'glm-4-plus',
     'glm-4-flash',
   ],
   general: NVIDIA_MODEL_IDS_FAST_FIRST,

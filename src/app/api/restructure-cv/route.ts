@@ -68,9 +68,9 @@ export async function POST(request: NextRequest) {
     },
   ];
 
-  // Race 2 models for all complexity levels (was inverted: complex→1, simple→2)
-  // For complex tasks quality matters more, so we race 2 quality models simultaneously.
-  const raceCount = 2;
+  // Race 3 models simultaneously — first valid response wins, cutting P50 latency
+  // significantly vs racing only 2 (fast NVIDIA models now lead the restructure chain).
+  const raceCount = 3;
 
   const { content: responseText, model: usedModel } = await aiQueue.add(
     () => callAIRaceForTask('restructure', messages, raceCount, 0.3, primaryModel),
