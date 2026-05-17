@@ -158,15 +158,15 @@ async function parseCvCore(cvText: string): Promise<ParseResult> {
 
   // ── AI attempt ──────────────────────────────────────────────────────────
   try {
-    // Race 3 models simultaneously: Mistral (quality) + Llama-70b (fast, 20s) + Pekpik (independent quota)
-    // Llama almost always responds first (~10s). If NVIDIA is rate-limited, Pekpik covers.
+    // Race 3 models simultaneously: Llama-70b (fast, 20s) + Mistral (quality, 35s) + Pekpik gemini-2.5-flash (120 RPM, independent quota)
+    // Llama almost always responds first (~10s). If NVIDIA is rate-limited, Pekpik Gemini covers.
     const aiResult = await callAIRaceForTask(
       'parse',
       [
         { role: 'system', content: CV_PARSE_SYSTEM_PROMPT },
         { role: 'user',   content: cvText },
       ],
-      3,   // race Mistral + Llama-70b + Pekpik gpt-5.4
+      3,   // race Llama-70b + Mistral + pekpik/gemini-2.5-flash
       0.1, // low temperature = deterministic JSON
     );
 

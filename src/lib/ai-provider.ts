@@ -21,6 +21,18 @@
  *   NVIDIA_KIMI_URL      — override base URL  (optional)
  *   NVIDIA_API_KEY       — generic pool used as last resort
  *
+ * Pekpik env-var layout — per-model-family slots (set in Vercel):
+ *   PEKPIK_API_KEY       — generic pool (gpt-5.4, backward compat)
+ *   PEKPIK_GPT55_KEY     — gpt-5.5 keys (comma-sep)
+ *   PEKPIK_CLAUDE_KEYS   — claude-opus-4-7 keys (comma-sep, also PEKPIK_CLAUDE_KEY)
+ *   PEKPIK_GEMINI_KEYS   — gemini-2.5-flash keys via Pekpik (comma-sep, also PEKPIK_GEMINI_KEY)
+ *   PEKPIK_DEEPSEEK_KEYS — deepseek-chat keys via Pekpik (comma-sep, also PEKPIK_DEEPSEEK_KEY)
+ *   PEKPIK_SMART_KEYS    — smart-chat keys (comma-sep, also PEKPIK_SMART_KEY)
+ *   PEKPIK_KIMI_KEYS     — kimi-k2.5 keys via Pekpik (comma-sep, also PEKPIK_KIMI_KEY)
+ * Pekpik models with conflicting names (e.g. gemini-2.5-flash) are
+ * referenced as "pekpik/gemini-2.5-flash" in TASK_MODEL_PREFERENCES so the
+ * router can distinguish them from the native Google / Anthropic variants.
+ *
  * Speed optimizations:
  *   - callAIRaceForTask(): fires top-3 models in parallel, first winner returned
  *   - Per-model timeouts tuned to each provider's p95 latency
@@ -364,6 +376,15 @@ export function getProviderKeyNames(provider: AIProvider): string[] {
       'NVIDIA_API_KEY',
     ];
   }
+  if (provider === 'pekpik') {
+    const names = [...PROVIDER_KEY_ALIASES['pekpik']];
+    for (const slot of Object.keys(PEKPIK_SLOT_CONFIG) as PekpikSlot[]) {
+      for (const alias of PEKPIK_SLOT_CONFIG[slot].aliases) {
+        if (!names.includes(alias)) names.push(alias);
+      }
+    }
+    return names;
+  }
   return PROVIDER_KEY_ALIASES[provider] ?? [];
 }
 
@@ -373,7 +394,7 @@ export function hasAnyProviderCredentials(): boolean {
     Boolean(getProviderApiKey('openai')) ||
     Boolean(getProviderApiKey('anthropic')) ||
     Boolean(getProviderApiKey('google')) ||
-    Boolean(getProviderApiKey('pekpik')) ||
+    hasPekpikCredentials() ||
     hasNvidiaCredentials() ||
     process.env.ZAI_SDK_FALLBACK === '1'
   );
@@ -385,7 +406,7 @@ export function getProviderCredentialStatus(): Record<AIProvider, boolean> {
     openai:    Boolean(getProviderApiKey('openai')),
     anthropic: Boolean(getProviderApiKey('anthropic')),
     google:    Boolean(getProviderApiKey('google')),
-    pekpik:    Boolean(getProviderApiKey('pekpik')),
+    pekpik:    hasPekpikCredentials(),
     nvidia:    hasNvidiaCredentials(),
   };
 }
@@ -400,9 +421,18 @@ export function getProviderCredentialDetails(): {
   const sources: Record<AIProvider, string[]> = {
     glm: [], openai: [], anthropic: [], google: [], pekpik: [], nvidia: [],
   };
-  for (const provider of ['glm', 'openai', 'anthropic', 'google', 'pekpik'] as Exclude<AIProvider, 'nvidia'>[]) {
+  for (const provider of ['glm', 'openai', 'anthropic', 'google'] as Exclude<AIProvider, 'nvidia' | 'pekpik'>[]) {
     for (const alias of PROVIDER_KEY_ALIASES[provider]) {
       if (readEnvValue(alias)) sources[provider].push(alias);
+    }
+  }
+  // Pekpik: check generic key + all per-slot keys
+  for (const alias of PROVIDER_KEY_ALIASES['pekpik']) {
+    if (readEnvValue(alias)) sources.pekpik.push(alias);
+  }
+  for (const slot of Object.keys(PEKPIK_SLOT_CONFIG) as PekpikSlot[]) {
+    for (const alias of PEKPIK_SLOT_CONFIG[slot].aliases) {
+      if (readEnvValue(alias) && !sources.pekpik.includes(alias)) sources.pekpik.push(alias);
     }
   }
   for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
@@ -423,14 +453,87 @@ export function getProviderCredentialDetails(): {
 
 const PEKPIK_BASE_URL = 'https://aiapiv2.pekpik.com/v1';
 
-// Models served exclusively via pekpik (takes priority over the gpt- prefix → openai routing)
-const PEKPIK_MODEL_IDS = new Set(['gpt-5.4', 'gpt-5', 'gpt-4.5']);
+// gpt-5.x models unique to Pekpik (no native OpenAI equivalent) — no prefix conflict
+const PEKPIK_OWN_MODELS = new Set(['gpt-5.4', 'gpt-5.5', 'gpt-5', 'gpt-4.5']);
+
+export type PekpikSlot = 'GPT54' | 'GPT55' | 'CLAUDE_OPUS' | 'GEMINI_FLASH' | 'DEEPSEEK' | 'SMART' | 'KIMI';
+
+// Per-slot: which model ID to send to the Pekpik API, plus env var aliases for key pool.
+// "pekpik/X" model IDs (used in TASK_MODEL_PREFERENCES) strip the prefix before the API call.
+const PEKPIK_SLOT_CONFIG: Record<PekpikSlot, { apiModel: string; aliases: string[] }> = {
+  GPT54:        { apiModel: 'gpt-5.4',          aliases: ['PEKPIK_API_KEY', 'PEKPIK_KEY', 'PEKPIK_GPT54_KEY', 'PEKPIK_GPT54_KEYS'] },
+  GPT55:        { apiModel: 'gpt-5.5',          aliases: ['PEKPIK_GPT55_KEY', 'PEKPIK_GPT55_KEYS'] },
+  CLAUDE_OPUS:  { apiModel: 'claude-opus-4-7',  aliases: ['PEKPIK_CLAUDE_KEYS', 'PEKPIK_CLAUDE_KEY'] },
+  GEMINI_FLASH: { apiModel: 'gemini-2.5-flash', aliases: ['PEKPIK_GEMINI_KEYS', 'PEKPIK_GEMINI_KEY'] },
+  DEEPSEEK:     { apiModel: 'deepseek-chat',    aliases: ['PEKPIK_DEEPSEEK_KEYS', 'PEKPIK_DEEPSEEK_KEY'] },
+  SMART:        { apiModel: 'smart-chat',       aliases: ['PEKPIK_SMART_KEYS', 'PEKPIK_SMART_KEY'] },
+  KIMI:         { apiModel: 'kimi-k2.5',        aliases: ['PEKPIK_KIMI_KEYS', 'PEKPIK_KIMI_KEY'] },
+};
+
+// Maps user-facing model ID (as used in TASK_MODEL_PREFERENCES) → Pekpik slot
+const PEKPIK_MODEL_TO_SLOT = new Map<string, PekpikSlot>([
+  ['gpt-5.4',                    'GPT54'],
+  ['gpt-5',                      'GPT54'],
+  ['gpt-4.5',                    'GPT54'],
+  ['gpt-5.5',                    'GPT55'],
+  ['pekpik/claude-opus-4-7',     'CLAUDE_OPUS'],
+  ['pekpik/gemini-2.5-flash',    'GEMINI_FLASH'],
+  ['pekpik/deepseek-chat',       'DEEPSEEK'],
+  ['pekpik/smart-chat',          'SMART'],
+  ['pekpik/kimi-k2.5',           'KIMI'],
+]);
+
+function getPekpikSlotKeys(slot: PekpikSlot): string[] {
+  const { aliases } = PEKPIK_SLOT_CONFIG[slot];
+  const keys = readMultiKeyEnv(...aliases);
+  initKeyHealth(`pekpik:${slot}`, keys);
+  return keys;
+}
+
+function pickPekpikKey(modelId: string): string | null {
+  const slot = PEKPIK_MODEL_TO_SLOT.get(modelId);
+  if (slot) {
+    const poolKey = `pekpik:${slot}`;
+    getPekpikSlotKeys(slot); // ensures pool is initialized
+    return pickHealthyKeyFromPool(poolKey);
+  }
+  return pickKeyNonNvidia('pekpik');
+}
+
+function markPekpikKeyDown(modelId: string, key: string): void {
+  const slot = PEKPIK_MODEL_TO_SLOT.get(modelId);
+  if (slot) markKeyDownInPool(`pekpik:${slot}`, key);
+  else markKeyDownNonNvidia('pekpik', key);
+}
+
+function hasPekpikCredentials(): boolean {
+  if (getAllProviderKeysNonNvidia('pekpik').length > 0) return true;
+  for (const slot of Object.keys(PEKPIK_SLOT_CONFIG) as PekpikSlot[]) {
+    if (getPekpikSlotKeys(slot).length > 0) return true;
+  }
+  return false;
+}
+
+export function getPekpikSlotDiagnostics(): Record<PekpikSlot, { keyCount: number; apiModel: string; healthyKeys: number }> {
+  const result = {} as Record<PekpikSlot, { keyCount: number; apiModel: string; healthyKeys: number }>;
+  for (const slot of Object.keys(PEKPIK_SLOT_CONFIG) as PekpikSlot[]) {
+    const keys = getPekpikSlotKeys(slot);
+    const pool = keyHealthMap.get(`pekpik:${slot}`) ?? [];
+    result[slot] = {
+      keyCount: keys.length,
+      apiModel: PEKPIK_SLOT_CONFIG[slot].apiModel,
+      healthyKeys: pool.filter((e) => e.status === 'healthy').length,
+    };
+  }
+  return result;
+}
 
 // ---- Utility ----
 
 export function getProvider(modelId: string): AIProvider {
+  if (modelId.startsWith('pekpik/'))     return 'pekpik';  // namespaced pekpik models
   if (modelId.startsWith('glm-'))        return 'glm';
-  if (PEKPIK_MODEL_IDS.has(modelId))     return 'pekpik';
+  if (PEKPIK_OWN_MODELS.has(modelId))   return 'pekpik';  // gpt-5.4, gpt-5.5, etc.
   if (modelId.startsWith('gpt-'))        return 'openai';
   if (modelId.startsWith('claude-'))     return 'anthropic';
   if (modelId.startsWith('gemini-'))     return 'google';
@@ -551,7 +654,8 @@ function modelTimeout(modelId: string): number {
     if (entry.speed === 'medium') return 35_000;
     return 55_000;
   }
-  if (PEKPIK_MODEL_IDS.has(modelId))  return 30_000;
+  if (modelId.startsWith('pekpik/'))  return 30_000;
+  if (PEKPIK_OWN_MODELS.has(modelId)) return 30_000;
   if (modelId.startsWith('gpt-'))    return 25_000;
   if (modelId.startsWith('claude-')) return 30_000;
   if (modelId.startsWith('gemini-')) return 25_000;
@@ -656,8 +760,21 @@ async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 
 }
 
 async function callPekpik(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
-  const apiKey = pickKeyNonNvidia('pekpik');
-  if (!apiKey) throw new AIProviderError({ provider: 'pekpik', model: modelId, kind: 'missing_key', message: 'Missing Pekpik API key (set PEKPIK_API_KEY in Vercel env vars)' });
+  // Strip pekpik/ namespace prefix to get the actual model ID for the API call
+  const apiModelId = modelId.startsWith('pekpik/') ? modelId.slice(7) : modelId;
+
+  const apiKey = pickPekpikKey(modelId);
+  if (!apiKey) {
+    const slot = PEKPIK_MODEL_TO_SLOT.get(modelId);
+    const envHint = slot ? PEKPIK_SLOT_CONFIG[slot].aliases[0] : 'PEKPIK_API_KEY';
+    throw new AIProviderError({
+      provider: 'pekpik',
+      model: modelId,
+      kind: 'missing_key',
+      message: `Missing Pekpik API key for ${apiModelId} (set ${envHint} in Vercel env vars)`,
+    });
+  }
+
   const timeout = modelTimeout(modelId);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -665,13 +782,14 @@ async function callPekpik(messages: AIMessage[], modelId: string, temperature = 
     const res = await fetch(`${PEKPIK_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: modelId, messages, temperature }),
+      body: JSON.stringify({ model: apiModelId, messages, temperature }),
       signal: controller.signal,
     });
     clearTimeout(timer);
     if (!res.ok) {
       const errText = await res.text();
-      if (res.status === 401 || res.status === 403) markKeyDownNonNvidia('pekpik', apiKey);
+      if (res.status === 401 || res.status === 403) markPekpikKeyDown(modelId, apiKey);
+      if (res.status === 429) markPekpikKeyDown(modelId, apiKey);
       throw new AIProviderError({ provider: 'pekpik', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
     }
     const data = await res.json();
@@ -933,7 +1051,7 @@ function hasProviderCredentials(provider: AIProvider): boolean {
     case 'openai':    return Boolean(getProviderApiKey('openai'));
     case 'anthropic': return Boolean(getProviderApiKey('anthropic'));
     case 'google':    return Boolean(getProviderApiKey('google'));
-    case 'pekpik':    return Boolean(getProviderApiKey('pekpik'));
+    case 'pekpik':    return hasPekpikCredentials();
     case 'nvidia':    return hasNvidiaCredentials();
     default:          return false;
   }
@@ -960,24 +1078,32 @@ void NVIDIA_MODEL_IDS_FAST_FIRST;
 
 export type AITaskType = 'parse' | 'analyze' | 'score' | 'restructure' | 'cover_letter' | 'general';
 
-// Model chain design (all keys are in NVIDIA_API_KEY generic pool + PEKPIK_API_KEY):
-//   Slots 1-2  = primary race pair — Mistral (quality) + Llama-70b (fast, 20s timeout).
-//               Both are free NVIDIA, both fire simultaneously. Llama almost always
-//               responds first (~10s); Mistral provides quality backup at ~25s.
-//   Slot 3     = gpt-5.4 (Pekpik) — independent rate limit, included in the race
-//               for parse-cv (raceCount=3) so a full NVIDIA outage doesn't block parsing.
-//               Sequential fallback #1 for all other routes.
-//   Slots 4-5  = remaining NVIDIA free models (sequential fallbacks)
-//   Slots 6+   = paid providers — last resort only
+// Model chain design:
+//   Slots 1-2  = primary race pair — Llama-70b (fast, 20s) + Mistral (quality, 35s).
+//               Both free NVIDIA. Llama almost always responds first (~10s).
+//   Slot 3     = pekpik/gemini-2.5-flash — independent rate limit (120 RPM via 6 Pekpik keys),
+//               included in parse-cv race triple. Sequential fallback #1 for all other tasks.
+//   Slots 4-5  = more Pekpik models — high combined RPM, independent from NVIDIA quota:
+//               pekpik/kimi-k2.5 (60 RPM), pekpik/deepseek-chat (80 RPM)
+//   Slot 6     = gpt-5.4 (backward compat generic PEKPIK_API_KEY)
+//   Slots 7-8  = remaining NVIDIA free sequential fallbacks
+//   Slot 9     = pekpik/claude-opus-4-7 — quality model (25 RPM) for restructure/cover_letter
+//   Slot 10+   = paid providers — last resort only
 export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   parse: [
     // ── race triple (raceCount=3 in parse-cv route) ──
-    'meta/llama-3.3-70b-instruct',          // #1 priority — fast, 20s timeout
-    'mistralai/mistral-medium-3.5-128b',   // quality backup
-    'gpt-5.4',                              // Pekpik — fires simultaneously, separate quota
+    'meta/llama-3.3-70b-instruct',        // #1 fast NVIDIA, ~10s
+    'mistralai/mistral-medium-3.5-128b',  // #2 quality NVIDIA, ~25s
+    'pekpik/gemini-2.5-flash',            // #3 Pekpik — 120 RPM, independent quota
+    // ── Pekpik sequential fallbacks (high capacity) ──
+    'pekpik/kimi-k2.5',                   // 60 RPM
+    'pekpik/deepseek-chat',               // 80 RPM
+    'gpt-5.4',                            // generic PEKPIK_API_KEY (backward compat)
     // ── NVIDIA free sequential fallbacks ──
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'moonshotai/kimi-k2-instruct',
+    // ── quality Pekpik fallback ──
+    'pekpik/claude-opus-4-7',             // 25 RPM
     // ── paid last resort ──
     'gemini-2.5-flash',
     'gpt-4o-mini',
@@ -988,8 +1114,12 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     // ── race pair (raceCount=2) ──
     'meta/llama-3.3-70b-instruct',
     'mistralai/mistral-medium-3.5-128b',
-    // ── Pekpik + NVIDIA sequential fallbacks ──
+    // ── Pekpik sequential fallbacks ──
+    'pekpik/gemini-2.5-flash',            // 120 RPM
+    'pekpik/deepseek-chat',               // 80 RPM
+    'pekpik/kimi-k2.5',                   // 60 RPM
     'gpt-5.4',
+    // ── NVIDIA free sequential fallbacks ──
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'moonshotai/kimi-k2-instruct',
     // ── paid last resort ──
@@ -1000,9 +1130,12 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'deepseek-ai/deepseek-r1-0528',
   ],
   score: [
-    // ── race pair (raceCount=1, sequential) ──
+    // ── single model (raceCount=1) ──
     'meta/llama-3.3-70b-instruct',
     'mistralai/mistral-medium-3.5-128b',
+    // ── Pekpik sequential fallbacks ──
+    'pekpik/gemini-2.5-flash',
+    'pekpik/deepseek-chat',
     'gpt-5.4',
     // ── NVIDIA free fallbacks ──
     'nvidia/llama-3.3-nemotron-super-49b-v1',
@@ -1016,8 +1149,13 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     // ── race pair (raceCount=2) ──
     'meta/llama-3.3-70b-instruct',
     'mistralai/mistral-medium-3.5-128b',
-    // ── Pekpik + NVIDIA sequential fallbacks ──
+    // ── Pekpik sequential fallbacks (ordered by quality then capacity) ──
+    'pekpik/claude-opus-4-7',             // high quality for restructuring
+    'pekpik/gemini-2.5-flash',            // 120 RPM
+    'pekpik/kimi-k2.5',                   // 60 RPM
+    'pekpik/deepseek-chat',               // 80 RPM
     'gpt-5.4',
+    // ── NVIDIA free sequential fallbacks ──
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'moonshotai/kimi-k2-instruct',
     'deepseek-ai/deepseek-r1-0528',
@@ -1035,8 +1173,12 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     // ── race pair (raceCount=2) ──
     'meta/llama-3.3-70b-instruct',
     'mistralai/mistral-medium-3.5-128b',
-    // ── Pekpik + NVIDIA sequential fallbacks ──
+    // ── Pekpik sequential fallbacks ──
+    'pekpik/claude-opus-4-7',             // high quality for writing
+    'pekpik/gemini-2.5-flash',            // 120 RPM
+    'pekpik/kimi-k2.5',                   // 60 RPM
     'gpt-5.4',
+    // ── NVIDIA free sequential fallbacks ──
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'moonshotai/kimi-k2-instruct',
     // ── paid last resort ──
@@ -1052,8 +1194,12 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     // ── race pair (raceCount=2) ──
     'meta/llama-3.3-70b-instruct',
     'mistralai/mistral-medium-3.5-128b',
-    // ── Pekpik + NVIDIA sequential fallbacks ──
+    // ── Pekpik sequential fallbacks ──
+    'pekpik/gemini-2.5-flash',
+    'pekpik/deepseek-chat',
+    'pekpik/kimi-k2.5',
     'gpt-5.4',
+    // ── NVIDIA free sequential fallbacks ──
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'moonshotai/kimi-k2-instruct',
     'deepseek-ai/deepseek-r1-0528',

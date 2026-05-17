@@ -114,7 +114,13 @@ Vercel serves the app in sandboxed contexts. All transient state lives in Zustan
 | `OPENAI_API_KEY` | Vercel env | Fallback |
 | `ANTHROPIC_API_KEY` | Vercel env | Fallback |
 | `GOOGLE_AI_API_KEY` | Vercel env | Fallback |
-| `PEKPIK_API_KEY` | Vercel env | OpenAI-compatible proxy (aiapiv2.pekpik.com) — enables gpt-5.4 |
+| `PEKPIK_API_KEY` | Vercel env | Generic Pekpik pool — enables gpt-5.4 (backward compat) |
+| `PEKPIK_GPT55_KEY` | Vercel env | Pekpik gpt-5.5 keys (comma-sep) |
+| `PEKPIK_CLAUDE_KEYS` | Vercel env | Pekpik claude-opus-4-7 keys (comma-sep, 5 keys) |
+| `PEKPIK_GEMINI_KEYS` | Vercel env | Pekpik gemini-2.5-flash keys (comma-sep, 6 keys, 20 RPM each) |
+| `PEKPIK_DEEPSEEK_KEYS` | Vercel env | Pekpik deepseek-chat keys (comma-sep, 4 keys) |
+| `PEKPIK_SMART_KEYS` | Vercel env | Pekpik smart-chat keys (comma-sep, 2 keys) |
+| `PEKPIK_KIMI_KEYS` | Vercel env | Pekpik kimi-k2.5 keys (comma-sep, 6 keys) |
 | `ZHIPU_API_KEY` | Vercel env | Safety net / GLM |
 | `NEXT_PUBLIC_APP_URL` | Vercel env | `https://cv.rauell.systems` |
 
