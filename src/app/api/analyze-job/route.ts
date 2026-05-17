@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
           { role: 'system', content: JOB_ANALYSIS_SYSTEM_PROMPT },
           { role: 'user', content: jobDescText },
         ],
-        1,    // sequential — avoids burning 2 NVIDIA slots simultaneously when rate-limited
+        2,    // race Mistral (NVIDIA) + gpt-5.4 (Pekpik) — independent rate limits
         0.2,
       ),
       'normal',

@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     ];
 
     const { content: responseText, model: usedModel } = await aiQueue.enqueue(
-      () => callAIRaceForTask('score', messages, 2, 0.3),
+      () => callAIRaceForTask('score', messages, 1, 0.3),
       'normal',
     );
 

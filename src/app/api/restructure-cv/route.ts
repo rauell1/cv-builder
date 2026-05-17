@@ -68,9 +68,9 @@ export async function POST(request: NextRequest) {
     },
   ];
 
-  // Race 3 models simultaneously — first valid response wins, cutting P50 latency
-  // significantly vs racing only 2 (fast NVIDIA models now lead the restructure chain).
-  const raceCount = 3;
+  // Race 2 models: Mistral (NVIDIA free) vs gpt-5.4 (Pekpik) — independent rate limits
+  // mean one provider's saturation never blocks the other.
+  const raceCount = 2;
 
   const { content: responseText, model: usedModel } = await aiQueue.add(
     () => callAIRaceForTask('restructure', messages, raceCount, 0.3, primaryModel),

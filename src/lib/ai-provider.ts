@@ -960,83 +960,104 @@ void NVIDIA_MODEL_IDS_FAST_FIRST;
 
 export type AITaskType = 'parse' | 'analyze' | 'score' | 'restructure' | 'cover_letter' | 'general';
 
+// Model chain design:
+//   Slots 1-2  = the race pair (raceCount=2 in all routes)
+//               Always Mistral (NVIDIA free) + gpt-5.4 (Pekpik) — separate rate limits,
+//               so a Mistral rate-limit never blocks gpt-5.4 and vice versa.
+//   Slots 3-5  = NVIDIA free fallbacks (sequential, same quota pool)
+//   Slots 6+   = paid providers — last resort only, never reached in normal operation
 export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   parse: [
-    'meta/llama-3.3-70b-instruct',
+    // ── race pair ──
+    'mistralai/mistral-medium-3.5-128b',   // proven fastest for JSON extraction
+    'gpt-5.4',                              // Pekpik — independent rate limit
+    // ── NVIDIA free fallbacks ──
+    'moonshotai/kimi-k2-instruct',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'gpt-5.4',
-    'glm-4-flash',
+    'meta/llama-3.3-70b-instruct',
+    // ── paid last resort ──
     'gemini-2.5-flash',
     'gpt-4o-mini',
+    'glm-4-flash',
     'claude-haiku-4-20250414',
-    'mistralai/mistral-medium-3.5-128b',
-    'glm-4-plus',
   ],
   analyze: [
-    'meta/llama-3.3-70b-instruct',
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    // ── race pair ──
+    'mistralai/mistral-medium-3.5-128b',
     'gpt-5.4',
-    'glm-4-flash',
-    'glm-4-plus',
+    // ── NVIDIA free fallbacks ──
+    'moonshotai/kimi-k2-instruct',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'meta/llama-3.3-70b-instruct',
+    // ── paid last resort ──
     'gemini-2.5-flash',
     'gpt-4o-mini',
-    'mistralai/mistral-medium-3.5-128b',
-    'moonshotai/kimi-k2-instruct',
+    'glm-4-flash',
     'claude-haiku-4-20250414',
     'deepseek-ai/deepseek-r1-0528',
   ],
   score: [
-    'meta/llama-3.3-70b-instruct',
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    // ── race pair ──
+    'mistralai/mistral-medium-3.5-128b',
     'gpt-5.4',
-    'glm-4-flash',
+    // ── NVIDIA free fallbacks ──
+    'moonshotai/kimi-k2-instruct',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'meta/llama-3.3-70b-instruct',
+    // ── paid last resort ──
     'gemini-2.5-flash',
     'gpt-4o-mini',
-    'glm-4-plus',
-    'claude-haiku-4-20250414',
-    'mistralai/mistral-medium-3.5-128b',
+    'glm-4-flash',
   ],
   restructure: [
-    'gpt-5.4',
-    'mistralai/mistral-medium-3.5-128b',
+    // ── race pair ──
+    'mistralai/mistral-medium-3.5-128b',   // quality + speed leader
+    'gpt-5.4',                              // Pekpik backup
+    // ── NVIDIA free fallbacks ──
     'moonshotai/kimi-k2-instruct',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'meta/llama-3.3-70b-instruct',
+    'deepseek-ai/deepseek-r1-0528',
+    // ── paid last resort ──
     'claude-sonnet-4-20250514',
     'gpt-4o',
     'gemini-2.5-pro',
     'gemini-2.5-flash',
     'gpt-4o-mini',
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'claude-haiku-4-20250414',
-    'meta/llama-3.3-70b-instruct',
-    'deepseek-ai/deepseek-r1-0528',
     'glm-4-plus',
     'glm-4-long',
     'glm-4-flash',
   ],
   cover_letter: [
-    'gpt-5.4',
+    // ── race pair ──
     'mistralai/mistral-medium-3.5-128b',
+    'gpt-5.4',
+    // ── NVIDIA free fallbacks ──
     'moonshotai/kimi-k2-instruct',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'meta/llama-3.3-70b-instruct',
+    // ── paid last resort ──
     'claude-sonnet-4-20250514',
     'gpt-4o',
     'gemini-2.5-pro',
     'gemini-2.5-flash',
     'gpt-4o-mini',
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'claude-haiku-4-20250414',
     'glm-4-plus',
     'glm-4-flash',
   ],
   general: [
-    'gpt-5.4',
-    'meta/llama-3.3-70b-instruct',
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    // ── race pair ──
     'mistralai/mistral-medium-3.5-128b',
+    'gpt-5.4',
+    // ── NVIDIA free fallbacks ──
     'moonshotai/kimi-k2-instruct',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'meta/llama-3.3-70b-instruct',
     'deepseek-ai/deepseek-r1-0528',
-    'glm-4-flash',
+    // ── paid last resort ──
     'gemini-2.5-flash',
     'gpt-4o-mini',
+    'glm-4-flash',
   ],
 };
 

@@ -158,14 +158,14 @@ async function parseCvCore(cvText: string): Promise<ParseResult> {
 
   // ── AI attempt ──────────────────────────────────────────────────────────
   try {
-    // Race top-3 fast parsing models in parallel — first valid JSON response wins
+    // Race Mistral (NVIDIA free) vs gpt-5.4 (Pekpik) — independent rate limits
     const aiResult = await callAIRaceForTask(
       'parse',
       [
         { role: 'system', content: CV_PARSE_SYSTEM_PROMPT },
         { role: 'user',   content: cvText },
       ],
-      3,   // race 3 models simultaneously
+      2,   // race 2 models: Mistral + Pekpik gpt-5.4
       0.1, // low temperature = deterministic JSON
     );
 
