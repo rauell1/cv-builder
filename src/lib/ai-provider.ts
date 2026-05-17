@@ -461,8 +461,8 @@ export function estimateComplexity(
 export function autoSelectModel(complexity: 'simple' | 'standard' | 'complex'): string {
   if (hasNvidiaCredentials()) {
     switch (complexity) {
-      case 'complex':  return 'mistralai/mistral-medium-3.5-128b';
-      case 'standard': return 'nvidia/llama-3.3-nemotron-super-49b-v1';
+      case 'complex':  return 'meta/llama-3.3-70b-instruct';
+      case 'standard': return 'meta/llama-3.3-70b-instruct';
       case 'simple':   return 'meta/llama-3.3-70b-instruct';
     }
   }
@@ -972,8 +972,8 @@ export type AITaskType = 'parse' | 'analyze' | 'score' | 'restructure' | 'cover_
 export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   parse: [
     // ── race triple (raceCount=3 in parse-cv route) ──
-    'mistralai/mistral-medium-3.5-128b',   // proven quality
-    'meta/llama-3.3-70b-instruct',          // fast — 20s timeout, often wins
+    'meta/llama-3.3-70b-instruct',          // #1 priority — fast, 20s timeout
+    'mistralai/mistral-medium-3.5-128b',   // quality backup
     'gpt-5.4',                              // Pekpik — fires simultaneously, separate quota
     // ── NVIDIA free sequential fallbacks ──
     'nvidia/llama-3.3-nemotron-super-49b-v1',
@@ -986,8 +986,8 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   ],
   analyze: [
     // ── race pair (raceCount=2) ──
-    'mistralai/mistral-medium-3.5-128b',
     'meta/llama-3.3-70b-instruct',
+    'mistralai/mistral-medium-3.5-128b',
     // ── Pekpik + NVIDIA sequential fallbacks ──
     'gpt-5.4',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
@@ -1001,8 +1001,8 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   ],
   score: [
     // ── race pair (raceCount=1, sequential) ──
-    'mistralai/mistral-medium-3.5-128b',
     'meta/llama-3.3-70b-instruct',
+    'mistralai/mistral-medium-3.5-128b',
     'gpt-5.4',
     // ── NVIDIA free fallbacks ──
     'nvidia/llama-3.3-nemotron-super-49b-v1',
@@ -1014,8 +1014,8 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   ],
   restructure: [
     // ── race pair (raceCount=2) ──
-    'mistralai/mistral-medium-3.5-128b',
     'meta/llama-3.3-70b-instruct',
+    'mistralai/mistral-medium-3.5-128b',
     // ── Pekpik + NVIDIA sequential fallbacks ──
     'gpt-5.4',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
@@ -1033,8 +1033,8 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   ],
   cover_letter: [
     // ── race pair (raceCount=2) ──
-    'mistralai/mistral-medium-3.5-128b',
     'meta/llama-3.3-70b-instruct',
+    'mistralai/mistral-medium-3.5-128b',
     // ── Pekpik + NVIDIA sequential fallbacks ──
     'gpt-5.4',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
@@ -1050,8 +1050,8 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   ],
   general: [
     // ── race pair (raceCount=2) ──
-    'mistralai/mistral-medium-3.5-128b',
     'meta/llama-3.3-70b-instruct',
+    'mistralai/mistral-medium-3.5-128b',
     // ── Pekpik + NVIDIA sequential fallbacks ──
     'gpt-5.4',
     'nvidia/llama-3.3-nemotron-super-49b-v1',

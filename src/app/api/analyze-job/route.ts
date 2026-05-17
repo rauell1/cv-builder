@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
           { role: 'system', content: JOB_ANALYSIS_SYSTEM_PROMPT },
           { role: 'user', content: jobDescText },
         ],
-        2,    // race Mistral + Llama-70b (both free NVIDIA, fast wins)
+        2,    // race Llama-70b (#1) + Mistral (#2) — both free NVIDIA
         0.2,
       ),
       'normal',
