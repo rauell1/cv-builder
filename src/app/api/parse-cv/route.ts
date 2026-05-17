@@ -135,6 +135,22 @@ interface ParseResult {
 async function parseCvCore(cvText: string): Promise<ParseResult> {
   const t0 = Date.now();
 
+  // ── Garbled-text gate ────────────────────────────────────────────────────
+  // PDFs with custom font encoding produce mostly non-letter chars (symbols, numbers).
+  // Sending this to AI burns 45s and always times out. Detect it early and skip to built-in.
+  const alphaChars = (cvText.match(/\p{L}/gu) || []).length;
+  const alphaRatio = alphaChars / Math.max(cvText.length, 1);
+  const hasCvKeywords = /email|phone|experience|education|skills|university|linkedin|resume|curriculum|work history/i.test(cvText);
+  if (alphaRatio < 0.20 && !hasCvKeywords) {
+    console.warn(`[parse-cv] Garbled text (alphaRatio=${alphaRatio.toFixed(3)}) — skipping AI, using built-in`);
+    return {
+      parsedCv: parseBuiltIn(cvText),
+      usedModel: 'builtin',
+      source: 'builtin',
+      warning: 'The extracted text appears garbled (PDF with custom font encoding). For accurate results, convert the PDF to an image or paste the text directly.',
+    };
+  }
+
   if (!hasAnyProviderCredentials()) {
     console.warn('[parse-cv] No AI credentials – using built-in parser');
     return { parsedCv: parseBuiltIn(cvText), usedModel: 'builtin', source: 'builtin' };

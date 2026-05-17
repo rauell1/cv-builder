@@ -576,6 +576,45 @@ async function extractPdfTextWithOpenAI(buffer: ArrayBuffer): Promise<string> {
 }
 
 // =============================================================================
+// Gemini inline-PDF OCR — no binary deps, works on Vercel Lambda
+// Requires GOOGLE_AI_API_KEY. Gemini can read PDF bytes directly via inline_data.
+// =============================================================================
+
+async function extractPdfTextWithGemini(buffer: ArrayBuffer): Promise<string> {
+  const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) return '';
+  try {
+    const base64Pdf = Buffer.from(buffer).toString('base64');
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: 'application/pdf', data: base64Pdf } },
+              { text: 'Extract ALL text from this CV/resume PDF exactly as written, in natural reading order. Return plain text only — no markdown, no commentary, no reformatting.' },
+            ],
+          }],
+          generationConfig: { temperature: 0, maxOutputTokens: 8192 },
+        }),
+        signal: AbortSignal.timeout(35_000),
+      },
+    );
+    if (!res.ok) {
+      console.warn('[extract-file] Gemini PDF OCR HTTP error:', res.status);
+      return '';
+    }
+    const data = await res.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+  } catch (e) {
+    console.warn('[extract-file] Gemini PDF OCR error:', e instanceof Error ? e.message : e);
+    return '';
+  }
+}
+
+// =============================================================================
 // Image OCR
 // =============================================================================
 
@@ -821,12 +860,18 @@ export async function POST(request: NextRequest) {
         const needsOcr     = nativeLen < MIN_TEXT_LENGTH || readability < 0.2 || garbledRatio > 0.02;
 
         if (needsOcr && !fastMode) {
-          // --- Step B: fire OpenAI OCR + pdftoppm OCR in PARALLEL, take first winner ---
-          console.warn(`[extract-file] Needs OCR (native=${nativeLen}c, readability=${readability.toFixed(2)}), racing OCR methods...`);
+          // --- Step B: race OpenAI + Gemini (inline PDF) + pdftoppm — first valid winner ---
+          console.warn(`[extract-file] Needs OCR (native=${nativeLen}c, readability=${readability.toFixed(2)}), racing 3 OCR methods...`);
           try {
             const ocrText = await Promise.any([
               extractPdfTextWithOpenAI(fileBuffer).then(t => {
                 if (!t || t.trim().length < MIN_TEXT_LENGTH) throw new Error('OpenAI OCR empty');
+                console.log('[extract-file] OpenAI PDF OCR succeeded');
+                return t;
+              }),
+              extractPdfTextWithGemini(fileBuffer).then(t => {
+                if (!t || t.trim().length < MIN_TEXT_LENGTH) throw new Error('Gemini OCR empty');
+                console.log('[extract-file] Gemini inline PDF OCR succeeded');
                 return t;
               }),
               ocrFallbackForPDF(fileBuffer, pageCount || 1),
@@ -837,10 +882,15 @@ export async function POST(request: NextRequest) {
             console.log(`[extract-file] OCR race won in ${Date.now()-t0}ms`);
           } catch (ocrErr) {
             console.error('[extract-file] All OCR methods failed:', ocrErr);
-            if (nativeLen < MIN_PDF_NATIVE_FALLBACK_LEN) {
-              return NextResponse.json({ success: false, error: 'Could not extract text from this PDF. Try uploading as PNG/JPG or paste text directly.' }, { status: 422 });
+            // If native text is also unreadable, reject rather than pass garbage to the AI
+            if (nativeLen < MIN_PDF_NATIVE_FALLBACK_LEN || readability < 0.15) {
+              return NextResponse.json({
+                success: false,
+                error: 'This PDF uses custom font encoding that prevents automated text extraction. Please:\n• Convert your PDF to a PNG/JPG image and upload it, or\n• Open the PDF, select all (Ctrl+A), copy, and paste the text directly.',
+                hint: 'pdf_encoding_issue',
+              }, { status: 422 });
             }
-            warning = 'OCR was unavailable. Proceeding with native text; please review quality.';
+            warning = 'OCR was unavailable. Proceeding with native text — please review carefully and consider pasting text directly for better results.';
           }
         } else if (needsOcr && fastMode) {
           warning = 'Fast mode: OCR skipped. If text looks incomplete, retry without ?fast=1.';

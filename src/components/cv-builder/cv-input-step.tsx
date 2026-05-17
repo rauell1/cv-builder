@@ -539,6 +539,8 @@ export function CvInputStep() {
                 {extractError.includes('unreachable') ? 'Server Unreachable' :
                  extractError.includes('busy') ? 'Server Busy' :
                  extractError.includes('timed out') ? 'Request Timed Out' :
+                 extractError.includes('font encoding') || extractError.includes('custom font') ? 'PDF Encoding Issue' :
+                 extractError.includes('garbled') || extractError.includes('Could not extract') ? 'Cannot Read This PDF' :
                  'File Extraction Failed'}
               </AlertTitle>
               <AlertDescription>
