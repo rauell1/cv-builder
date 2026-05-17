@@ -6,22 +6,22 @@
  *   - OpenAI          (OPENAI_API_KEY)
  *   - Anthropic       (ANTHROPIC_API_KEY)
  *   - Google Gemini   (GOOGLE_AI_API_KEY / GEMINI_API_KEY)
- *   - NVIDIA NIM      (NVIDIA_API_KEY | NVIDIA_MISTRAL_KEYS | NVIDIA_DEEPSEEK_KEYS | NVIDIA_KIMI_KEYS)
+ *   - NVIDIA NIM      (per-slot keys below)
  *
- * NVIDIA env-var layout (matches Vercel project settings):
- *   NVIDIA_MISTRAL_KEYS  = comma-separated keys for mistralai/mistral-medium-3.5-128b
- *   NVIDIA_DEEPSEEK_KEYS = comma-separated keys for deepseek-ai/deepseek-r1-0528
- *   NVIDIA_KIMI_KEYS     = comma-separated keys for moonshotai/kimi-k2-instruct
- *   NVIDIA_MISTRAL_MODEL = override model id  (optional)
- *   NVIDIA_DEEPSEEK_MODEL= override model id  (optional)
- *   NVIDIA_KIMI_MODEL    = override model id  (optional)
- *   NVIDIA_MISTRAL_URL   = override base URL  (optional)
- *   NVIDIA_DEEPSEEK_URL  = override base URL  (optional)
- *   NVIDIA_KIMI_URL      = override base URL  (optional)
- *   NVIDIA_API_KEY       = generic pool used by any model not covered above
+ * NVIDIA env-var layout — EXACT names as set in Vercel:
+ *   NVIDIA_MISTRAL_KEYS  (also reads NVIDIA_MISTRAL_KEY)  — Mistral keys
+ *   NVIDIA_DEEPSEEK_KEYS (also reads NVIDIA_DEEPSEEK_KEY) — DeepSeek keys
+ *   NVIDIA_KIMI_KEYS     (also reads NVIDIA_KIMI_KEY)     — Kimi keys
+ *   NVIDIA_MISTRAL_MODEL — override model id  (optional)
+ *   NVIDIA_DEEPSEEK_MODEL— override model id  (optional)
+ *   NVIDIA_KIMI_MODEL    — override model id  (optional)
+ *   NVIDIA_MISTRAL_URL   — override base URL  (optional)
+ *   NVIDIA_DEEPSEEK_URL  — override base URL  (optional)
+ *   NVIDIA_KIMI_URL      — override base URL  (optional)
+ *   NVIDIA_API_KEY       — generic pool used as last resort
  *
  * Speed optimizations:
- *   - callAIRaceForTask(): fires top-N models in parallel, first winner returned
+ *   - callAIRaceForTask(): fires top-3 models in parallel, first winner returned
  *   - Per-model timeouts tuned to each provider's p95 latency
  *   - Non-blocking background healer restores keys every 60 s
  *   - Each NVIDIA model has independent key pools + health state
@@ -103,16 +103,13 @@ interface KeyHealth {
   downSince?: number;
 }
 
-const keyHealthMap = new Map<string, KeyHealth[]>(); // keyed by provider OR "nvidia:<modelId>"
-
-// Per-NVIDIA-model health (model id → down timestamp)
+const keyHealthMap = new Map<string, KeyHealth[]>();
 const nvidiaModelHealth = new Map<string, number>();
 
 function initKeyHealth(poolKey: string, keys: string[]): void {
   if (!keyHealthMap.has(poolKey)) {
     keyHealthMap.set(poolKey, keys.map((k) => ({ key: k, status: 'healthy' })));
   } else {
-    // Merge in any new keys that were not present before
     const pool = keyHealthMap.get(poolKey)!;
     for (const k of keys) {
       if (!pool.find((e) => e.key === k)) pool.push({ key: k, status: 'healthy' });
@@ -193,6 +190,19 @@ function splitKeys(raw: string | null): string[] {
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
+/**
+ * Read keys from multiple possible env var names and deduplicate.
+ * This handles both plural (KEYS) and singular (KEY) naming conventions,
+ * matching whatever the user set in Vercel.
+ */
+function readMultiKeyEnv(...varNames: string[]): string[] {
+  const found: string[] = [];
+  for (const varName of varNames) {
+    found.push(...splitKeys(readEnvValue(varName)));
+  }
+  return [...new Set(found)];
+}
+
 // ---- Generic (non-NVIDIA) provider key aliases ----
 
 const PROVIDER_KEY_ALIASES: Record<Exclude<AIProvider, 'nvidia'>, string[]> = {
@@ -224,12 +234,8 @@ function markKeyDownNonNvidia(provider: Exclude<AIProvider, 'nvidia'>, key: stri
 
 // ---- NVIDIA per-model key / URL / model-id config ----
 //
-// Each logical "model slot" reads from dedicated env vars:
-//   NVIDIA_<SLOT>_KEYS  → comma-separated API keys
-//   NVIDIA_<SLOT>_MODEL → override the model id string (optional)
-//   NVIDIA_<SLOT>_URL   → override the inference base URL (optional)
-//
-// Falls back to the generic NVIDIA_API_KEY pool for any model not in a named slot.
+// Each slot reads from BOTH plural (KEYS) and singular (KEY) env var names
+// so that whatever the user set in Vercel is found automatically.
 
 export type NvidiaSlot = 'MISTRAL' | 'DEEPSEEK' | 'KIMI';
 
@@ -239,7 +245,13 @@ const NVIDIA_SLOT_DEFAULTS: Record<NvidiaSlot, { defaultModel: string; defaultUr
   KIMI:     { defaultModel: 'moonshotai/kimi-k2-instruct',        defaultUrl: 'https://integrate.api.nvidia.com/v1' },
 };
 
-// Model id → which slot it belongs to (populated lazily from env)
+// Additional aliases per slot — covers both KEYS and KEY naming conventions
+const NVIDIA_SLOT_KEY_ALIASES: Record<NvidiaSlot, string[]> = {
+  MISTRAL:  ['NVIDIA_MISTRAL_KEYS', 'NVIDIA_MISTRAL_KEY'],
+  DEEPSEEK: ['NVIDIA_DEEPSEEK_KEYS', 'NVIDIA_DEEPSEEK_KEY'],
+  KIMI:     ['NVIDIA_KIMI_KEYS', 'NVIDIA_KIMI_KEY', 'KIMI_KEYS', 'KIMI_KEY'],
+};
+
 const modelToSlot: Map<string, NvidiaSlot> = new Map();
 
 function getNvidiaSlotConfig(slot: NvidiaSlot): {
@@ -247,37 +259,41 @@ function getNvidiaSlotConfig(slot: NvidiaSlot): {
   modelId: string;
   baseUrl: string;
 } {
-  const keys = splitKeys(readEnvValue(`NVIDIA_${slot}_KEYS`));
+  // Read keys from all alias names (handles both KEYS and KEY naming)
+  const keys = readMultiKeyEnv(...NVIDIA_SLOT_KEY_ALIASES[slot]);
   const modelId = readEnvValue(`NVIDIA_${slot}_MODEL`) ?? NVIDIA_SLOT_DEFAULTS[slot].defaultModel;
   const baseUrl = (readEnvValue(`NVIDIA_${slot}_URL`) ?? NVIDIA_SLOT_DEFAULTS[slot].defaultUrl).replace(/\/$/, '');
   const poolKey = `nvidia:${slot}`;
   initKeyHealth(poolKey, keys);
-  // Register model → slot so callNvidia can find the right pool
   modelToSlot.set(modelId, slot);
   return { keys, modelId, baseUrl };
 }
 
 function getGenericNvidiaKeys(): string[] {
-  const keys = splitKeys(readEnvValue('NVIDIA_API_KEY') ?? '');
-  const extra = splitKeys(readEnvValue('NVIDIA_NIM_API_KEY') ?? '');
-  const unique = [...new Set([...keys, ...extra])];
-  initKeyHealth('nvidia:generic', unique);
-  return unique;
+  const keys = readMultiKeyEnv('NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY', 'NVIDIA_KEY');
+  initKeyHealth('nvidia:generic', keys);
+  return keys;
 }
 
 function pickNvidiaKey(modelId: string): { key: string; baseUrl: string } | null {
   const slot = modelToSlot.get(modelId);
   if (slot) {
     const poolKey = `nvidia:${slot}`;
-    const { baseUrl } = NVIDIA_SLOT_DEFAULTS[slot];
-    const overrideUrl = (readEnvValue(`NVIDIA_${slot}_URL`) ?? baseUrl).replace(/\/$/, '');
+    const overrideUrl = (readEnvValue(`NVIDIA_${slot}_URL`) ?? NVIDIA_SLOT_DEFAULTS[slot].defaultUrl).replace(/\/$/, '');
     const key = pickHealthyKeyFromPool(poolKey);
     if (key) return { key, baseUrl: overrideUrl };
-    // If slot keys are all down, fall through to generic pool
   }
-  // Generic pool
+  // Fall through to generic pool
   const genericKey = pickHealthyKeyFromPool('nvidia:generic');
   if (genericKey) return { key: genericKey, baseUrl: 'https://integrate.api.nvidia.com/v1' };
+  // Last resort: try any slot that has healthy keys
+  for (const s of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
+    const k = pickHealthyKeyFromPool(`nvidia:${s}`);
+    if (k) {
+      const url = (readEnvValue(`NVIDIA_${s}_URL`) ?? NVIDIA_SLOT_DEFAULTS[s].defaultUrl).replace(/\/$/, '');
+      return { key: k, baseUrl: url };
+    }
+  }
   return null;
 }
 
@@ -288,7 +304,6 @@ function markNvidiaKeyDown(modelId: string, key: string): void {
 }
 
 function hasNvidiaCredentials(): boolean {
-  // Eagerly seed slot configs so modelToSlot is populated
   const slots: NvidiaSlot[] = ['MISTRAL', 'DEEPSEEK', 'KIMI'];
   let found = false;
   for (const slot of slots) {
@@ -299,7 +314,20 @@ function hasNvidiaCredentials(): boolean {
   return found;
 }
 
-// ---- Public key API (used by credential checks & diagnostics) ----
+// ---- Diagnostics export (used by /api/env-check) ----
+
+export function getNvidiaSlotDiagnostics(): Record<NvidiaSlot, { keyCount: number; modelId: string; baseUrl: string; healthyKeys: number }> {
+  const result = {} as Record<NvidiaSlot, { keyCount: number; modelId: string; baseUrl: string; healthyKeys: number }>;
+  for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
+    const { keys, modelId, baseUrl } = getNvidiaSlotConfig(slot);
+    const pool = keyHealthMap.get(`nvidia:${slot}`) ?? [];
+    const healthyKeys = pool.filter((e) => e.status === 'healthy').length;
+    result[slot] = { keyCount: keys.length, modelId, baseUrl, healthyKeys };
+  }
+  return result;
+}
+
+// ---- Public key API ----
 
 export function getAllProviderKeys(provider: AIProvider): string[] {
   if (provider === 'nvidia') {
@@ -314,7 +342,6 @@ export function getAllProviderKeys(provider: AIProvider): string[] {
 
 export function getProviderApiKey(provider: AIProvider): string | null {
   if (provider === 'nvidia') {
-    // Return any healthy key across all slots (generic first for quick check)
     const generic = pickHealthyKeyFromPool('nvidia:generic');
     if (generic) return generic;
     for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
@@ -328,7 +355,12 @@ export function getProviderApiKey(provider: AIProvider): string | null {
 
 export function getProviderKeyNames(provider: AIProvider): string[] {
   if (provider === 'nvidia') {
-    return ['NVIDIA_MISTRAL_KEYS', 'NVIDIA_DEEPSEEK_KEYS', 'NVIDIA_KIMI_KEYS', 'NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY'];
+    return [
+      'NVIDIA_MISTRAL_KEYS', 'NVIDIA_MISTRAL_KEY',
+      'NVIDIA_DEEPSEEK_KEYS', 'NVIDIA_DEEPSEEK_KEY',
+      'NVIDIA_KIMI_KEYS', 'NVIDIA_KIMI_KEY',
+      'NVIDIA_API_KEY',
+    ];
   }
   return PROVIDER_KEY_ALIASES[provider] ?? [];
 }
@@ -369,9 +401,12 @@ export function getProviderCredentialDetails(): {
       if (readEnvValue(alias)) sources[provider].push(alias);
     }
   }
-  for (const varName of ['NVIDIA_MISTRAL_KEYS', 'NVIDIA_DEEPSEEK_KEYS', 'NVIDIA_KIMI_KEYS', 'NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY']) {
-    if (readEnvValue(varName)) sources.nvidia.push(varName);
+  for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
+    for (const alias of NVIDIA_SLOT_KEY_ALIASES[slot]) {
+      if (readEnvValue(alias)) sources.nvidia.push(alias);
+    }
   }
+  if (readEnvValue('NVIDIA_API_KEY')) sources.nvidia.push('NVIDIA_API_KEY');
   return {
     anyConfigured: hasAnyProviderCredentials(),
     status,
@@ -499,20 +534,21 @@ export const NVIDIA_MODELS: NvidiaModelEntry[] = [
 function modelTimeout(modelId: string): number {
   const entry = NVIDIA_MODELS.find((m) => m.id === modelId);
   if (entry) {
-    if (entry.speed === 'fast')   return 15_000;
-    if (entry.speed === 'medium') return 25_000;
-    return 40_000;
+    // Bumped timeouts: fast=20s, medium=35s, slow=55s
+    if (entry.speed === 'fast')   return 20_000;
+    if (entry.speed === 'medium') return 35_000;
+    return 55_000;
   }
-  if (modelId.startsWith('gpt-'))    return 20_000;
-  if (modelId.startsWith('claude-')) return 25_000;
-  if (modelId.startsWith('gemini-')) return 20_000;
-  if (modelId.startsWith('glm-'))    return 15_000;
-  return 30_000;
+  if (modelId.startsWith('gpt-'))    return 25_000;
+  if (modelId.startsWith('claude-')) return 30_000;
+  if (modelId.startsWith('gemini-')) return 25_000;
+  if (modelId.startsWith('glm-'))    return 20_000;
+  return 35_000;
 }
 
 // ---- Provider call implementations ----
 
-async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
+async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs = 20_000): Promise<string | null> {
   try {
     const zai = await getZAI();
     const controller = new AbortController();
@@ -530,7 +566,7 @@ async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs =
   }
 }
 
-async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
+async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs = 20_000): Promise<string | null> {
   const apiKey = pickKeyNonNvidia('glm');
   if (!apiKey) throw new AIProviderError({ provider: 'glm', model: modelId, kind: 'missing_key', message: 'Missing GLM API key' });
   const controller = new AbortController();
@@ -559,7 +595,7 @@ async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs =
   }
 }
 
-async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
+async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 20_000): Promise<string | null> {
   const zhipuKey = pickKeyNonNvidia('glm');
   if (zhipuKey) {
     try {
@@ -687,7 +723,6 @@ async function callNvidia(
   temperature = 0.3,
   timeoutMs?: number
 ): Promise<string | null> {
-  // Seed slot configs so modelToSlot is populated before key pick
   for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
     getNvidiaSlotConfig(slot);
   }
@@ -707,7 +742,14 @@ async function callNvidia(
       provider: 'nvidia',
       model: modelId,
       kind: 'missing_key',
-      message: `No healthy NVIDIA key for ${modelId}. Set NVIDIA_MISTRAL_KEYS, NVIDIA_DEEPSEEK_KEYS, NVIDIA_KIMI_KEYS, or NVIDIA_API_KEY in Vercel env vars.`,
+      message: [
+        `No healthy NVIDIA key for ${modelId}.`,
+        'Set one of: NVIDIA_MISTRAL_KEYS, NVIDIA_MISTRAL_KEY,',
+        'NVIDIA_DEEPSEEK_KEYS, NVIDIA_DEEPSEEK_KEY,',
+        'NVIDIA_KIMI_KEYS, NVIDIA_KIMI_KEY, or NVIDIA_API_KEY',
+        'in Vercel → Project → Settings → Environment Variables.',
+        'Visit /api/env-check to see which vars are currently found.',
+      ].join(' '),
     });
   }
   const { key: apiKey, baseUrl } = picked;
@@ -865,7 +907,6 @@ const OPENAI_MODELS    = ['gpt-4o-mini', 'gpt-4o'] as const;
 const ANTHROPIC_MODELS = ['claude-haiku-4-20250414', 'claude-sonnet-4-20250514'] as const;
 const GOOGLE_MODELS    = ['gemini-2.5-flash', 'gemini-2.5-pro'] as const;
 
-// Suppress unused variable warnings — kept for future task routing use
 void OPENAI_MODELS;
 void ANTHROPIC_MODELS;
 void GOOGLE_MODELS;
@@ -954,7 +995,6 @@ export function getPreferredModelsForTask(task: AITaskType): readonly string[] {
 }
 
 export function pickBestModelForTask(task: AITaskType): string {
-  // Seed NVIDIA slot configs
   for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
     getNvidiaSlotConfig(slot);
   }
@@ -972,11 +1012,10 @@ export function pickBestModelForTask(task: AITaskType): string {
 export async function callAIRaceForTask(
   task: AITaskType,
   messages: AIMessage[],
-  raceCount = 2,
+  raceCount = 3, // Bumped from 2 to 3 — more parallel racers = faster first response
   temperature?: number,
   hintModel?: string,
 ): Promise<AIResponse> {
-  // Seed NVIDIA slot configs before any credential checks
   for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
     getNvidiaSlotConfig(slot);
   }
@@ -996,7 +1035,6 @@ export async function callAIRaceForTask(
     return true;
   });
 
-  // GLM safety nets
   for (const glmId of ['glm-4-flash', 'glm-4-plus']) {
     if (!eligible.includes(glmId) && hasProviderCredentials('glm')) {
       eligible.push(glmId);
@@ -1005,8 +1043,19 @@ export async function callAIRaceForTask(
 
   if (eligible.length === 0) {
     throw new AIModelFailedError([{
-      provider: 'glm', model: 'glm-4-flash', kind: 'missing_key',
-      message: 'No eligible models for task. Configure NVIDIA_MISTRAL_KEYS, NVIDIA_DEEPSEEK_KEYS, NVIDIA_KIMI_KEYS, OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY, or ZHIPU_API_KEY in Vercel env vars.',
+      provider: 'glm',
+      model: 'glm-4-flash',
+      kind: 'missing_key',
+      message: [
+        'No eligible models for task. Configure at least one of:',
+        'NVIDIA_MISTRAL_KEYS, NVIDIA_MISTRAL_KEY,',
+        'NVIDIA_DEEPSEEK_KEYS, NVIDIA_DEEPSEEK_KEY,',
+        'NVIDIA_KIMI_KEYS, NVIDIA_KIMI_KEY,',
+        'OPENAI_API_KEY, ANTHROPIC_API_KEY,',
+        'GOOGLE_AI_API_KEY, or ZHIPU_API_KEY',
+        'in Vercel → Project → Settings → Environment Variables.',
+        'Visit /api/env-check for a live diagnostic.',
+      ].join(' '),
     }]);
   }
 
