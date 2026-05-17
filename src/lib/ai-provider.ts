@@ -773,16 +773,18 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'glm-4-plus',
   ],
   analyze: [
-    // Fast structured-output models — job analysis is JSON extraction, not reasoning
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    // Fast structured-output models — job analysis is JSON extraction, not reasoning.
+    // meta/llama first: same model that handles parse-cv reliably; avoids burning
+    // nemotron quota when the two would otherwise be raced simultaneously.
     'meta/llama-3.3-70b-instruct',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'glm-4-flash',
     'glm-4-plus',
     'gemini-2.5-flash',
     'gpt-4o-mini',
     'mistralai/mistral-medium-3.5-128b',
     'moonshotai/kimi-k2-instruct',
     'claude-haiku-4-20250414',
-    'glm-4-flash',
     'deepseek-ai/deepseek-r1-0528',  // slow reasoning — last resort
   ],
   score: [

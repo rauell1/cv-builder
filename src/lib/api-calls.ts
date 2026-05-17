@@ -73,48 +73,67 @@ export async function parseCv(cvText: string, sessionId?: string): Promise<Parse
 }
 
 export async function analyzeJob(jobDescText: string): Promise<JobAnalysis> {
-  // Job analysis feeds multiple later steps, so we allow a bit more time here
-  // to let the server-side provider fallback chain complete before timing out.
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 45_000); // 45s timeout (was 20s)
+  const MAX_RETRIES = 2;
+  const RETRY_DELAYS = [3000, 6000]; // 3s, 6s — give the server's sequential fallback time to run
+  let lastError: Error | null = null;
 
-  try {
-    const response = await fetch('/api/analyze-job', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobDescText }),
-      signal: controller.signal,
-    });
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45_000);
 
-    clearTimeout(timeoutId);
+    try {
+      const response = await fetch('/api/analyze-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobDescText }),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      let errorMessage = `Job analysis failed (HTTP ${response.status})`;
-      try {
-        const bodyText = await response.text();
-        if (bodyText) {
-          try {
-            const errorData = JSON.parse(bodyText);
-            errorMessage = errorData.error || errorMessage;
-          } catch {
-            errorMessage = `Job analysis failed (HTTP ${response.status}): ${bodyText.substring(0, 300)}`;
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        let errorMessage = `Job analysis failed (HTTP ${response.status})`;
+        try {
+          const bodyText = await response.text();
+          if (bodyText) {
+            try {
+              const errorData = JSON.parse(bodyText);
+              errorMessage = errorData.error || errorMessage;
+            } catch {
+              errorMessage = `Job analysis failed (HTTP ${response.status}): ${bodyText.substring(0, 300)}`;
+            }
           }
-        }
-      } catch { }
-      throw new Error(errorMessage);
-    }
+        } catch { }
 
-    const result: ApiResponse<JobAnalysis> = await response.json();
-    if (!result.success) throw new Error(result.error);
-    return result.data;
-  } catch (err) {
-    clearTimeout(timeoutId);
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      // Surface a friendlier message that matches the UI error copy
-      throw new Error('Job analysis timed out before the AI could finish. The server may be busy — please try again in a few seconds.');
+        // 503 = all providers failed — retry with backoff (rate limit may clear)
+        if (response.status === 503 && attempt < MAX_RETRIES) {
+          const delay = RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)];
+          lastError = new Error(errorMessage);
+          await sleep(delay);
+          continue;
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const result: ApiResponse<JobAnalysis> = await response.json();
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error('Job analysis timed out before the AI could finish. The server may be busy — please try again in a few seconds.');
+      }
+      if (attempt < MAX_RETRIES && !(err instanceof Error && err.message.includes('timed out'))) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        await sleep(RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)]);
+        continue;
+      }
+      throw err;
     }
-    throw err;
   }
+
+  throw lastError || new Error('Job analysis failed after multiple attempts. Please try again.');
 }
 
 export async function restructureCv(

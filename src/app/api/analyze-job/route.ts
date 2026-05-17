@@ -5,6 +5,7 @@ import {
   getProviderCredentialDetails,
   getProviderCredentialStatus,
   hasAnyProviderCredentials,
+  AIModelFailedError,
 } from '@/lib/ai-provider';
 import { JOB_ANALYSIS_SYSTEM_PROMPT, type JobAnalysis } from '@/lib/cv-types';
 import { extractJSON, fixCommonJSONIssues } from '@/lib/json-utils';
@@ -79,8 +80,8 @@ export async function POST(request: NextRequest) {
           { role: 'system', content: JOB_ANALYSIS_SYSTEM_PROMPT },
           { role: 'user', content: jobDescText },
         ],
-        2,    // race 2 models simultaneously
-        0.2,  // slightly higher temp for richer keyword extraction
+        1,    // sequential — avoids burning 2 NVIDIA slots simultaneously when rate-limited
+        0.2,
       ),
       'normal',
       30_000
@@ -130,16 +131,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: jobAnalysis, model: usedModel, cached: false });
   } catch (error: unknown) {
-    console.error('[analyze-job] Error:', error);
-
-    if (error instanceof Error && error.message.includes('AI model failed')) {
+    if (error instanceof AIModelFailedError) {
+      console.error('[analyze-job] All models failed. Diagnostics:', JSON.stringify(error.diagnostics));
       return NextResponse.json(
         {
           success: false,
           error: error.message,
           providerStatus: getProviderCredentialStatus(),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          diagnostics: (error as any)?.diagnostics,
+          diagnostics: error.diagnostics,
           providerDetails: getProviderCredentialDetails(),
         },
         { status: 503 }
@@ -153,6 +152,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.error('[analyze-job] Error:', error);
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
