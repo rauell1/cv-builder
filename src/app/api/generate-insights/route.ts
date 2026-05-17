@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callAI } from '@/lib/ai-provider';
+import { callAIRaceForTask } from '@/lib/ai-provider';
+import { aiQueue } from '@/lib/request-queue';
 import {
   SECTION_INSIGHT_SYSTEM_PROMPT,
   type ParsedCV,
   type JobAnalysis,
   type SectionInsight,
 } from '@/lib/cv-types';
+
+export const runtime = 'nodejs';
+export const maxDuration = 45;
 
 // All supported section IDs with their display names
 const ALL_SECTIONS = [
@@ -19,31 +23,18 @@ const ALL_SECTIONS = [
 
 type SectionId = (typeof ALL_SECTIONS)[number]['id'];
 
-/**
- * Extract the content for a given section from the parsed CV data.
- */
 function getSectionContent(cvData: ParsedCV, sectionId: SectionId): string {
   switch (sectionId) {
-    case 'personal':
-      return JSON.stringify(cvData.personalInfo, null, 2);
-    case 'statement':
-      return cvData.personalStatement || '(empty)';
-    case 'experience':
-      return JSON.stringify(cvData.workExperience, null, 2);
-    case 'education':
-      return JSON.stringify(cvData.education, null, 2);
-    case 'projects':
-      return JSON.stringify(cvData.projects, null, 2);
-    case 'skills':
-      return JSON.stringify(cvData.skills, null, 2);
-    default:
-      return '';
+    case 'personal':   return JSON.stringify(cvData.personalInfo, null, 2);
+    case 'statement':  return cvData.personalStatement || '(empty)';
+    case 'experience': return JSON.stringify(cvData.workExperience, null, 2);
+    case 'education':  return JSON.stringify(cvData.education, null, 2);
+    case 'projects':   return JSON.stringify(cvData.projects, null, 2);
+    case 'skills':     return JSON.stringify(cvData.skills, null, 2);
+    default:           return '';
   }
 }
 
-/**
- * Build a focused user prompt for a single section insight analysis.
- */
 function buildSectionPrompt(
   sectionId: SectionId,
   sectionName: string,
@@ -83,19 +74,6 @@ ${jobDescText}
 Analyze this "${sectionName}" section and provide your insights as a JSON object. Set "sectionId" to "${sectionId}" and "sectionName" to "${sectionName}".`.trim();
 }
 
-/**
- * Clean the LLM response text by stripping markdown code fences.
- */
-function cleanLLMResponse(text: string): string {
-  return text
-    .replace(/```json\s*/gi, '')
-    .replace(/```\s*/g, '')
-    .trim();
-}
-
-/**
- * Validate that a parsed object has the required SectionInsight fields.
- */
 function isValidSectionInsight(obj: unknown): obj is SectionInsight {
   if (typeof obj !== 'object' || obj === null) return false;
   const record = obj as Record<string, unknown>;
@@ -111,10 +89,6 @@ function isValidSectionInsight(obj: unknown): obj is SectionInsight {
   );
 }
 
-/**
- * Generate insights for a single section using callAI (glm-4-flash).
- * Returns a valid SectionInsight or null on failure.
- */
 async function generateSingleSectionInsight(
   sectionId: SectionId,
   sectionName: string,
@@ -122,22 +96,16 @@ async function generateSingleSectionInsight(
   jobAnalysis: JobAnalysis,
   jobDescText: string
 ): Promise<SectionInsight | null> {
-  const userPrompt = buildSectionPrompt(
-    sectionId,
-    sectionName,
-    sectionContent,
-    jobAnalysis,
-    jobDescText
-  );
+  const userPrompt = buildSectionPrompt(sectionId, sectionName, sectionContent, jobAnalysis, jobDescText);
+  const messages = [
+    { role: 'system' as const, content: SECTION_INSIGHT_SYSTEM_PROMPT },
+    { role: 'user'   as const, content: userPrompt },
+  ];
 
   try {
-    const responseText = await callAI(
-      [
-        { role: 'system', content: SECTION_INSIGHT_SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      'glm-4-flash',
-      0.4
+    const { content: responseText } = await aiQueue.enqueue(
+      () => callAIRaceForTask('analyze', messages, 1, 0.4),
+      'normal',
     );
 
     if (!responseText) {
@@ -145,7 +113,7 @@ async function generateSingleSectionInsight(
       return null;
     }
 
-    const cleaned = cleanLLMResponse(responseText);
+    const cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
     const parsed = JSON.parse(cleaned);
 
     if (!isValidSectionInsight(parsed)) {
@@ -153,10 +121,8 @@ async function generateSingleSectionInsight(
       return null;
     }
 
-    // Override sectionId/sectionName to ensure consistency
     parsed.sectionId = sectionId;
     parsed.sectionName = sectionName;
-
     return parsed as SectionInsight;
   } catch (error) {
     console.error(`Failed to generate insight for section "${sectionId}":`, error);
@@ -169,7 +135,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { cvData, jobAnalysis, jobDescText, sectionId } = body;
 
-    // Validate required fields
     if (!cvData || typeof cvData !== 'object') {
       return NextResponse.json(
         { success: false, error: 'cvData is required and must be a valid ParsedCV object' },
@@ -191,17 +156,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine which sections to analyze
     let sectionsToAnalyze: (typeof ALL_SECTIONS)[number][];
 
     if (sectionId && typeof sectionId === 'string') {
       const matchedSection = ALL_SECTIONS.find((s) => s.id === sectionId);
       if (!matchedSection) {
         return NextResponse.json(
-          {
-            success: false,
-            error: `Invalid sectionId "${sectionId}". Must be one of: ${ALL_SECTIONS.map((s) => s.id).join(', ')}`,
-          },
+          { success: false, error: `Invalid sectionId "${sectionId}". Must be one of: ${ALL_SECTIONS.map((s) => s.id).join(', ')}` },
           { status: 400 }
         );
       }
@@ -210,7 +171,6 @@ export async function POST(request: NextRequest) {
       sectionsToAnalyze = [...ALL_SECTIONS];
     }
 
-    // Generate insights for all target sections in parallel
     const insightPromises = sectionsToAnalyze.map((section) =>
       generateSingleSectionInsight(
         section.id,
@@ -223,56 +183,37 @@ export async function POST(request: NextRequest) {
 
     const results = await Promise.allSettled(insightPromises);
 
-    // Collect successful insights, filter out failures
     const insights: SectionInsight[] = [];
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
       if (result.status === 'fulfilled' && result.value) {
         insights.push(result.value);
       } else if (result.status === 'rejected') {
-        console.warn(
-          `Section "${sectionsToAnalyze[i].id}" insight generation rejected:`,
-          result.reason
-        );
+        console.warn(`Section "${sectionsToAnalyze[i].id}" insight rejected:`, result.reason);
       }
     }
 
-    // If all sections failed, return error
     if (insights.length === 0) {
-      console.error('All section insight generations failed');
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Failed to generate insights for any section. Please try again.',
-        },
+        { success: false, error: 'Failed to generate insights for any section. Please try again.' },
         { status: 500 }
       );
     }
 
-    // If some sections failed, log a warning but still return partial results
     if (insights.length < sectionsToAnalyze.length) {
       const failedSections = sectionsToAnalyze
         .filter((_, idx) => {
           const result = results[idx];
-          // Section failed if: promise rejected OR fulfilled with null
           return !result || result.status === 'rejected' || (result.status === 'fulfilled' && !result.value);
         })
         .map((s) => s.id);
-      console.warn(
-        `Partial success: generated ${insights.length}/${sectionsToAnalyze.length} insights. Missing: ${failedSections.join(', ')}`
-      );
+      console.warn(`Partial success: ${insights.length}/${sectionsToAnalyze.length} insights. Missing: ${failedSections.join(', ')}`);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: insights,
-    });
+    return NextResponse.json({ success: true, data: insights });
   } catch (error: unknown) {
     console.error('Generate insights error:', error);
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';
-    return NextResponse.json(
-      { success: false, error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

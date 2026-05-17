@@ -39,10 +39,11 @@ const inflateRawAsync = promisify(zlib.inflateRaw);
 
 import { aiQueue } from '@/lib/request-queue';
 import { extractionCache, hashContent } from '@/lib/response-cache';
-import { callAIRace, callAIVision, hasAnyProviderCredentials } from '@/lib/ai-provider';
+import { callAIRaceForTask, callAIVision, hasAnyProviderCredentials } from '@/lib/ai-provider';
 import { checkRateLimit, resolveClientIp } from '@/lib/rate-limit';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { sanitizeGeneratedText, sanitizeParsedCV } from '@/lib/text-cleaning';
+import { extractJSON, fixCommonJSONIssues } from '@/lib/json-utils';
 
 // =============================================================================
 // Constants
@@ -123,33 +124,8 @@ function validateExtractedText(text: string): { valid: boolean; reason?: string 
 }
 
 // =============================================================================
-// JSON Extraction / Repair
+// JSON Extraction / Repair — shared utils imported from @/lib/json-utils
 // =============================================================================
-
-function extractJSON(text: string): string | null {
-  const codeBlockRe = /```(?:json)?\s*\n?([\s\S]*?)```/;
-  const codeMatch = codeBlockRe.exec(text);
-  if (codeMatch) { const c = codeMatch[1].trim(); if (c.startsWith('{')) return c; }
-  let depth = 0, start = -1, inString = false, escape = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (escape) { escape = false; continue; }
-    if (ch === '\\' && inString) { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === '{') { if (depth === 0) start = i; depth++; }
-    else if (ch === '}') { depth--; if (depth === 0 && start !== -1) return text.substring(start, i + 1); }
-  }
-  return null;
-}
-
-function fixJSONIssues(json: string): string {
-  return json
-    .replace(/,\s*([\]}])/g, '$1')
-    .replace(/(?<=:\s*|[\[,]\s*)'([^']*)'(?=\s*[,}\]:])/g, '"$1"')
-    .replace(/(?<=:\s*")([\s\S]*?)(?="\s*[,}])/g, (m) =>
-      m.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t'));
-}
 
 function validateAndNormalize(obj: unknown): ParsedCV {
   if (!obj || typeof obj !== 'object') throw new Error('Not a valid object');
@@ -728,33 +704,33 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
     { role: 'user'   as const, content: truncText },
   ];
 
-  // OPTIMISATION: race 3 models in parallel — first valid JSON response wins.
-  // This is dramatically faster than the old sequential loop + sleep approach.
+  // OPTIMISATION: race 3 parse-optimised models in parallel — first valid JSON wins.
   try {
-    const aiResult = await callAIRace(messages, 'auto', 'simple', 3, 0.1);
+    const aiResult = await callAIRaceForTask('parse', messages, 3, 0.1);
     const rawJson = extractJSON(aiResult.content);
     if (rawJson) {
       try {
-        const parsedCv = validateAndNormalize(JSON.parse(fixJSONIssues(rawJson)));
+        const parsedCv = validateAndNormalize(JSON.parse(fixCommonJSONIssues(rawJson)));
         return { parsedCv: sanitizeParsedCV(parsedCv), usedModel: aiResult.model };
       } catch { /* fall through to retry */ }
     }
   } catch (e) {
-    console.warn('[extract-file] callAIRace failed, falling back to built-in:', e instanceof Error ? e.message : e);
+    console.warn('[extract-file] callAIRaceForTask failed, falling back to built-in:', e instanceof Error ? e.message : e);
   }
 
   // Strict-prompt retry (single shot, no sleep)
   try {
-    const retryResult = await callAIRace(
+    const retryResult = await callAIRaceForTask(
+      'parse',
       [
         { role: 'system', content: 'You are a CV parser. Return ONLY valid raw JSON starting with {. No markdown.' },
         { role: 'user',   content: `Parse this CV:\n\n${truncText.substring(0, 8_000)}` },
       ],
-      'auto', 'simple', 2, 0.1,
+      2, 0.1,
     );
     const rawJson2 = extractJSON(retryResult.content);
     if (rawJson2) {
-      const parsedCv = validateAndNormalize(JSON.parse(fixJSONIssues(rawJson2)));
+      const parsedCv = validateAndNormalize(JSON.parse(fixCommonJSONIssues(rawJson2)));
       return { parsedCv: sanitizeParsedCV(parsedCv), usedModel: retryResult.model };
     }
   } catch { /* fall through */ }

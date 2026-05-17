@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callAIWithFallback } from '@/lib/ai-provider';
+import { callAIRaceForTask } from '@/lib/ai-provider';
+import { aiQueue } from '@/lib/request-queue';
+import { extractJSON, fixCommonJSONIssues } from '@/lib/json-utils';
 import type { AchievementEnhancement } from '@/lib/cv-types';
+
+export const runtime = 'nodejs';
+export const maxDuration = 30;
 
 const ACHIEVEMENT_ENHANCER_SYSTEM_PROMPT = `You are a CV achievement optimization expert. Rewrite the following experience bullet points to be significantly more impactful.
 
@@ -42,35 +47,31 @@ export async function POST(request: NextRequest) {
       ? `Here are the bullet points to enhance:\n\n${bullets.map((b: string, i: number) => `${i + 1}. ${b}`).join('\n')}\n\nJob Context / Industry: ${jobContext}`
       : `Here are the bullet points to enhance:\n\n${bullets.map((b: string, i: number) => `${i + 1}. ${b}`).join('\n')}`;
 
-    const { content: responseText, model: usedModel } = await callAIWithFallback(
-      [
-        { role: 'system', content: ACHIEVEMENT_ENHANCER_SYSTEM_PROMPT },
-        { role: 'user', content: userMessage },
-      ],
-      'glm-4-plus',
-      'standard'
+    const messages = [
+      { role: 'system' as const, content: ACHIEVEMENT_ENHANCER_SYSTEM_PROMPT },
+      { role: 'user'   as const, content: userMessage },
+    ];
+
+    const { content: responseText, model: usedModel } = await aiQueue.enqueue(
+      () => callAIRaceForTask('analyze', messages, 2, 0.5),
+      'normal',
     );
 
     let result: AchievementEnhancement;
     try {
-      const cleanResponse = responseText
-        .replace(/```json\s*/g, '')
-        .replace(/```\s*/g, '')
-        .trim();
-
-      const parsed = JSON.parse(cleanResponse) as AchievementEnhancement;
+      const rawJson = extractJSON(responseText);
+      if (!rawJson) throw new Error('No JSON found in response');
+      const parsed = JSON.parse(fixCommonJSONIssues(rawJson)) as AchievementEnhancement;
 
       if (!Array.isArray(parsed.enhanced) || !Array.isArray(parsed.improvements)) {
         throw new Error('Missing enhanced or improvements arrays');
       }
 
-      // Ensure arrays match the input length
       result = {
         enhanced: parsed.enhanced.slice(0, bullets.length),
         improvements: parsed.improvements.slice(0, bullets.length),
       };
 
-      // Pad if the AI returned fewer items than input
       while (result.enhanced.length < bullets.length) {
         const idx = result.enhanced.length;
         result.enhanced.push(bullets[idx]);
@@ -78,24 +79,16 @@ export async function POST(request: NextRequest) {
       }
     } catch (parseError) {
       console.error('Failed to parse achievement enhancement response:', parseError);
-      console.error('Raw response:', responseText);
       return NextResponse.json(
         { success: false, error: 'AI returned an invalid format for achievement enhancement. Please try again.' },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result,
-      model: usedModel,
-    });
+    return NextResponse.json({ success: true, data: result, model: usedModel });
   } catch (error: unknown) {
     console.error('Enhance achievements error:', error);
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';
-    return NextResponse.json(
-      { success: false, error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

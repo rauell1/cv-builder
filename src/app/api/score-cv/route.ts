@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callAIWithFallback } from '@/lib/ai-provider';
+import { callAIRaceForTask } from '@/lib/ai-provider';
+import { aiQueue } from '@/lib/request-queue';
+import { extractJSON, fixCommonJSONIssues } from '@/lib/json-utils';
 import type { CVScore, ParsedCV, JobAnalysis } from '@/lib/cv-types';
+
+export const runtime = 'nodejs';
+export const maxDuration = 30;
 
 const CV_SCORE_SYSTEM_PROMPT = `You are an ATS (Applicant Tracking System) simulation engine and CV scoring expert. Evaluate this CV against the job description and provide a comprehensive scoring breakdown.
 
@@ -81,40 +86,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userPrompt = buildScorePrompt(cvData, jobAnalysis, jobDescText);
+    const messages = [
+      { role: 'system' as const, content: CV_SCORE_SYSTEM_PROMPT },
+      { role: 'user'   as const, content: buildScorePrompt(cvData, jobAnalysis, jobDescText) },
+    ];
 
-    const { content: responseText, model: usedModel } = await callAIWithFallback(
-      [
-        { role: 'system', content: CV_SCORE_SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      'glm-4-plus',
-      'complex'
+    const { content: responseText, model: usedModel } = await aiQueue.enqueue(
+      () => callAIRaceForTask('analyze', messages, 2, 0.3),
+      'normal',
     );
 
     let cvScore: CVScore;
     try {
-      const cleanResponse = responseText
-        .replace(/```json\s*/g, '')
-        .replace(/```\s*/g, '')
-        .trim();
+      const rawJson = extractJSON(responseText);
+      if (!rawJson) throw new Error('No JSON found in response');
+      const parsed = JSON.parse(fixCommonJSONIssues(rawJson)) as CVScore;
 
-      const parsed = JSON.parse(cleanResponse) as CVScore;
-
-      // Validate required fields
       if (typeof parsed.overallScore !== 'number' || typeof parsed.atsScore !== 'number') {
         throw new Error('Missing overallScore or atsScore');
       }
-
       if (!parsed.keywordMatch || !Array.isArray(parsed.keywordMatch.matched) || !Array.isArray(parsed.keywordMatch.missing)) {
         throw new Error('Invalid keywordMatch structure');
       }
-
       if (!Array.isArray(parsed.sectionScores)) {
         throw new Error('Missing sectionScores array');
       }
 
-      // Clamp scores to 0-100
       cvScore = {
         overallScore: Math.max(0, Math.min(100, parsed.overallScore)),
         atsScore: Math.max(0, Math.min(100, parsed.atsScore)),
@@ -130,24 +127,16 @@ export async function POST(request: NextRequest) {
       };
     } catch (parseError) {
       console.error('Failed to parse CV score response:', parseError);
-      console.error('Raw response:', responseText);
       return NextResponse.json(
         { success: false, error: 'AI returned an invalid format for CV scoring. Please try again.' },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: cvScore,
-      model: usedModel,
-    });
+    return NextResponse.json({ success: true, data: cvScore, model: usedModel });
   } catch (error: unknown) {
     console.error('Score CV error:', error);
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';
-    return NextResponse.json(
-      { success: false, error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
