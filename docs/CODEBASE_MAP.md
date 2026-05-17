@@ -1,7 +1,7 @@
 # Codebase Map
 
 > **Auto-updated** on every push to `main` by `.github/workflows/update-docs.yml`.  
-> Last update: 2026-05-17 · commit `b0d807d` · branch `main`
+> Last update: 2026-05-17 · commit `596f663` · branch `main`
 
 ---
 
