@@ -35,7 +35,12 @@ function scrubKey(val: string | undefined): string {
 export async function GET(request: NextRequest) {
   const details = getProviderCredentialDetails();
 
-  const isDebug = request.nextUrl.searchParams.get('debug') === '1';
+  const debugToken = request.nextUrl.searchParams.get('debug');
+  const expectedToken = process.env.HEALTH_DEBUG_TOKEN;
+  // Debug mode requires HEALTH_DEBUG_TOKEN env var to be set and matched
+  const isDebug = Boolean(
+    debugToken && expectedToken && debugToken === expectedToken
+  );
 
   // Debug block: show which env var names exist and scrubbed prefix/suffix
   let debugInfo: Record<string, unknown> | undefined;

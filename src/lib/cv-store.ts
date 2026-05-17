@@ -1,10 +1,12 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ParsedCV, JobAnalysis, SectionInsight, CVFormatId, AIModelConfig, CoverLetterData, CoverLetterFormatId, CVScore } from './cv-types';
 import { AVAILABLE_MODELS } from './cv-types';
 
 export type BuilderStep = 'landing' | 'cv-input' | 'job-desc' | 'processing' | 'output';
 
 const MAX_COVER_LETTER_VERSIONS = 10;
+const STORAGE_KEY = 'cv-builder-session';
 
 interface CVBuilderState {
   step: BuilderStep;
@@ -148,60 +150,81 @@ const initialState = {
   extractionMeta: null as CVBuilderState['extractionMeta'],
 };
 
-export const useCVBuilderStore = create<CVBuilderState>((set, get) => ({
-  ...initialState,
+export const useCVBuilderStore = create<CVBuilderState>()(
+  persist(
+    (set, get) => ({
+      ...initialState,
 
-  setStep: (step) => set({ step }),
-  setSessionId: (id) => set({ sessionId: id }),
-  setRawCvText: (text) => set({ rawCvText: text }),
-  setParsedCv: (cv) => set({ parsedCv: cv }),
-  setIsParsing: (val) => set({ isParsing: val }),
-  setParseError: (err) => set({ parseError: err }),
-  setJobDescText: (text) => set({ jobDescText: text }),
-  setAnalyzedJob: (analysis) => set({ analyzedJob: analysis }),
-  setIsAnalyzing: (val) => set({ isAnalyzing: val }),
-  setAnalyzeError: (err) => set({ analyzeError: err }),
-  setIsRestructuring: (val) => set({ isRestructuring: val }),
-  setRestructureError: (err) => set({ restructureError: err }),
-  setRestructureProgress: (msg) => set({ restructureProgress: msg }),
-  setModelUsed: (model) => set({ modelUsed: model }),
-  setTailoredCv: (cv) => set({ tailoredCv: cv }),
+      setStep: (step) => set({ step }),
+      setSessionId: (id) => set({ sessionId: id }),
+      setRawCvText: (text) => set({ rawCvText: text }),
+      setParsedCv: (cv) => set({ parsedCv: cv }),
+      setIsParsing: (val) => set({ isParsing: val }),
+      setParseError: (err) => set({ parseError: err }),
+      setJobDescText: (text) => set({ jobDescText: text }),
+      setAnalyzedJob: (analysis) => set({ analyzedJob: analysis }),
+      setIsAnalyzing: (val) => set({ isAnalyzing: val }),
+      setAnalyzeError: (err) => set({ analyzeError: err }),
+      setIsRestructuring: (val) => set({ isRestructuring: val }),
+      setRestructureError: (err) => set({ restructureError: err }),
+      setRestructureProgress: (msg) => set({ restructureProgress: msg }),
+      setModelUsed: (model) => set({ modelUsed: model }),
+      setTailoredCv: (cv) => set({ tailoredCv: cv }),
 
-  // Fixed: revoke previous blob URL to prevent memory leak
-  setPdfBlobUrl: (url) => {
-    const prev = get().pdfBlobUrl;
-    if (prev) URL.revokeObjectURL(prev);
-    set({ pdfBlobUrl: url });
-  },
+      setPdfBlobUrl: (url) => {
+        const prev = get().pdfBlobUrl;
+        if (prev) URL.revokeObjectURL(prev);
+        set({ pdfBlobUrl: url });
+      },
 
-  setIsGeneratingPdf: (val) => set({ isGeneratingPdf: val }),
-  setSelectedModel: (model) => set({ selectedModel: model }),
-  setSelectedFormat: (format) => set({ selectedFormat: format }),
-  setSectionInsights: (insights) => set({ sectionInsights: insights }),
-  setIsGeneratingInsights: (val) => set({ isGeneratingInsights: val }),
-  setInsightError: (err) => set({ insightError: err }),
-  setCoverLetter: (cl) => set({ coverLetter: cl }),
-  setSelectedCoverLetterFormat: (format) => set({ selectedCoverLetterFormat: format }),
-  setIsGeneratingCoverLetter: (val) => set({ isGeneratingCoverLetter: val }),
-  setCoverLetterError: (err) => set({ coverLetterError: err }),
+      setIsGeneratingPdf: (val) => set({ isGeneratingPdf: val }),
+      setSelectedModel: (model) => set({ selectedModel: model }),
+      setSelectedFormat: (format) => set({ selectedFormat: format }),
+      setSectionInsights: (insights) => set({ sectionInsights: insights }),
+      setIsGeneratingInsights: (val) => set({ isGeneratingInsights: val }),
+      setInsightError: (err) => set({ insightError: err }),
+      setCoverLetter: (cl) => set({ coverLetter: cl }),
+      setSelectedCoverLetterFormat: (format) => set({ selectedCoverLetterFormat: format }),
+      setIsGeneratingCoverLetter: (val) => set({ isGeneratingCoverLetter: val }),
+      setCoverLetterError: (err) => set({ coverLetterError: err }),
 
-  // Fixed: cap versions to prevent unbounded growth
-  addCoverLetterVersion: (cl) => set((state) => {
-    const versions = [...state.coverLetterVersions, cl];
-    // Keep only the most recent N versions
-    if (versions.length > MAX_COVER_LETTER_VERSIONS) {
-      versions.splice(0, versions.length - MAX_COVER_LETTER_VERSIONS);
+      addCoverLetterVersion: (cl) => set((state) => {
+        const versions = [...state.coverLetterVersions, cl];
+        if (versions.length > MAX_COVER_LETTER_VERSIONS) {
+          versions.splice(0, versions.length - MAX_COVER_LETTER_VERSIONS);
+        }
+        return { coverLetterVersions: versions };
+      }),
+      setCvScore: (score) => set({ cvScore: score }),
+      setIsScoring: (val) => set({ isScoring: val }),
+      setExtractionMeta: (meta) => set({ extractionMeta: meta }),
+
+      reset: () => {
+        const prev = get().pdfBlobUrl;
+        if (prev) URL.revokeObjectURL(prev);
+        set(initialState);
+      },
+    }),
+    {
+      name: STORAGE_KEY,
+      storage: createJSONStorage(() => localStorage),
+      // Only persist the data fields — never loading/error/blob states
+      partialize: (state) => ({
+        step: state.step,
+        sessionId: state.sessionId,
+        rawCvText: state.rawCvText,
+        parsedCv: state.parsedCv,
+        jobDescText: state.jobDescText,
+        analyzedJob: state.analyzedJob,
+        tailoredCv: state.tailoredCv,
+        selectedFormat: state.selectedFormat,
+        selectedCoverLetterFormat: state.selectedCoverLetterFormat,
+        coverLetter: state.coverLetter,
+        coverLetterVersions: state.coverLetterVersions,
+        sectionInsights: state.sectionInsights,
+        cvScore: state.cvScore,
+        extractionMeta: state.extractionMeta,
+      }),
     }
-    return { coverLetterVersions: versions };
-  }),
-  setCvScore: (score) => set({ cvScore: score }),
-  setIsScoring: (val) => set({ isScoring: val }),
-  setExtractionMeta: (meta) => set({ extractionMeta: meta }),
-
-  // Fixed: revoke blob URL on reset
-  reset: () => {
-    const prev = get().pdfBlobUrl;
-    if (prev) URL.revokeObjectURL(prev);
-    set(initialState);
-  },
-}));
+  )
+);

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callAIRaceForTask, type AIMessage } from '@/lib/ai-provider';
+import { callAIRaceForTask, hasAnyProviderCredentials, type AIMessage } from '@/lib/ai-provider';
 import { aiQueue } from '@/lib/request-queue';
 import { extractJSON } from '@/lib/json-utils';
+import { coverLetterCache, hashContent } from '@/lib/response-cache';
 import {
   COVER_LETTER_SYSTEM_PROMPT,
   COVER_LETTER_FORMATS,
@@ -18,7 +19,7 @@ export const maxDuration = 45;
 interface GenerateCoverLetterRequest {
   cvData: ParsedCV;
   jobAnalysis: JobAnalysis;
-  jobDescText: string;
+  jobDescText?: string; // kept for backwards compat but not forwarded to AI
   formatId: CoverLetterFormatId;
   modelId?: string;
 }
@@ -45,34 +46,16 @@ function isValidCoverLetterData(obj: unknown): obj is CoverLetterData {
 export async function POST(request: NextRequest) {
   try {
     const body: GenerateCoverLetterRequest = await request.json();
-    const { cvData, jobAnalysis, jobDescText, formatId } = body;
+    const { cvData, jobAnalysis, formatId } = body;
 
     if (!cvData || typeof cvData !== 'object') {
-      return NextResponse.json(
-        { success: false, error: 'cvData is required and must be an object' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'cvData is required and must be an object' }, { status: 400 });
     }
-
     if (!jobAnalysis || typeof jobAnalysis !== 'object') {
-      return NextResponse.json(
-        { success: false, error: 'jobAnalysis is required and must be an object' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'jobAnalysis is required and must be an object' }, { status: 400 });
     }
-
-    if (!jobDescText || typeof jobDescText !== 'string') {
-      return NextResponse.json(
-        { success: false, error: 'jobDescText is required and must be a string' },
-        { status: 400 }
-      );
-    }
-
     if (!formatId || typeof formatId !== 'string') {
-      return NextResponse.json(
-        { success: false, error: 'formatId is required and must be a string' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'formatId is required and must be a string' }, { status: 400 });
     }
 
     const format = COVER_LETTER_FORMATS.find((f) => f.id === formatId);
@@ -83,11 +66,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!hasAnyProviderCredentials()) {
+      return NextResponse.json(
+        { success: false, error: 'No AI provider is configured. Set at least one provider API key.' },
+        { status: 503 }
+      );
+    }
+
+    // Cache — key on CV + job analysis + format (jobDescText omitted: already summarised in jobAnalysis)
+    const cacheKey = `cl:${hashContent(JSON.stringify(cvData) + JSON.stringify(jobAnalysis) + formatId)}`;
+    const cached = coverLetterCache.get(cacheKey) as CoverLetterData | null;
+    if (cached) {
+      return NextResponse.json({ success: true, data: cached, cached: true });
+    }
+
+    // jobDescText deliberately excluded — jobAnalysis already contains summary, keyRequirements,
+    // preferredSkills, and keywords extracted from the job description. Sending the raw text
+    // again would double token usage with no quality benefit.
     const messages: AIMessage[] = [
       { role: 'system', content: COVER_LETTER_SYSTEM_PROMPT },
       {
         role: 'user',
-        content: JSON.stringify({ cvData, jobAnalysis, jobDescText, toneInstruction: format.tone }),
+        content: JSON.stringify({ cvData, jobAnalysis, toneInstruction: format.tone }),
       },
     ];
 
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
       parsed = JSON.parse(rawJson ?? rawContent.trim());
     } catch (parseError: unknown) {
       const message = parseError instanceof Error ? parseError.message : 'JSON parse error';
-      console.error('[generate-cover-letter] Failed to parse AI response as JSON:', message);
+      console.error('[generate-cover-letter] Failed to parse AI response:', message);
       return NextResponse.json(
         { success: false, error: 'Failed to parse AI response as JSON. Please try again.' },
         { status: 500 }
@@ -117,11 +117,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: sanitizeCoverLetterData(parsed as CoverLetterData),
-      model: usedModel,
-    });
+    const sanitized = sanitizeCoverLetterData(parsed as CoverLetterData);
+    coverLetterCache.set(cacheKey, sanitized);
+
+    return NextResponse.json({ success: true, data: sanitized, model: usedModel });
   } catch (error: unknown) {
     console.error('[generate-cover-letter] Unexpected error:', error);
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';

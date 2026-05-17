@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, PDFFont, StandardFonts } from 'pdf-lib';
+
+export const runtime = 'nodejs';
+export const maxDuration = 30;
 import type { CoverLetterData, CoverLetterFormatId } from '@/lib/cv-types';
 import { sanitizeCoverLetterData } from '@/lib/text-cleaning';
 import {

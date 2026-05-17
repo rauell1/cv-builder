@@ -1,51 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callAIRaceForTask } from '@/lib/ai-provider';
+import { callAIRaceForTask, hasAnyProviderCredentials } from '@/lib/ai-provider';
 import { aiQueue } from '@/lib/request-queue';
 import { extractJSON, fixCommonJSONIssues } from '@/lib/json-utils';
+import { insightsCache, hashContent } from '@/lib/response-cache';
 import type { CVScore, ParsedCV, JobAnalysis } from '@/lib/cv-types';
+import { CV_SCORE_SYSTEM_PROMPT } from '@/lib/cv-types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
-
-const CV_SCORE_SYSTEM_PROMPT = `You are an ATS (Applicant Tracking System) simulation engine and CV scoring expert. Evaluate this CV against the job description and provide a comprehensive scoring breakdown.
-
-SCORING CRITERIA (weighted):
-1. KEYWORD MATCH (25%): Are the top job keywords present in the CV? Check both explicit and implicit keyword usage.
-2. EXPERIENCE RELEVANCE (25%): Does the candidate's experience align with the job's core requirements? Consider years, scope, and domain.
-3. ACHIEVEMENT QUALITY (20%): Are bullet points quantified with measurable outcomes (%, numbers, scale, $)? Do they start with strong action verbs?
-4. SKILLS COVERAGE (15%): Are required skills present in the CV? Are they prominent enough for ATS detection?
-5. FORMAT & STRUCTURE (10%): Is the CV clean, professional, and ATS-friendly? Proper section ordering?
-6. EDUCATION (5%): Does the candidate meet minimum educational requirements?
-
-EVALUATION RULES:
-- Be objective and data-driven — score based on evidence, not assumptions
-- overallScore: Weighted composite of all criteria (0-100)
-- atsScore: Simulated ATS pass probability (0-100) — how likely this CV passes automated screening
-- keywordMatch: Split job keywords into matched (found in CV) and missing (not found)
-- sectionScores: Score each major CV section individually with specific feedback
-- weakBullets: Identify specific bullet points that are vague, passive, or unquantified (quote the actual bullet text)
-- strengths: List 3-5 specific things the CV does well
-- suggestions: List 3-5 actionable improvements ordered by impact
-
-Return ONLY valid JSON matching this exact structure:
-{
-  "overallScore": 0-100,
-  "atsScore": 0-100,
-  "keywordMatch": {
-    "matched": ["keyword1", "keyword2"],
-    "missing": ["keyword3", "keyword4"]
-  },
-  "sectionScores": [
-    { "section": "Personal Statement", "score": 0-100, "feedback": "Specific feedback..." },
-    { "section": "Work Experience", "score": 0-100, "feedback": "Specific feedback..." },
-    { "section": "Education", "score": 0-100, "feedback": "Specific feedback..." },
-    { "section": "Skills", "score": 0-100, "feedback": "Specific feedback..." },
-    { "section": "Projects", "score": 0-100, "feedback": "Specific feedback..." }
-  ],
-  "weakBullets": ["Exact text of weak bullet 1", "Exact text of weak bullet 2"],
-  "strengths": ["Strength 1", "Strength 2", "Strength 3"],
-  "suggestions": ["Suggestion 1", "Suggestion 2", "Suggestion 3"]
-}`;
 
 function buildScorePrompt(cvData: ParsedCV, jobAnalysis: JobAnalysis, jobDescText: string): string {
   return `=== CV DATA ===
@@ -84,6 +46,19 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'jobDescText is required and must be a string' },
         { status: 400 }
       );
+    }
+
+    if (!hasAnyProviderCredentials()) {
+      return NextResponse.json(
+        { success: false, error: 'No AI provider is configured. Set at least one provider API key.' },
+        { status: 503 }
+      );
+    }
+
+    const cacheKey = `score:${hashContent(JSON.stringify(cvData) + jobDescText)}`;
+    const cached = insightsCache.get(cacheKey) as CVScore | null;
+    if (cached) {
+      return NextResponse.json({ success: true, data: cached, cached: true });
     }
 
     const messages = [
@@ -133,6 +108,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    insightsCache.set(cacheKey, cvScore);
     return NextResponse.json({ success: true, data: cvScore, model: usedModel });
   } catch (error: unknown) {
     console.error('Score CV error:', error);

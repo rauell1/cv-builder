@@ -1,28 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callAIRaceForTask } from '@/lib/ai-provider';
+import { callAIRaceForTask, hasAnyProviderCredentials } from '@/lib/ai-provider';
 import { aiQueue } from '@/lib/request-queue';
 import { extractJSON, fixCommonJSONIssues } from '@/lib/json-utils';
 import type { AchievementEnhancement } from '@/lib/cv-types';
+import { ACHIEVEMENT_ENHANCER_SYSTEM_PROMPT } from '@/lib/cv-types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
-
-const ACHIEVEMENT_ENHANCER_SYSTEM_PROMPT = `You are a CV achievement optimization expert. Rewrite the following experience bullet points to be significantly more impactful.
-
-RULES:
-- Start EVERY bullet with a strong action verb (Led, Built, Delivered, Optimized, Implemented, Reduced, Increased, Managed, Developed, Designed, Achieved, Launched, Spearheaded, Transformed, Architected, Streamlined, Accelerated, Pioneered, Negotiated, Mentored)
-- Add MEASURABLE RESULTS — numbers, percentages, dollar amounts, scale metrics
-- Focus on OUTCOMES and IMPACT, not tasks or responsibilities
-- Keep each bullet under 2 lines (approximately 25 words)
-- Transform passive descriptions into active achievement statements
-- If a job context is provided, align language to that industry/role
-- Do NOT fabricate achievements — only amplify what is implied or reasonably inferred from the original text
-- Maintain the original meaning and scope — do not change what was actually done
-
-Return JSON: { "enhanced": ["improved bullet 1", "improved bullet 2", ...], "improvements": ["Added quantified impact to bullet 1", "Changed passive to active voice in bullet 2", ...] }
-
-The "enhanced" array must have the same length as the input bullets array.
-The "improvements" array must have the same length, describing what was changed in each bullet.`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,6 +24,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'All bullets must be non-empty strings' },
         { status: 400 }
+      );
+    }
+
+    if (!hasAnyProviderCredentials()) {
+      return NextResponse.json(
+        { success: false, error: 'No AI provider is configured. Set at least one provider API key.' },
+        { status: 503 }
       );
     }
 

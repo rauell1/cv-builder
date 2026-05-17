@@ -1214,7 +1214,21 @@ export function OutputStep() {
                           : (<><Sparkles className="w-4 h-4" />Generate {activeClFormat.name} Cover Letter</>)
                         }
                       </Button>
-                      {coverLetterError && <p className="text-xs text-[#ea2261] mt-2">{coverLetterError}</p>}
+                      {coverLetterError && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <p className="text-xs text-[#ea2261] flex-1">{coverLetterError}</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs border-[#ea2261]/40 text-[#ea2261] hover:bg-[#ea2261]/5 shrink-0"
+                            onClick={() => handleGenerateCoverLetter(selectedCoverLetterFormat)}
+                            disabled={isGeneratingCoverLetter}
+                          >
+                            <RefreshCw className="w-3 h-3 mr-1" />
+                            Retry
+                          </Button>
+                        </div>
+                      )}
                       {cl && (
                         <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="mt-3 space-y-2">
                           <Separator className="bg-border" />
@@ -1259,7 +1273,21 @@ export function OutputStep() {
                     : (<><Sparkles className="w-4 h-4" />Generate All AI Insights</>)
                   }
                 </Button>
-                {insightError && <p className="text-xs text-[#ea2261] mt-2">{insightError}</p>}
+                {insightError && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <p className="text-xs text-[#ea2261] flex-1">{insightError}</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs border-[#ea2261]/40 text-[#ea2261] hover:bg-[#ea2261]/5 shrink-0"
+                      onClick={generateAllInsights}
+                      disabled={isGeneratingInsights}
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      Retry
+                    </Button>
+                  </div>
+                )}
                 {sectionInsights.length > 0 && (
                   <div className="mt-3 space-y-1.5">
                     <p className="text-[11px] text-muted-foreground font-normal">Insights generated for {sectionInsights.length} section(s)</p>

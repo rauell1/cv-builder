@@ -124,7 +124,7 @@ export async function restructureCv(
   modelId?: string
 ): Promise<{ cv: ParsedCV; model: string }> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120_000); // 120s timeout (AI restructuring can be slow for complex CVs)
+  const timeoutId = setTimeout(() => controller.abort(), 65_000); // 65s — slightly above server maxDuration=60 so the server error surfaces first
 
   try {
     const response = await fetch('/api/restructure-cv', {
