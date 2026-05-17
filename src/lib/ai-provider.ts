@@ -960,21 +960,24 @@ void NVIDIA_MODEL_IDS_FAST_FIRST;
 
 export type AITaskType = 'parse' | 'analyze' | 'score' | 'restructure' | 'cover_letter' | 'general';
 
-// Model chain design:
-//   Slots 1-2  = the race pair (raceCount=2 in all routes)
-//               Always Mistral (NVIDIA free) + gpt-5.4 (Pekpik) — separate rate limits,
-//               so a Mistral rate-limit never blocks gpt-5.4 and vice versa.
-//   Slots 3-5  = NVIDIA free fallbacks (sequential, same quota pool)
-//   Slots 6+   = paid providers — last resort only, never reached in normal operation
+// Model chain design (all keys are in NVIDIA_API_KEY generic pool + PEKPIK_API_KEY):
+//   Slots 1-2  = primary race pair — Mistral (quality) + Llama-70b (fast, 20s timeout).
+//               Both are free NVIDIA, both fire simultaneously. Llama almost always
+//               responds first (~10s); Mistral provides quality backup at ~25s.
+//   Slot 3     = gpt-5.4 (Pekpik) — independent rate limit, included in the race
+//               for parse-cv (raceCount=3) so a full NVIDIA outage doesn't block parsing.
+//               Sequential fallback #1 for all other routes.
+//   Slots 4-5  = remaining NVIDIA free models (sequential fallbacks)
+//   Slots 6+   = paid providers — last resort only
 export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   parse: [
-    // ── race pair ──
-    'mistralai/mistral-medium-3.5-128b',   // proven fastest for JSON extraction
-    'gpt-5.4',                              // Pekpik — independent rate limit
-    // ── NVIDIA free fallbacks ──
-    'moonshotai/kimi-k2-instruct',
+    // ── race triple (raceCount=3 in parse-cv route) ──
+    'mistralai/mistral-medium-3.5-128b',   // proven quality
+    'meta/llama-3.3-70b-instruct',          // fast — 20s timeout, often wins
+    'gpt-5.4',                              // Pekpik — fires simultaneously, separate quota
+    // ── NVIDIA free sequential fallbacks ──
     'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'meta/llama-3.3-70b-instruct',
+    'moonshotai/kimi-k2-instruct',
     // ── paid last resort ──
     'gemini-2.5-flash',
     'gpt-4o-mini',
@@ -982,13 +985,13 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'claude-haiku-4-20250414',
   ],
   analyze: [
-    // ── race pair ──
+    // ── race pair (raceCount=2) ──
     'mistralai/mistral-medium-3.5-128b',
-    'gpt-5.4',
-    // ── NVIDIA free fallbacks ──
-    'moonshotai/kimi-k2-instruct',
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
     'meta/llama-3.3-70b-instruct',
+    // ── Pekpik + NVIDIA sequential fallbacks ──
+    'gpt-5.4',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'moonshotai/kimi-k2-instruct',
     // ── paid last resort ──
     'gemini-2.5-flash',
     'gpt-4o-mini',
@@ -997,26 +1000,26 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'deepseek-ai/deepseek-r1-0528',
   ],
   score: [
-    // ── race pair ──
+    // ── race pair (raceCount=1, sequential) ──
     'mistralai/mistral-medium-3.5-128b',
+    'meta/llama-3.3-70b-instruct',
     'gpt-5.4',
     // ── NVIDIA free fallbacks ──
-    'moonshotai/kimi-k2-instruct',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'meta/llama-3.3-70b-instruct',
+    'moonshotai/kimi-k2-instruct',
     // ── paid last resort ──
     'gemini-2.5-flash',
     'gpt-4o-mini',
     'glm-4-flash',
   ],
   restructure: [
-    // ── race pair ──
-    'mistralai/mistral-medium-3.5-128b',   // quality + speed leader
-    'gpt-5.4',                              // Pekpik backup
-    // ── NVIDIA free fallbacks ──
-    'moonshotai/kimi-k2-instruct',
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    // ── race pair (raceCount=2) ──
+    'mistralai/mistral-medium-3.5-128b',
     'meta/llama-3.3-70b-instruct',
+    // ── Pekpik + NVIDIA sequential fallbacks ──
+    'gpt-5.4',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'moonshotai/kimi-k2-instruct',
     'deepseek-ai/deepseek-r1-0528',
     // ── paid last resort ──
     'claude-sonnet-4-20250514',
@@ -1029,13 +1032,13 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'glm-4-flash',
   ],
   cover_letter: [
-    // ── race pair ──
+    // ── race pair (raceCount=2) ──
     'mistralai/mistral-medium-3.5-128b',
-    'gpt-5.4',
-    // ── NVIDIA free fallbacks ──
-    'moonshotai/kimi-k2-instruct',
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
     'meta/llama-3.3-70b-instruct',
+    // ── Pekpik + NVIDIA sequential fallbacks ──
+    'gpt-5.4',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'moonshotai/kimi-k2-instruct',
     // ── paid last resort ──
     'claude-sonnet-4-20250514',
     'gpt-4o',
@@ -1046,13 +1049,13 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'glm-4-flash',
   ],
   general: [
-    // ── race pair ──
+    // ── race pair (raceCount=2) ──
     'mistralai/mistral-medium-3.5-128b',
-    'gpt-5.4',
-    // ── NVIDIA free fallbacks ──
-    'moonshotai/kimi-k2-instruct',
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
     'meta/llama-3.3-70b-instruct',
+    // ── Pekpik + NVIDIA sequential fallbacks ──
+    'gpt-5.4',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'moonshotai/kimi-k2-instruct',
     'deepseek-ai/deepseek-r1-0528',
     // ── paid last resort ──
     'gemini-2.5-flash',

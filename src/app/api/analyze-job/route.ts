@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
           { role: 'system', content: JOB_ANALYSIS_SYSTEM_PROMPT },
           { role: 'user', content: jobDescText },
         ],
-        2,    // race Mistral (NVIDIA) + gpt-5.4 (Pekpik) — independent rate limits
+        2,    // race Mistral + Llama-70b (both free NVIDIA, fast wins)
         0.2,
       ),
       'normal',
