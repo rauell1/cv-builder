@@ -6,13 +6,25 @@
  *   - OpenAI          (OPENAI_API_KEY)
  *   - Anthropic       (ANTHROPIC_API_KEY)
  *   - Google Gemini   (GOOGLE_AI_API_KEY / GEMINI_API_KEY)
- *   - NVIDIA NIM      (NVIDIA_API_KEY)
+ *   - NVIDIA NIM      (NVIDIA_API_KEY | NVIDIA_MISTRAL_KEYS | NVIDIA_DEEPSEEK_KEYS | NVIDIA_KIMI_KEYS)
+ *
+ * NVIDIA env-var layout (matches Vercel project settings):
+ *   NVIDIA_MISTRAL_KEYS  = comma-separated keys for mistralai/mistral-medium-3.5-128b
+ *   NVIDIA_DEEPSEEK_KEYS = comma-separated keys for deepseek-ai/deepseek-r1-0528
+ *   NVIDIA_KIMI_KEYS     = comma-separated keys for moonshotai/kimi-k2-instruct
+ *   NVIDIA_MISTRAL_MODEL = override model id  (optional)
+ *   NVIDIA_DEEPSEEK_MODEL= override model id  (optional)
+ *   NVIDIA_KIMI_MODEL    = override model id  (optional)
+ *   NVIDIA_MISTRAL_URL   = override base URL  (optional)
+ *   NVIDIA_DEEPSEEK_URL  = override base URL  (optional)
+ *   NVIDIA_KIMI_URL      = override base URL  (optional)
+ *   NVIDIA_API_KEY       = generic pool used by any model not covered above
  *
  * Speed optimizations:
- *   - callAIRaceForTask(): fires top-N models for a task type in parallel, first winner returned
- *   - Per-model timeouts tuned to each provider's actual p95 latency
- *   - Non-blocking background DB / cache writes throughout
- *   - NVIDIA gets individual per-model health (not whole-provider blackout)
+ *   - callAIRaceForTask(): fires top-N models in parallel, first winner returned
+ *   - Per-model timeouts tuned to each provider's p95 latency
+ *   - Non-blocking background healer restores keys every 60 s
+ *   - Each NVIDIA model has independent key pools + health state
  */
 
 // ---- Lazy ZAI SDK instance ----
@@ -83,7 +95,7 @@ export class AIModelFailedError extends Error {
 
 // ---- Key health tracking ----
 
-const COOLDOWN_MS = 2 * 60_000; // 2 minutes — models re-enter rotation faster
+const COOLDOWN_MS = 2 * 60_000; // 2 minutes
 
 interface KeyHealth {
   key: string;
@@ -91,19 +103,25 @@ interface KeyHealth {
   downSince?: number;
 }
 
-const keyHealthMap = new Map<AIProvider, KeyHealth[]>();
+const keyHealthMap = new Map<string, KeyHealth[]>(); // keyed by provider OR "nvidia:<modelId>"
 
 // Per-NVIDIA-model health (model id → down timestamp)
 const nvidiaModelHealth = new Map<string, number>();
 
-function initKeyHealth(provider: AIProvider, keys: string[]): void {
-  if (!keyHealthMap.has(provider)) {
-    keyHealthMap.set(provider, keys.map((k) => ({ key: k, status: 'healthy' })));
+function initKeyHealth(poolKey: string, keys: string[]): void {
+  if (!keyHealthMap.has(poolKey)) {
+    keyHealthMap.set(poolKey, keys.map((k) => ({ key: k, status: 'healthy' })));
+  } else {
+    // Merge in any new keys that were not present before
+    const pool = keyHealthMap.get(poolKey)!;
+    for (const k of keys) {
+      if (!pool.find((e) => e.key === k)) pool.push({ key: k, status: 'healthy' });
+    }
   }
 }
 
-function pickHealthyKey(provider: AIProvider): string | null {
-  const pool = keyHealthMap.get(provider) ?? [];
+function pickHealthyKeyFromPool(poolKey: string): string | null {
+  const pool = keyHealthMap.get(poolKey) ?? [];
   const now = Date.now();
   for (const entry of pool) {
     if (entry.status === 'down' && entry.downSince && now - entry.downSince >= COOLDOWN_MS) {
@@ -115,8 +133,8 @@ function pickHealthyKey(provider: AIProvider): string | null {
   return healthy[Math.floor(Math.random() * healthy.length)].key;
 }
 
-function markKeyDown(provider: AIProvider, key: string): void {
-  const pool = keyHealthMap.get(provider) ?? [];
+function markKeyDownInPool(poolKey: string, key: string): void {
+  const pool = keyHealthMap.get(poolKey) ?? [];
   const entry = pool.find((e) => e.key === key);
   if (entry) { entry.status = 'down'; entry.downSince = Date.now(); }
 }
@@ -154,59 +172,164 @@ if (typeof setInterval !== 'undefined' && typeof window === 'undefined') {
 
 // ---- Env resolution ----
 
-const PROVIDER_KEY_ALIASES: Record<AIProvider, string[]> = {
-  glm:       ['ZHIPU_API_KEY', 'GLM_API_KEY', 'BIGMODEL_API_KEY'],
-  openai:    ['OPENAI_API_KEY', 'OPENAI_KEY'],
-  anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
-  google:    ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
-  nvidia:    ['NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY'],
-};
-
-type ResolvedEnv = { value: string; source: string } | null;
-
-function resolveEnvValue(key: string): ResolvedEnv {
+function readEnvValue(key: string): string | null {
   const env = typeof process !== 'undefined' ? process.env : undefined;
   if (!env) return null;
   const candidates = [
-    { name: key,                                value: env[key] },
-    { name: `NEXT_PUBLIC_${key}`,               value: env[`NEXT_PUBLIC_${key}`] },
-    { name: key.toLowerCase(),                  value: env[key.toLowerCase()] },
-    { name: `next_public_${key.toLowerCase()}`, value: env[`next_public_${key.toLowerCase()}`] },
+    env[key],
+    env[`NEXT_PUBLIC_${key}`],
+    env[key.toLowerCase()],
+    env[`next_public_${key.toLowerCase()}`],
   ];
-  for (const c of candidates) {
-    const trimmed = c.value?.trim();
-    if (trimmed) return { value: trimmed, source: c.name };
+  for (const v of candidates) {
+    const trimmed = v?.trim();
+    if (trimmed) return trimmed;
   }
   return null;
 }
 
-function readEnvValue(key: string): string | null {
-  return resolveEnvValue(key)?.value ?? null;
+function splitKeys(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
-export function getAllProviderKeys(provider: AIProvider): string[] {
-  const aliases = PROVIDER_KEY_ALIASES[provider] ?? [];
+// ---- Generic (non-NVIDIA) provider key aliases ----
+
+const PROVIDER_KEY_ALIASES: Record<Exclude<AIProvider, 'nvidia'>, string[]> = {
+  glm:       ['ZHIPU_API_KEY', 'GLM_API_KEY', 'BIGMODEL_API_KEY'],
+  openai:    ['OPENAI_API_KEY', 'OPENAI_KEY'],
+  anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
+  google:    ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
+};
+
+function getAllProviderKeysNonNvidia(provider: Exclude<AIProvider, 'nvidia'>): string[] {
   const found: string[] = [];
-  for (const alias of aliases) {
-    const raw = readEnvValue(alias);
-    if (!raw) continue;
-    for (const part of raw.split(',')) {
-      const trimmed = part.trim();
-      if (trimmed) found.push(trimmed);
-    }
+  for (const alias of PROVIDER_KEY_ALIASES[provider]) {
+    found.push(...splitKeys(readEnvValue(alias)));
   }
   const unique = [...new Set(found)];
   initKeyHealth(provider, unique);
   return unique;
 }
 
-export function getProviderApiKey(provider: AIProvider): string | null {
-  const keys = getAllProviderKeys(provider);
+function pickKeyNonNvidia(provider: Exclude<AIProvider, 'nvidia'>): string | null {
+  const keys = getAllProviderKeysNonNvidia(provider);
   if (keys.length === 0) return null;
-  return pickHealthyKey(provider) ?? keys[0];
+  return pickHealthyKeyFromPool(provider) ?? keys[0];
+}
+
+function markKeyDownNonNvidia(provider: Exclude<AIProvider, 'nvidia'>, key: string): void {
+  markKeyDownInPool(provider, key);
+}
+
+// ---- NVIDIA per-model key / URL / model-id config ----
+//
+// Each logical "model slot" reads from dedicated env vars:
+//   NVIDIA_<SLOT>_KEYS  → comma-separated API keys
+//   NVIDIA_<SLOT>_MODEL → override the model id string (optional)
+//   NVIDIA_<SLOT>_URL   → override the inference base URL (optional)
+//
+// Falls back to the generic NVIDIA_API_KEY pool for any model not in a named slot.
+
+export type NvidiaSlot = 'MISTRAL' | 'DEEPSEEK' | 'KIMI';
+
+const NVIDIA_SLOT_DEFAULTS: Record<NvidiaSlot, { defaultModel: string; defaultUrl: string }> = {
+  MISTRAL:  { defaultModel: 'mistralai/mistral-medium-3.5-128b',  defaultUrl: 'https://integrate.api.nvidia.com/v1' },
+  DEEPSEEK: { defaultModel: 'deepseek-ai/deepseek-r1-0528',       defaultUrl: 'https://integrate.api.nvidia.com/v1' },
+  KIMI:     { defaultModel: 'moonshotai/kimi-k2-instruct',        defaultUrl: 'https://integrate.api.nvidia.com/v1' },
+};
+
+// Model id → which slot it belongs to (populated lazily from env)
+const modelToSlot: Map<string, NvidiaSlot> = new Map();
+
+function getNvidiaSlotConfig(slot: NvidiaSlot): {
+  keys: string[];
+  modelId: string;
+  baseUrl: string;
+} {
+  const keys = splitKeys(readEnvValue(`NVIDIA_${slot}_KEYS`));
+  const modelId = readEnvValue(`NVIDIA_${slot}_MODEL`) ?? NVIDIA_SLOT_DEFAULTS[slot].defaultModel;
+  const baseUrl = (readEnvValue(`NVIDIA_${slot}_URL`) ?? NVIDIA_SLOT_DEFAULTS[slot].defaultUrl).replace(/\/$/, '');
+  const poolKey = `nvidia:${slot}`;
+  initKeyHealth(poolKey, keys);
+  // Register model → slot so callNvidia can find the right pool
+  modelToSlot.set(modelId, slot);
+  return { keys, modelId, baseUrl };
+}
+
+function getGenericNvidiaKeys(): string[] {
+  const keys = splitKeys(readEnvValue('NVIDIA_API_KEY') ?? '');
+  const extra = splitKeys(readEnvValue('NVIDIA_NIM_API_KEY') ?? '');
+  const unique = [...new Set([...keys, ...extra])];
+  initKeyHealth('nvidia:generic', unique);
+  return unique;
+}
+
+function pickNvidiaKey(modelId: string): { key: string; baseUrl: string } | null {
+  const slot = modelToSlot.get(modelId);
+  if (slot) {
+    const poolKey = `nvidia:${slot}`;
+    const { baseUrl } = NVIDIA_SLOT_DEFAULTS[slot];
+    const overrideUrl = (readEnvValue(`NVIDIA_${slot}_URL`) ?? baseUrl).replace(/\/$/, '');
+    const key = pickHealthyKeyFromPool(poolKey);
+    if (key) return { key, baseUrl: overrideUrl };
+    // If slot keys are all down, fall through to generic pool
+  }
+  // Generic pool
+  const genericKey = pickHealthyKeyFromPool('nvidia:generic');
+  if (genericKey) return { key: genericKey, baseUrl: 'https://integrate.api.nvidia.com/v1' };
+  return null;
+}
+
+function markNvidiaKeyDown(modelId: string, key: string): void {
+  const slot = modelToSlot.get(modelId);
+  if (slot) markKeyDownInPool(`nvidia:${slot}`, key);
+  else markKeyDownInPool('nvidia:generic', key);
+}
+
+function hasNvidiaCredentials(): boolean {
+  // Eagerly seed slot configs so modelToSlot is populated
+  const slots: NvidiaSlot[] = ['MISTRAL', 'DEEPSEEK', 'KIMI'];
+  let found = false;
+  for (const slot of slots) {
+    const { keys } = getNvidiaSlotConfig(slot);
+    if (keys.length > 0) found = true;
+  }
+  if (getGenericNvidiaKeys().length > 0) found = true;
+  return found;
+}
+
+// ---- Public key API (used by credential checks & diagnostics) ----
+
+export function getAllProviderKeys(provider: AIProvider): string[] {
+  if (provider === 'nvidia') {
+    const slots: NvidiaSlot[] = ['MISTRAL', 'DEEPSEEK', 'KIMI'];
+    const all: string[] = [];
+    for (const slot of slots) all.push(...getNvidiaSlotConfig(slot).keys);
+    all.push(...getGenericNvidiaKeys());
+    return [...new Set(all)];
+  }
+  return getAllProviderKeysNonNvidia(provider);
+}
+
+export function getProviderApiKey(provider: AIProvider): string | null {
+  if (provider === 'nvidia') {
+    // Return any healthy key across all slots (generic first for quick check)
+    const generic = pickHealthyKeyFromPool('nvidia:generic');
+    if (generic) return generic;
+    for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
+      const k = pickHealthyKeyFromPool(`nvidia:${slot}`);
+      if (k) return k;
+    }
+    return null;
+  }
+  return pickKeyNonNvidia(provider);
 }
 
 export function getProviderKeyNames(provider: AIProvider): string[] {
+  if (provider === 'nvidia') {
+    return ['NVIDIA_MISTRAL_KEYS', 'NVIDIA_DEEPSEEK_KEYS', 'NVIDIA_KIMI_KEYS', 'NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY'];
+  }
   return PROVIDER_KEY_ALIASES[provider] ?? [];
 }
 
@@ -216,7 +339,7 @@ export function hasAnyProviderCredentials(): boolean {
     Boolean(getProviderApiKey('openai')) ||
     Boolean(getProviderApiKey('anthropic')) ||
     Boolean(getProviderApiKey('google')) ||
-    Boolean(getProviderApiKey('nvidia')) ||
+    hasNvidiaCredentials() ||
     process.env.ZAI_SDK_FALLBACK === '1'
   );
 }
@@ -227,7 +350,7 @@ export function getProviderCredentialStatus(): Record<AIProvider, boolean> {
     openai:    Boolean(getProviderApiKey('openai')),
     anthropic: Boolean(getProviderApiKey('anthropic')),
     google:    Boolean(getProviderApiKey('google')),
-    nvidia:    Boolean(getProviderApiKey('nvidia')),
+    nvidia:    hasNvidiaCredentials(),
   };
 }
 
@@ -238,15 +361,17 @@ export function getProviderCredentialDetails(): {
   zaiSdkFallback: boolean;
 } {
   const status = getProviderCredentialStatus();
-  const sources = {} as Record<AIProvider, string[]>;
-  (Object.keys(PROVIDER_KEY_ALIASES) as AIProvider[]).forEach((provider) => {
-    const found: string[] = [];
+  const sources: Record<AIProvider, string[]> = {
+    glm: [], openai: [], anthropic: [], google: [], nvidia: [],
+  };
+  for (const provider of ['glm', 'openai', 'anthropic', 'google'] as Exclude<AIProvider, 'nvidia'>[]) {
     for (const alias of PROVIDER_KEY_ALIASES[provider]) {
-      const resolved = resolveEnvValue(alias);
-      if (resolved) found.push(resolved.source);
+      if (readEnvValue(alias)) sources[provider].push(alias);
     }
-    sources[provider] = [...new Set(found)];
-  });
+  }
+  for (const varName of ['NVIDIA_MISTRAL_KEYS', 'NVIDIA_DEEPSEEK_KEYS', 'NVIDIA_KIMI_KEYS', 'NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY']) {
+    if (readEnvValue(varName)) sources.nvidia.push(varName);
+  }
   return {
     anyConfigured: hasAnyProviderCredentials(),
     status,
@@ -287,10 +412,9 @@ export function estimateComplexity(
 }
 
 export function autoSelectModel(complexity: 'simple' | 'standard' | 'complex'): string {
-  if (getProviderApiKey('nvidia')) {
+  if (hasNvidiaCredentials()) {
     switch (complexity) {
       case 'complex':  return 'mistralai/mistral-medium-3.5-128b';
-      // ↓ Use a fast NVIDIA model for standard tasks to cut latency
       case 'standard': return 'nvidia/llama-3.3-nemotron-super-49b-v1';
       case 'simple':   return 'meta/llama-3.3-70b-instruct';
     }
@@ -310,7 +434,6 @@ export interface NvidiaModelEntry {
   baseScore: number;
   contextWindow?: number;
   tags: string[];
-  /** Typical cold-start latency bucket – used to tune per-model timeouts */
   speed: 'fast' | 'medium' | 'slow';
 }
 
@@ -373,19 +496,17 @@ export const NVIDIA_MODELS: NvidiaModelEntry[] = [
   },
 ];
 
-/** Timeout per model speed bucket */
 function modelTimeout(modelId: string): number {
   const entry = NVIDIA_MODELS.find((m) => m.id === modelId);
   if (entry) {
     if (entry.speed === 'fast')   return 15_000;
     if (entry.speed === 'medium') return 25_000;
-    return 40_000; // slow
+    return 40_000;
   }
-  // Defaults for non-NVIDIA models
-  if (modelId.startsWith('gpt-'))     return 20_000;
-  if (modelId.startsWith('claude-'))  return 25_000;
-  if (modelId.startsWith('gemini-'))  return 20_000;
-  if (modelId.startsWith('glm-'))     return 15_000;
+  if (modelId.startsWith('gpt-'))    return 20_000;
+  if (modelId.startsWith('claude-')) return 25_000;
+  if (modelId.startsWith('gemini-')) return 20_000;
+  if (modelId.startsWith('glm-'))    return 15_000;
   return 30_000;
 }
 
@@ -410,7 +531,7 @@ async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs =
 }
 
 async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
-  const apiKey = getProviderApiKey('glm');
+  const apiKey = pickKeyNonNvidia('glm');
   if (!apiKey) throw new AIProviderError({ provider: 'glm', model: modelId, kind: 'missing_key', message: 'Missing GLM API key' });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -425,7 +546,7 @@ async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs =
     if (!res.ok) {
       let errText = '';
       try { errText = await res.text(); } catch { /* ignore */ }
-      if (res.status === 401 || res.status === 403) markKeyDown('glm', apiKey);
+      if (res.status === 401 || res.status === 403) markKeyDownNonNvidia('glm', apiKey);
       throw new AIProviderError({ provider: 'glm', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
     }
     const data = await res.json();
@@ -439,7 +560,7 @@ async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs =
 }
 
 async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
-  const zhipuKey = getProviderApiKey('glm');
+  const zhipuKey = pickKeyNonNvidia('glm');
   if (zhipuKey) {
     try {
       const result = await callGLMviaAPI(messages, modelId, timeoutMs);
@@ -457,7 +578,7 @@ async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_00
 }
 
 async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
-  const apiKey = getProviderApiKey('openai');
+  const apiKey = pickKeyNonNvidia('openai');
   if (!apiKey) throw new AIProviderError({ provider: 'openai', model: modelId, kind: 'missing_key', message: 'Missing OpenAI API key' });
   const timeout = modelTimeout(modelId);
   const controller = new AbortController();
@@ -472,7 +593,7 @@ async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 
     clearTimeout(timer);
     if (!res.ok) {
       const errText = await res.text();
-      if (res.status === 401 || res.status === 403) markKeyDown('openai', apiKey);
+      if (res.status === 401 || res.status === 403) markKeyDownNonNvidia('openai', apiKey);
       throw new AIProviderError({ provider: 'openai', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
     }
     const data = await res.json();
@@ -486,7 +607,7 @@ async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 
 }
 
 async function callAnthropic(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
-  const apiKey = getProviderApiKey('anthropic');
+  const apiKey = pickKeyNonNvidia('anthropic');
   if (!apiKey) throw new AIProviderError({ provider: 'anthropic', model: modelId, kind: 'missing_key', message: 'Missing Anthropic API key' });
   const timeout = modelTimeout(modelId);
   const controller = new AbortController();
@@ -512,7 +633,7 @@ async function callAnthropic(messages: AIMessage[], modelId: string, temperature
     clearTimeout(timer);
     if (!res.ok) {
       const errText = await res.text();
-      if (res.status === 401 || res.status === 403) markKeyDown('anthropic', apiKey);
+      if (res.status === 401 || res.status === 403) markKeyDownNonNvidia('anthropic', apiKey);
       throw new AIProviderError({ provider: 'anthropic', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
     }
     const data = await res.json();
@@ -526,7 +647,7 @@ async function callAnthropic(messages: AIMessage[], modelId: string, temperature
 }
 
 async function callGemini(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
-  const apiKey = getProviderApiKey('google');
+  const apiKey = pickKeyNonNvidia('google');
   if (!apiKey) throw new AIProviderError({ provider: 'google', model: modelId, kind: 'missing_key', message: 'Missing Google AI API key' });
   const timeout = modelTimeout(modelId);
   const controller = new AbortController();
@@ -547,7 +668,7 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
     clearTimeout(timer);
     if (!res.ok) {
       const errText = await res.text();
-      if (res.status === 401 || res.status === 403) markKeyDown('google', apiKey);
+      if (res.status === 401 || res.status === 403) markKeyDownNonNvidia('google', apiKey);
       throw new AIProviderError({ provider: 'google', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
     }
     const data = await res.json();
@@ -566,7 +687,11 @@ async function callNvidia(
   temperature = 0.3,
   timeoutMs?: number
 ): Promise<string | null> {
-  // Per-model health check (NVIDIA models are independent)
+  // Seed slot configs so modelToSlot is populated before key pick
+  for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
+    getNvidiaSlotConfig(slot);
+  }
+
   if (!isNvidiaModelHealthy(modelId)) {
     throw new AIProviderError({
       provider: 'nvidia',
@@ -576,15 +701,22 @@ async function callNvidia(
     });
   }
 
-  const apiKey = getProviderApiKey('nvidia');
-  if (!apiKey) throw new AIProviderError({ provider: 'nvidia', model: modelId, kind: 'missing_key', message: 'Missing NVIDIA API key (set NVIDIA_API_KEY in Vercel env vars)' });
-
+  const picked = pickNvidiaKey(modelId);
+  if (!picked) {
+    throw new AIProviderError({
+      provider: 'nvidia',
+      model: modelId,
+      kind: 'missing_key',
+      message: `No healthy NVIDIA key for ${modelId}. Set NVIDIA_MISTRAL_KEYS, NVIDIA_DEEPSEEK_KEYS, NVIDIA_KIMI_KEYS, or NVIDIA_API_KEY in Vercel env vars.`,
+    });
+  }
+  const { key: apiKey, baseUrl } = picked;
   const timeout = timeoutMs ?? modelTimeout(modelId);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -603,10 +735,9 @@ async function callNvidia(
     if (!res.ok) {
       const errText = await res.text();
       if (res.status === 401 || res.status === 403) {
-        markKeyDown('nvidia', apiKey);
+        markNvidiaKeyDown(modelId, apiKey);
         markNvidiaModelDown(modelId);
       } else if (res.status === 429 || res.status >= 500) {
-        // Rate-limited or server error → cool down just this model
         markNvidiaModelDown(modelId);
       }
       throw new AIProviderError({
@@ -624,7 +755,7 @@ async function callNvidia(
     clearTimeout(timer);
     if (err instanceof AIProviderError) throw err;
     const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
-    if (isTimeout) markNvidiaModelDown(modelId); // timed-out model gets cooled down too
+    if (isTimeout) markNvidiaModelDown(modelId);
     throw new AIProviderError({
       provider: 'nvidia',
       model: modelId,
@@ -671,7 +802,7 @@ async function callGLMVision(messages: any[], modelId: string, _timeoutMs = 35_0
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function callOpenAIVision(messages: any[], modelId: string, timeoutMs = 30_000): Promise<string | null> {
-  const apiKey = getProviderApiKey('openai');
+  const apiKey = pickKeyNonNvidia('openai');
   if (!apiKey) throw new AIProviderError({ provider: 'openai', model: modelId, kind: 'missing_key', message: 'Missing OpenAI API key' });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -717,12 +848,11 @@ function hasProviderCredentials(provider: AIProvider): boolean {
     case 'openai':    return Boolean(getProviderApiKey('openai'));
     case 'anthropic': return Boolean(getProviderApiKey('anthropic'));
     case 'google':    return Boolean(getProviderApiKey('google'));
-    case 'nvidia':    return Boolean(getProviderApiKey('nvidia'));
+    case 'nvidia':    return hasNvidiaCredentials();
     default:          return false;
   }
 }
 
-// Sorted fast-first: fast NVIDIA models first, then medium, then slow, then others
 const NVIDIA_MODEL_IDS_FAST_FIRST = [...NVIDIA_MODELS]
   .sort((a, b) => {
     const speedOrder = { fast: 0, medium: 1, slow: 2 };
@@ -731,38 +861,22 @@ const NVIDIA_MODEL_IDS_FAST_FIRST = [...NVIDIA_MODELS]
   })
   .map((m) => m.id);
 
-// Score-first (quality priority) for complex tasks
-const NVIDIA_MODEL_IDS_QUALITY_FIRST = [...NVIDIA_MODELS]
-  .sort((a, b) => b.baseScore - a.baseScore)
-  .map((m) => m.id);
-
 const OPENAI_MODELS    = ['gpt-4o-mini', 'gpt-4o'] as const;
 const ANTHROPIC_MODELS = ['claude-haiku-4-20250414', 'claude-sonnet-4-20250514'] as const;
 const GOOGLE_MODELS    = ['gemini-2.5-flash', 'gemini-2.5-pro'] as const;
+
+// Suppress unused variable warnings — kept for future task routing use
+void OPENAI_MODELS;
+void ANTHROPIC_MODELS;
+void GOOGLE_MODELS;
+void NVIDIA_MODEL_IDS_FAST_FIRST;
 
 // ---- Task-specific model routing ----
 
 export type AITaskType = 'parse' | 'analyze' | 'score' | 'restructure' | 'cover_letter' | 'general';
 
-/**
- * Preferred model order per task type — filtered to available providers at call time.
- *
- * parse        → speed first: fast JSON extraction from raw CV text
- * analyze      → speed + structure: job keyword/requirement extraction
- * score        → lightweight: ATS scoring, insights, achievement rewrites
- * restructure  → quality + speed: professional CV rewrite (NVIDIA fast models race first)
- * cover_letter → quality + tone: cover letter prose (similar to restructure, tuned for writing)
- * general      → balanced default
- *
- * Rotation strategy:
- *  - Within each chain, models are ordered so the fastest reliable option comes first.
- *  - callAIRaceForTask fires the top N simultaneously; whoever responds first wins.
- *  - Models on cooldown (< 2 min since last failure) are automatically skipped.
- *  - GLM safety-net models are appended unconditionally so there is always a fallback.
- */
 export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   parse: [
-    // Fast NVIDIA models first — reliable structured JSON output, low latency
     'meta/llama-3.3-70b-instruct',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'glm-4-flash',
@@ -773,9 +887,6 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'glm-4-plus',
   ],
   analyze: [
-    // Fast structured-output models — job analysis is JSON extraction, not reasoning.
-    // meta/llama first: same model that handles parse-cv reliably; avoids burning
-    // nemotron quota when the two would otherwise be raced simultaneously.
     'meta/llama-3.3-70b-instruct',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'glm-4-flash',
@@ -785,11 +896,9 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'mistralai/mistral-medium-3.5-128b',
     'moonshotai/kimi-k2-instruct',
     'claude-haiku-4-20250414',
-    'deepseek-ai/deepseek-r1-0528',  // slow reasoning — last resort
+    'deepseek-ai/deepseek-r1-0528',
   ],
   score: [
-    // Lightweight scoring tasks: ATS scoring, section insights, bullet rewrites
-    // Use smallest/fastest models — quality requirements are lower
     'meta/llama-3.3-70b-instruct',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'glm-4-flash',
@@ -800,32 +909,27 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'mistralai/mistral-medium-3.5-128b',
   ],
   restructure: [
-    // CV rewrite — quality matters but fast NVIDIA models come first so we get
-    // results in ~12s instead of waiting ~22s for Claude/GPT cold starts.
-    // callAIRaceForTask fires top 3 simultaneously; fastest good response wins.
-    'mistralai/mistral-medium-3.5-128b',      // NVIDIA NIM — ~10-15s, excellent CV quality
-    'moonshotai/kimi-k2-instruct',            // NVIDIA NIM — ~10-15s, long context
-    'claude-sonnet-4-20250514',               // Anthropic — ~20-25s, best prose quality
-    'gpt-4o',                                 // OpenAI — ~15-20s, reliable
-    'gemini-2.5-pro',                         // Google — ~15-20s, strong writing
+    'mistralai/mistral-medium-3.5-128b',
+    'moonshotai/kimi-k2-instruct',
+    'claude-sonnet-4-20250514',
+    'gpt-4o',
+    'gemini-2.5-pro',
     'gemini-2.5-flash',
     'gpt-4o-mini',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'claude-haiku-4-20250414',
     'meta/llama-3.3-70b-instruct',
-    'deepseek-ai/deepseek-r1-0528',           // slow — last resort
+    'deepseek-ai/deepseek-r1-0528',
     'glm-4-plus',
     'glm-4-long',
     'glm-4-flash',
   ],
   cover_letter: [
-    // Cover letter prose — similar to restructure but tone/voice matters more than
-    // strict JSON structure, so Anthropic/OpenAI models are ranked slightly higher.
-    'mistralai/mistral-medium-3.5-128b',      // NVIDIA NIM — fast, fluent prose
-    'moonshotai/kimi-k2-instruct',            // NVIDIA NIM — fast, long context
-    'claude-sonnet-4-20250514',               // Anthropic — best tone control
-    'gpt-4o',                                 // OpenAI — strong writing
-    'gemini-2.5-pro',                         // Google — solid prose
+    'mistralai/mistral-medium-3.5-128b',
+    'moonshotai/kimi-k2-instruct',
+    'claude-sonnet-4-20250514',
+    'gpt-4o',
+    'gemini-2.5-pro',
     'gemini-2.5-flash',
     'gpt-4o-mini',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
@@ -833,35 +937,38 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'glm-4-plus',
     'glm-4-flash',
   ],
-  general: NVIDIA_MODEL_IDS_FAST_FIRST,
+  general: [
+    'meta/llama-3.3-70b-instruct',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'mistralai/mistral-medium-3.5-128b',
+    'moonshotai/kimi-k2-instruct',
+    'deepseek-ai/deepseek-r1-0528',
+    'glm-4-flash',
+    'gemini-2.5-flash',
+    'gpt-4o-mini',
+  ],
 };
 
-/** Returns the ordered preference list for a task. */
 export function getPreferredModelsForTask(task: AITaskType): readonly string[] {
   return TASK_MODEL_PREFERENCES[task];
 }
 
-/** Returns the best currently-healthy model available for the given task. */
 export function pickBestModelForTask(task: AITaskType): string {
+  // Seed NVIDIA slot configs
+  for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
+    getNvidiaSlotConfig(slot);
+  }
   for (const modelId of TASK_MODEL_PREFERENCES[task]) {
     const provider = getProvider(modelId);
     if (!hasProviderCredentials(provider)) continue;
     if (provider === 'nvidia' && !isNvidiaModelHealthy(modelId)) continue;
     return modelId;
   }
-  // GLM is the unconditional safety net (ZAI SDK or API key)
   return hasProviderCredentials('glm') || process.env.ZAI_SDK_FALLBACK === '1'
     ? 'glm-4-flash'
-    : 'glm-4-flash'; // will error gracefully if truly no key
+    : 'glm-4-flash';
 }
 
-/**
- * Task-aware AI race — uses the task-specific model preference chain instead of
- * the global rotation list. Races raceCount models in parallel, falls back
- * sequentially through the rest. GLM safety-nets are always appended.
- *
- * @param hintModel  Optional model to place first (e.g. user-selected model in UI).
- */
 export async function callAIRaceForTask(
   task: AITaskType,
   messages: AIMessage[],
@@ -869,16 +976,19 @@ export async function callAIRaceForTask(
   temperature?: number,
   hintModel?: string,
 ): Promise<AIResponse> {
+  // Seed NVIDIA slot configs before any credential checks
+  for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
+    getNvidiaSlotConfig(slot);
+  }
+
   const prefs = [...TASK_MODEL_PREFERENCES[task]];
 
-  // Respect caller hint by inserting it at position 0 (deduplicated)
   if (hintModel && !prefs.includes(hintModel)) prefs.unshift(hintModel);
   else if (hintModel) {
     const idx = prefs.indexOf(hintModel);
     if (idx > 0) { prefs.splice(idx, 1); prefs.unshift(hintModel); }
   }
 
-  // Filter to healthy, available models
   const eligible: string[] = prefs.filter((m) => {
     const p = getProvider(m);
     if (!hasProviderCredentials(p)) return false;
@@ -886,7 +996,7 @@ export async function callAIRaceForTask(
     return true;
   });
 
-  // Always append GLM safety nets at end if not already present
+  // GLM safety nets
   for (const glmId of ['glm-4-flash', 'glm-4-plus']) {
     if (!eligible.includes(glmId) && hasProviderCredentials('glm')) {
       eligible.push(glmId);
@@ -896,7 +1006,7 @@ export async function callAIRaceForTask(
   if (eligible.length === 0) {
     throw new AIModelFailedError([{
       provider: 'glm', model: 'glm-4-flash', kind: 'missing_key',
-      message: 'No eligible models for task. Configure at least one provider API key.',
+      message: 'No eligible models for task. Configure NVIDIA_MISTRAL_KEYS, NVIDIA_DEEPSEEK_KEYS, NVIDIA_KIMI_KEYS, OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY, or ZHIPU_API_KEY in Vercel env vars.',
     }]);
   }
 
@@ -918,7 +1028,6 @@ export async function callAIRaceForTask(
   try {
     return await Promise.any(racers.map(callModel));
   } catch {
-    // All racers failed — sequential fallback through the rest
     const remaining = eligible.slice(racers.length);
     const diagnostics: AIProviderFailureDiagnostic[] = [];
     for (const modelId of remaining) {
@@ -933,4 +1042,3 @@ export async function callAIRaceForTask(
     throw new AIModelFailedError(diagnostics);
   }
 }
-
