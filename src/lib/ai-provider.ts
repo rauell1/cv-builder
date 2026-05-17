@@ -765,16 +765,17 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'glm-4-plus',
   ],
   analyze: [
-    // Reasoning models first for accurate keyword/requirement extraction
-    'deepseek-ai/deepseek-r1-0528',
+    // Fast models first — job analysis is structured JSON extraction, not reasoning
     'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'mistralai/mistral-medium-3.5-128b',
-    'moonshotai/kimi-k2-instruct',
+    'meta/llama-3.3-70b-instruct',
     'glm-4-plus',
     'gemini-2.5-flash',
     'gpt-4o-mini',
+    'mistralai/mistral-medium-3.5-128b',
+    'moonshotai/kimi-k2-instruct',
     'claude-haiku-4-20250414',
     'glm-4-flash',
+    'deepseek-ai/deepseek-r1-0528',  // slow reasoning model — last resort only
   ],
   restructure: [
     // Quality writing models first — latency tradeoff is justified here

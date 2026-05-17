@@ -13,7 +13,7 @@ import { parsingCache, hashContent } from '@/lib/response-cache';
 import { checkRateLimit, resolveClientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
-export const maxDuration = 30;
+export const maxDuration = 45;
 
 export async function POST(request: NextRequest) {
   // Rate limiting (consistent with parse-cv)
