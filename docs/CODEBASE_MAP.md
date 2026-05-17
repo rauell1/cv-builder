@@ -1,7 +1,7 @@
 # Codebase Map
 
 > **Auto-updated** on every push to `main` by `.github/workflows/update-docs.yml`.  
-> Last manual baseline: May 2026. Commit SHA is injected by the workflow.
+> Last update: 2026-05-17 · commit `06ae56c` · branch `main`
 
 ---
 

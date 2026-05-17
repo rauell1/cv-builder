@@ -1,5 +1,7 @@
 # CLAUDE.md — AI Agent Context for cv-builder
 
+> **Auto-updated**: 2026-05-17 · commit `06ae56c` · branch `main`
+
 > This file is read automatically by Claude, GitHub Copilot, and other AI coding agents.
 > Keep it accurate. It is auto-updated by `.github/workflows/update-docs.yml` on every push to `main`.
 
