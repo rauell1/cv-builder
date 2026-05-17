@@ -4,6 +4,7 @@ import {
   callAIRaceForTask,
   hasAnyProviderCredentials,
   pickBestModelForTask,
+  AIModelFailedError,
 } from '@/lib/ai-provider';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { extractJSON, safeJSONParse } from '@/lib/json-utils';
@@ -119,13 +120,16 @@ function parseBuiltIn(cvText: string): ParsedCV {
 }
 
 // ---------------------------------------------------------------------------
-// Core parsing — races fast parsing models in parallel for maximum speed
+// Core parsing — races fast parsing models in parallel for maximum speed.
+// ALWAYS returns a result — never throws. Falls back to built-in parser on
+// any AI failure so the user is never stuck.
 // ---------------------------------------------------------------------------
 
 interface ParseResult {
   parsedCv: ParsedCV;
   usedModel: string;
   source: 'ai' | 'builtin';
+  warning?: string;
 }
 
 async function parseCvCore(cvText: string): Promise<ParseResult> {
@@ -136,47 +140,70 @@ async function parseCvCore(cvText: string): Promise<ParseResult> {
     return { parsedCv: parseBuiltIn(cvText), usedModel: 'builtin', source: 'builtin' };
   }
 
-  // Race top-3 fast parsing models in parallel — first valid JSON response wins
-  const aiResult = await callAIRaceForTask(
-    'parse',
-    [
-      { role: 'system', content: CV_PARSE_SYSTEM_PROMPT },
-      { role: 'user',   content: cvText },
-    ],
-    3,   // race 3 models simultaneously
-    0.1, // low temperature = deterministic JSON
-  );
-
-  console.warn(`[parse-cv] AI race responded in ${Date.now() - t0}ms (model: ${aiResult.model})`);
-
-  const parsedCv = tryParseResponse(aiResult.content);
-  if (parsedCv) return { parsedCv, usedModel: aiResult.model, source: 'ai' };
-
-  // JSON unparseable – single strict-prompt retry (no sleep)
-  console.warn('[parse-cv] Race JSON unparseable, trying strict retry...');
+  // ── AI attempt ──────────────────────────────────────────────────────────
   try {
-    const primaryModel = pickBestModelForTask('parse');
-    const retryResult = await callAIRaceForTask(
+    // Race top-3 fast parsing models in parallel — first valid JSON response wins
+    const aiResult = await callAIRaceForTask(
       'parse',
       [
-        { role: 'system', content: 'You are a CV parser. Return ONLY valid raw JSON starting with {. No markdown.' },
-        { role: 'user',   content: `Parse this CV into JSON:\n\n${cvText.substring(0, 10_000)}` },
+        { role: 'system', content: CV_PARSE_SYSTEM_PROMPT },
+        { role: 'user',   content: cvText },
       ],
-      2,
-      0.1,
-      primaryModel,
+      3,   // race 3 models simultaneously
+      0.1, // low temperature = deterministic JSON
     );
-    const retryCv = tryParseResponse(retryResult.content);
-    if (retryCv) {
-      console.warn(`[parse-cv] Strict retry succeeded with ${retryResult.model} (${Date.now()-t0}ms)`);
-      return { parsedCv: retryCv, usedModel: retryResult.model, source: 'ai' };
+
+    console.warn(`[parse-cv] AI race responded in ${Date.now() - t0}ms (model: ${aiResult.model})`);
+
+    const parsedCv = tryParseResponse(aiResult.content);
+    if (parsedCv) return { parsedCv, usedModel: aiResult.model, source: 'ai' };
+
+    // JSON unparseable – single strict-prompt retry (no sleep)
+    console.warn('[parse-cv] Race JSON unparseable, trying strict retry...');
+    try {
+      const primaryModel = pickBestModelForTask('parse');
+      const retryResult = await callAIRaceForTask(
+        'parse',
+        [
+          { role: 'system', content: 'You are a CV parser. Return ONLY valid raw JSON starting with {. No markdown.' },
+          { role: 'user',   content: `Parse this CV into JSON:\n\n${cvText.substring(0, 10_000)}` },
+        ],
+        2,
+        0.1,
+        primaryModel,
+      );
+      const retryCv = tryParseResponse(retryResult.content);
+      if (retryCv) {
+        console.warn(`[parse-cv] Strict retry succeeded with ${retryResult.model} (${Date.now()-t0}ms)`);
+        return { parsedCv: retryCv, usedModel: retryResult.model, source: 'ai' };
+      }
+    } catch (retryErr) {
+      console.warn('[parse-cv] Strict retry threw:', retryErr instanceof Error ? retryErr.message : String(retryErr));
     }
-  } catch (e) {
-    console.warn('[parse-cv] Strict retry threw:', e instanceof Error ? e.message : String(e));
+
+    // AI returned text but we could not parse JSON — fall through to built-in
+    console.warn(`[parse-cv] AI response not parseable after ${Date.now()-t0}ms — using built-in parser`);
+  } catch (aiErr) {
+    // Includes AIModelFailedError (all providers exhausted), network errors, etc.
+    // Log the real reason server-side but NEVER surface it to the browser.
+    if (aiErr instanceof AIModelFailedError) {
+      console.error(
+        '[parse-cv] AIModelFailedError — diagnostics:',
+        JSON.stringify(aiErr.diagnostics, null, 2),
+      );
+    } else {
+      console.error('[parse-cv] AI call threw:', aiErr instanceof Error ? aiErr.message : String(aiErr));
+    }
   }
 
+  // ── Built-in fallback (always succeeds) ─────────────────────────────────
   console.warn(`[parse-cv] All AI attempts failed after ${Date.now()-t0}ms — using built-in parser`);
-  return { parsedCv: parseBuiltIn(cvText), usedModel: 'builtin', source: 'builtin' };
+  return {
+    parsedCv: parseBuiltIn(cvText),
+    usedModel: 'builtin',
+    source: 'builtin',
+    warning: 'AI parsing unavailable — used fast built-in parser. Results may be less structured.',
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -226,27 +253,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data: cached.parsedCv, model: cached.usedModel, cached: true, processingTime: Date.now() - requestStart });
   }
 
-  try {
-    const { parsedCv, usedModel, source } = await aiQueue.add(() => parseCvCore(cvText), 'high');
-    const processingTime = Date.now() - requestStart;
-    console.warn(`[parse-cv] Done in ${processingTime}ms via ${source} (${usedModel})`);
+  // parseCvCore never throws — it always returns a result
+  const { parsedCv, usedModel, source, warning } = await aiQueue.add(() => parseCvCore(cvText), 'high');
+  const processingTime = Date.now() - requestStart;
+  console.warn(`[parse-cv] Done in ${processingTime}ms via ${source} (${usedModel})`);
 
-    // Non-blocking writes
-    parsingCache.set(cacheKey, { parsedCv, usedModel });
-    if (sessionId) {
-      db.cVSession.upsert({
-        where: { id: sessionId },
-        update: { parsedCv: JSON.stringify(parsedCv), modelUsed: usedModel, step: 2, updatedAt: new Date() },
-        create: { rawCvText: cvText, parsedCv: JSON.stringify(parsedCv), modelUsed: usedModel, step: 2 },
-      }).catch((dbErr: unknown) => {
-        console.warn('[parse-cv] DB save failed (non-critical):', dbErr instanceof Error ? dbErr.message : String(dbErr));
-      });
-    }
-
-    return NextResponse.json({ success: true, data: parsedCv, model: usedModel, source, processingTime });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unexpected error';
-    console.error('[parse-cv] Fatal error:', message);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  // Non-blocking writes
+  parsingCache.set(cacheKey, { parsedCv, usedModel });
+  if (sessionId) {
+    db.cVSession.upsert({
+      where: { id: sessionId },
+      update: { parsedCv: JSON.stringify(parsedCv), modelUsed: usedModel, step: 2, updatedAt: new Date() },
+      create: { rawCvText: cvText, parsedCv: JSON.stringify(parsedCv), modelUsed: usedModel, step: 2 },
+    }).catch((dbErr: unknown) => {
+      console.warn('[parse-cv] DB save failed (non-critical):', dbErr instanceof Error ? dbErr.message : String(dbErr));
+    });
   }
+
+  return NextResponse.json({
+    success: true,
+    data: parsedCv,
+    model: usedModel,
+    source,
+    processingTime,
+    ...(warning ? { warning } : {}),
+  });
 }
