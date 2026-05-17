@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { aiQueue, requestQueue } from "@/lib/request-queue";
+import { aiQueue } from "@/lib/request-queue";
 import { extractionCache, parsingCache } from "@/lib/response-cache";
 
 export async function GET() {
   try {
     const aiMetrics = aiQueue.getMetrics();
-    const generalMetrics = requestQueue.getMetrics();
     const extractionStats = extractionCache.getStats();
     const parsingStats = parsingCache.getStats();
 
@@ -30,21 +29,12 @@ export async function GET() {
         avgWaitMs: Math.round(aiMetrics.averageWaitTimeMs),
         totalProcessed: aiMetrics.totalProcessed,
       },
-      generalQueue: {
-        active: generalMetrics.activeCount,
-        queued: generalMetrics.queueLength,
-        completed: generalMetrics.completedCount,
-        failed: generalMetrics.failedCount,
-        avgWaitMs: Math.round(generalMetrics.averageWaitTimeMs),
-        totalProcessed: generalMetrics.totalProcessed,
-      },
       cache: {
         extraction: extractionStats,
         parsing: parsingStats,
       },
     });
   } catch (error) {
-    // Health endpoint should always return 200, even with degraded data
     console.error('[health] Error collecting metrics:', error);
     return NextResponse.json({
       status: "degraded",
@@ -52,7 +42,6 @@ export async function GET() {
       uptime: process.uptime(),
       memory: { rss: 0, heapUsed: 0, heapTotal: 0, external: 0 },
       aiQueue: { active: 0, queued: 0, completed: 0, failed: 0, dropped: 0, avgWaitMs: 0, totalProcessed: 0 },
-      generalQueue: { active: 0, queued: 0, completed: 0, failed: 0, avgWaitMs: 0, totalProcessed: 0 },
       cache: { extraction: {}, parsing: {} },
       error: error instanceof Error ? error.message : 'Unknown error',
     });

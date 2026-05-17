@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { aiQueue, requestQueue } from '@/lib/request-queue';
+import { aiQueue } from '@/lib/request-queue';
 import { extractionCache, parsingCache } from '@/lib/response-cache';
 import { getProviderCredentialDetails, getProviderCredentialStatus, hasAnyProviderCredentials } from '@/lib/ai-provider';
 
 export async function GET() {
   const aiMetrics = aiQueue.getMetrics();
-  const reqMetrics = requestQueue.getMetrics();
   const extCacheStats = extractionCache.getStats();
   const parseCacheStats = parsingCache.getStats();
 
@@ -14,7 +13,6 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     queues: {
       ai: aiMetrics,
-      general: reqMetrics,
     },
     cache: {
       extraction: extCacheStats,
