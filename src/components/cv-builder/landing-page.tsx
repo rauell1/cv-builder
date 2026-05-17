@@ -33,31 +33,35 @@ const features = [
     icon: FileText,
     title: 'Smart CV Parsing',
     description:
-      'Upload PDF, image, DOCX, or paste text. AI extracts every detail with OCR fallback for scanned documents.',
+      'Upload PDF, DOCX, image, or paste text. AI extracts every section — including OCR for scanned documents — in seconds.',
+    outcome: 'Supports 10+ file formats',
     accent: 'from-violet-500 to-purple-600',
     accentBorder: '#7c3aed',
   },
   {
     icon: Cpu,
-    title: 'Multi-Model AI',
+    title: 'AI Job Matching',
     description:
-      'Choose from 9+ models across GLM, GPT, Claude, and Gemini. Auto-switches for best results.',
+      'Paste any job description. AI identifies ATS keywords, required qualifications, and rewrites your CV to match.',
+    outcome: 'Boosts ATS pass rate',
     accent: 'from-emerald-500 to-teal-600',
     accentBorder: '#0d9488',
   },
   {
     icon: Sparkles,
-    title: 'Section AI Insights',
+    title: 'Per-Section Insights',
     description:
-      'Get actionable feedback per section with scores, keyword matching, and AI-powered improvements.',
+      'Get a scored breakdown of every CV section with keyword gaps, weak bullet diagnostics, and one-click AI fixes.',
+    outcome: 'Scores 0–100 per section',
     accent: 'from-amber-500 to-orange-600',
     accentBorder: '#d97706',
   },
   {
     icon: Download,
-    title: '5 CV Formats',
+    title: '5 PDF Formats + Cover Letter',
     description:
-      'Europass, ATS-Friendly, Modern, Creative, and Classic. Plus cover letter generation.',
+      'Export as Europass, ATS-Friendly, Modern, Creative, or Classic. Generate a tailored cover letter in any tone.',
+    outcome: 'Recruiter-ready in one click',
     accent: 'from-rose-500 to-pink-600',
     accentBorder: '#e11d48',
   },
@@ -66,11 +70,22 @@ const features = [
 /* ── Stats / Social Proof ─────────────────────────────────── */
 
 const stats = [
-  { value: '9+', label: 'AI Models' },
-  { value: '5', label: 'CV Formats' },
-  { value: '5', label: 'Cover Letters' },
-  { value: 'OCR', label: 'Scan Support' },
+  { value: '~60s', label: 'Avg. Processing' },
+  { value: '15+', label: 'AI Models' },
+  { value: '5', label: 'PDF Formats' },
+  { value: '100%', label: 'Free' },
 ];
+
+const beforeAfterExample = {
+  before: {
+    text: '"Responsible for developing web applications, managing team tasks, and assisting in project delivery."',
+    tags: ['Task-focused', 'No metrics', 'Passive voice'],
+  },
+  after: {
+    text: '"Led a team of 6 engineers to ship 8 production web apps in 10 months, cutting deployment time by 40% and increasing sprint velocity by 3x."',
+    tags: ['Impact-focused', 'Quantified', 'ATS-matched'],
+  },
+};
 
 /* ── How It Works ──────────────────────────────────────────── */
 
@@ -78,25 +93,29 @@ const steps = [
   {
     step: 1,
     title: 'Upload Your CV',
-    description: 'Drop a PDF, image, or paste your CV text. AI extracts all sections automatically.',
+    description: 'Drop a PDF, DOCX, image, or paste text. AI extracts every detail — even from scanned documents.',
+    timing: '~10 seconds',
     icon: FileText,
   },
   {
     step: 2,
-    title: 'Add Job Description',
-    description: 'Paste the target job description for AI-powered keyword matching and tailoring.',
+    title: 'Paste the Job Description',
+    description: 'Add any job posting. AI extracts ATS keywords, required qualifications, and seniority level automatically.',
+    timing: '~5 seconds',
     icon: Globe,
   },
   {
     step: 3,
-    title: 'Choose AI Model',
-    description: 'Select from GLM, GPT, Claude, or Gemini. GLM models are built-in in Z.ai and key-based on external hosting.',
+    title: 'AI Rewrites Your CV',
+    description: 'Multi-model AI restructures your experience, rewrites bullets with impact, and mirrors job keywords naturally.',
+    timing: '~45 seconds',
     icon: Cpu,
   },
   {
     step: 4,
     title: 'Download & Iterate',
-    description: 'Get your tailored CV with insights, cover letter, and export as PDF.',
+    description: 'Export as PDF in 5 formats, generate a cover letter, review per-section insights, and keep refining.',
+    timing: 'Instant',
     icon: Download,
   },
 ];
@@ -305,19 +324,22 @@ export function LandingPage() {
             {/* Title */}
             <motion.h1
               id="hero-heading"
-              className="text-4xl sm:text-5xl md:text-6xl font-semibold text-center mb-6 tracking-tight"
+              className="text-4xl sm:text-5xl md:text-6xl font-semibold text-center mb-6 tracking-tight leading-tight"
               variants={itemVariants}
             >
-              <span className="text-gradient">AI CV Builder</span>
+              Land More Interviews.{' '}
+              <span className="text-gradient block sm:inline">AI Tailors Your CV</span>{' '}
+              <span className="block sm:inline">to Every Job.</span>
             </motion.h1>
 
             {/* Subtitle with reveal feel */}
             <motion.p
-              className="text-base sm:text-lg text-muted-foreground text-center max-w-lg mb-12 font-normal leading-relaxed"
+              className="text-base sm:text-lg text-muted-foreground text-center max-w-xl mb-10 font-normal leading-relaxed"
               variants={itemVariants}
             >
-              Multi-model AI intelligence meets professional CV formats.
-              Upload, analyze, and generate a perfectly tailored resume.
+              Paste your CV, add a job description, and get a fully rewritten,
+              ATS-optimized resume in under 60 seconds.{' '}
+              <span className="text-foreground font-medium">No account required.</span>
             </motion.p>
 
             {/* CTA Buttons */}
@@ -341,10 +363,23 @@ export function LandingPage() {
               </Button>
             </motion.div>
 
+            {/* Trust signals */}
+            <motion.div
+              variants={itemVariants}
+              className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 mt-6 mb-4"
+            >
+              {['Free forever', 'No signup', 'ATS-optimized', '15+ AI models'].map((label) => (
+                <span key={label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#15be53] inline-block shrink-0" />
+                  {label}
+                </span>
+              ))}
+            </motion.div>
+
             {/* Stats */}
             <motion.div
               variants={itemVariants}
-              className="flex items-center gap-6 sm:gap-10 mt-16"
+              className="flex items-center gap-6 sm:gap-10 mt-12"
             >
               {stats.map((stat) => (
                 <div key={stat.label} className="text-center">
@@ -414,15 +449,117 @@ export function LandingPage() {
                         <h3 className="font-semibold text-foreground text-sm mb-2">
                           {feature.title}
                         </h3>
-                        <p className="text-muted-foreground text-sm leading-relaxed">
+                        <p className="text-muted-foreground text-sm leading-relaxed mb-3">
                           {feature.description}
                         </p>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary bg-primary/8 px-2 py-0.5 rounded-full">
+                          <span className="w-1 h-1 rounded-full bg-primary inline-block" />
+                          {feature.outcome}
+                        </span>
                       </CardContent>
                     </Card>
                   </motion.div>
                 );
               })}
             </div>
+          </div>
+        </motion.section>
+
+        {/* ═══════════════════════════════════════════
+            Before / After
+            ═══════════════════════════════════════════ */}
+        <motion.section
+          className="px-4 sm:px-6 py-16 md:py-24"
+          {...sectionAnimationProps}
+          aria-labelledby="before-after-heading"
+        >
+          <div className="max-w-5xl mx-auto">
+            <motion.div variants={fadeUp} className="text-center mb-12">
+              <Badge
+                variant="outline"
+                className="px-3 py-1 text-[11px] font-medium border-border text-muted-foreground rounded-full mb-4"
+              >
+                AI Impact
+              </Badge>
+              <h2
+                id="before-after-heading"
+                className="text-2xl sm:text-3xl font-semibold text-foreground mb-3 tracking-tight"
+              >
+                See What AI Does to Your CV
+              </h2>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                A real bullet point — transformed from generic task description to interview-winning achievement
+              </p>
+            </motion.div>
+
+            <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-5 relative">
+              {/* Before */}
+              <Card className="border-border rounded-2xl bg-white overflow-hidden">
+                <div className="h-1 bg-rose-400/60" />
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-rose-500 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-full">
+                      Before
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">Generic CV bullet</span>
+                  </div>
+                  <p className="text-sm text-foreground/80 leading-relaxed italic mb-5">
+                    {beforeAfterExample.before.text}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {beforeAfterExample.before.tags.map((tag) => (
+                      <span key={tag} className="text-[10px] px-2 py-0.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-full">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Connector arrow — desktop only */}
+              <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-glow-sm">
+                  <ArrowRight className="w-4 h-4 text-white" />
+                </div>
+              </div>
+
+              {/* After */}
+              <Card className="border-primary/20 rounded-2xl bg-white overflow-hidden shadow-soft">
+                <div className="h-1 bg-gradient-to-r from-primary to-[#15be53]" />
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-primary bg-primary/8 border border-primary/20 px-2.5 py-1 rounded-full">
+                      After AI
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">Optimized by AI</span>
+                  </div>
+                  <p className="text-sm text-foreground leading-relaxed italic font-medium mb-5">
+                    {beforeAfterExample.after.text}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {beforeAfterExample.after.tags.map((tag) => (
+                      <span key={tag} className="text-[10px] px-2 py-0.5 bg-primary/8 text-primary border border-primary/20 rounded-full">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div variants={fadeUp} className="text-center mt-8">
+              <p className="text-xs text-muted-foreground mb-4">
+                AI uses your real experience — no fabrication, no guesswork
+              </p>
+              <Button
+                size="sm"
+                onClick={() => setStep('cv-input')}
+                className="h-9 px-5 text-xs bg-primary hover:bg-[#4434d4] text-white rounded-lg font-medium"
+              >
+                Try It on Your CV
+                <ArrowRight className="ml-1.5 w-3 h-3" />
+              </Button>
+            </motion.div>
           </div>
         </motion.section>
 
@@ -480,9 +617,13 @@ export function LandingPage() {
                       <h3 className="font-semibold text-foreground text-sm mb-2">
                         {item.title}
                       </h3>
-                      <p className="text-muted-foreground text-sm leading-relaxed">
+                      <p className="text-muted-foreground text-sm leading-relaxed mb-3">
                         {item.description}
                       </p>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                        <Zap className="w-2.5 h-2.5" />
+                        {item.timing}
+                      </span>
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -657,43 +798,57 @@ export function LandingPage() {
         </motion.section>
 
         {/* ═══════════════════════════════════════════
-            Trust & Security
+            Bottom CTA
             ═══════════════════════════════════════════ */}
         <motion.section
-          className="px-4 sm:px-6 py-16 md:py-20"
+          className="px-4 sm:px-6 py-16 md:py-24"
           {...sectionAnimationProps}
-          aria-labelledby="trust-heading"
+          aria-labelledby="cta-heading"
         >
-          <div className="max-w-5xl mx-auto">
+          <div className="max-w-4xl mx-auto">
             <motion.div variants={fadeUp}>
-              <Card className="trust-gradient-border rounded-2xl bg-gradient-to-br from-secondary to-white overflow-hidden">
-                <CardContent className="p-8 md:p-10">
-                  <div className="flex flex-col md:flex-row items-center gap-6">
-                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-                      <Shield className="w-8 h-8 text-primary" />
-                    </div>
-                    <div className="text-center md:text-left flex-1">
-                      <h3
-                        id="trust-heading"
-                        className="font-semibold text-foreground text-base mb-1.5"
-                      >
-                        Privacy-First Processing
-                      </h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed max-w-lg">
-                        Your CV data is processed by AI models and never stored permanently. No accounts required, no data retention. Your information stays yours.
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => setStep('cv-input')}
-                      className="shrink-0 border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl font-medium transition-all duration-200"
-                    >
-                      Try It Now
-                      <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
-                    </Button>
+              <div className="cta-section rounded-3xl p-10 md:p-16 text-center relative overflow-hidden">
+                {/* Background glow */}
+                <div className="absolute inset-0 bg-hero-gradient opacity-60 pointer-events-none" />
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="relative z-10">
+                  <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 bg-white/80 backdrop-blur-sm border border-primary/20 rounded-full text-xs font-medium text-primary">
+                    <Shield className="w-3 h-3" />
+                    Privacy-first · No data retained
                   </div>
-                </CardContent>
-              </Card>
+
+                  <h2
+                    id="cta-heading"
+                    className="text-3xl sm:text-4xl md:text-5xl font-semibold text-foreground mb-4 tracking-tight"
+                  >
+                    Ready to Land Your{' '}
+                    <span className="text-gradient">Next Interview?</span>
+                  </h2>
+                  <p className="text-sm sm:text-base text-muted-foreground mb-8 max-w-lg mx-auto leading-relaxed">
+                    Thousands of job seekers have already optimized their CVs with AI.
+                    Start now — it takes under 60 seconds and costs nothing.
+                  </p>
+
+                  <Button
+                    size="lg"
+                    onClick={() => setStep('cv-input')}
+                    className="h-14 px-10 text-base bg-primary hover:bg-[#4434d4] text-white rounded-xl font-semibold shadow-glow transition-all duration-200 hover:scale-105"
+                  >
+                    Build Your CV — Free
+                    <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
+
+                  <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 mt-6">
+                    {['No signup required', 'No credit card', 'Instant results', 'ATS-optimized output'].map((t) => (
+                      <span key={t} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#15be53] inline-block shrink-0" />
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </motion.div>
           </div>
         </motion.section>
