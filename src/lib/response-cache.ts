@@ -48,6 +48,10 @@ class LRUCache<T = unknown> {
   delete(key: string): void { this.cache.delete(key); }
   clear(): void { this.cache.clear(); }
   get size(): number { return this.cache.size; }
+
+  getStats(): { size: number; maxSize: number; ttlMs: number } {
+    return { size: this.cache.size, maxSize: this.maxSize, ttlMs: this.ttlMs };
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -125,3 +125,4 @@ class RequestQueue {
 }
 
 export const aiQueue = new RequestQueue(6, 30_000);
+export const requestQueue = new RequestQueue(10, 30_000);
