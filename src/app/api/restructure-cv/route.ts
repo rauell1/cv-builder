@@ -1,57 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import {
-  callAIRace,
-  getNextRotatingModel,
+  callAIRaceForTask,
   estimateComplexity,
-  autoSelectModel,
+  pickBestModelForTask,
 } from '@/lib/ai-provider';
 import {
   CV_RESTRUCTURE_SYSTEM_PROMPT,
   type ParsedCV,
 } from '@/lib/cv-types';
+import { extractJSON, fixCommonJSONIssues } from '@/lib/json-utils';
+import { aiQueue } from '@/lib/request-queue';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // restructuring is heavier – allow full 60 s
-
-// ---------------------------------------------------------------------------
-// JSON helpers (same robust stack as parse-cv)
-// ---------------------------------------------------------------------------
-
-function extractJSON(text: string): string | null {
-  const codeBlockRe = /```(?:json)?\s*\n?([\s\S]*?)```/;
-  const codeMatch = codeBlockRe.exec(text);
-  if (codeMatch) {
-    const candidate = codeMatch[1].trim();
-    if (candidate.startsWith('{')) return candidate;
-  }
-  let depth = 0, start = -1, inString = false, escape = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (escape)          { escape = false; continue; }
-    if (ch === '\\' && inString) { escape = true; continue; }
-    if (ch === '"')      { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === '{')      { if (depth === 0) start = i; depth++; }
-    else if (ch === '}') { depth--; if (depth === 0 && start !== -1) return text.substring(start, i + 1); }
-  }
-  return null;
-}
-
-function fixCommonJSONIssues(json: string): string {
-  return json
-    .replace(/,\s*([\]}])/g, '$1')
-    .replace(/(?<=:\s*|[\[,]\s*)'([^']*)'(?=\s*[,}\]:])/g, '"$1"')
-    .replace(/(?<=:\s*")([\s\S]*?)(?="\s*[,}])/g, (match) =>
-      match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Route handler
-// ---------------------------------------------------------------------------
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
@@ -82,16 +46,15 @@ export async function POST(request: NextRequest) {
   }
 
   // Complexity detection
-  const cvLength      = JSON.stringify(parsedCv).length;
-  const jobLength     = jobDescText.length;
-  const totalBullets  = (parsedCv.workExperience || []).reduce((s, e) => s + (e.bullets?.length || 0), 0);
-  const projectCount  = (parsedCv.projects || []).length;
-  const complexity    = estimateComplexity(cvLength, jobLength, totalBullets, projectCount);
+  const cvLength     = JSON.stringify(parsedCv).length;
+  const jobLength    = jobDescText.length;
+  const totalBullets = (parsedCv.workExperience || []).reduce((s, e) => s + (e.bullets?.length || 0), 0);
+  const projectCount = (parsedCv.projects || []).length;
+  const complexity   = estimateComplexity(cvLength, jobLength, totalBullets, projectCount);
 
-  // Model selection: user override → auto-select based on complexity
-  const primaryModel = typeof modelId === 'string' && modelId
-    ? modelId
-    : autoSelectModel(complexity);
+  // Model selection: respect UI hint → otherwise use task-optimised quality model
+  const hintModel = typeof modelId === 'string' && modelId ? modelId : undefined;
+  const primaryModel = hintModel ?? pickBestModelForTask('restructure');
 
   const messages = [
     { role: 'system' as const, content: CV_RESTRUCTURE_SYSTEM_PROMPT },
@@ -105,14 +68,13 @@ export async function POST(request: NextRequest) {
     },
   ];
 
-  // Race 2 models in parallel for complex tasks, single for simple
-  const raceCount = complexity === 'complex' ? 1 : 2;
-  const { content: responseText, model: usedModel } = await callAIRace(
-    messages,
-    primaryModel,
-    complexity,
-    raceCount,
-    0.3
+  // Race 2 models for all complexity levels (was inverted: complex→1, simple→2)
+  // For complex tasks quality matters more, so we race 2 quality models simultaneously.
+  const raceCount = 2;
+
+  const { content: responseText, model: usedModel } = await aiQueue.add(
+    () => callAIRaceForTask('restructure', messages, raceCount, 0.3, primaryModel),
+    'normal',
   );
 
   console.warn(`[restructure-cv] AI responded in ${Date.now() - t0}ms (model: ${usedModel}, complexity: ${complexity})`);

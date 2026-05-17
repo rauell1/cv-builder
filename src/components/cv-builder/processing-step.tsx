@@ -10,6 +10,7 @@ import {
   Zap,
   Loader2,
   Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,33 +21,32 @@ import { AVAILABLE_MODELS } from '@/lib/cv-types';
 import type { AIModelConfig } from '@/lib/cv-types';
 import { toast } from '@/hooks/use-toast';
 
-/* ---------- Model priority list (highest score = best, tried first) ----------
+/* ---------- Restructure-specific model priority (quality-first) ----------
  *
  * Scoring bands:
- *  100-90  Premium paid models (Claude, GPT-4o, Gemini Pro)
- *   89-65  NVIDIA NIM free models (best → fastest)
- *   64-50  GLM built-in fallbacks (always available)
+ *  100-90  Premium paid models (best writing quality)
+ *   89-65  NVIDIA NIM free models (ranked by quality for CV writing)
+ *   64-50  GLM always-on fallbacks
  *
- * The list intentionally interleaves NVIDIA free models between the paid
- * premium tier and the GLM always-on fallbacks so the system uses the best
- * free option before giving up on the NVIDIA tier entirely.
+ * Intentionally quality-first: restructuring is the one step where latency
+ * tradeoff is acceptable — a better CV matters more than 5s saved here.
  */
-const MODEL_PRIORITY: { id: string; score: number }[] = [
-  // ── Premium paid ──────────────────────────────────────────────────────────
-  { id: 'claude-sonnet-4-20250514',                   score: 100 }, // Best quality
+const RESTRUCTURE_MODEL_PRIORITY: { id: string; score: number }[] = [
+  // ── Premium paid (best writing quality) ──────────────────────────────────
+  { id: 'claude-sonnet-4-20250514',                   score: 100 },
   { id: 'gpt-4o',                                     score: 95  },
   { id: 'gemini-2.5-pro',                             score: 90  },
-  // ── NVIDIA NIM free tier (ranked by quality) ───────────────────────────────
-  { id: 'mistralai/mistral-medium-3.5-128b',          score: 89  }, // Top NVIDIA pick
-  { id: 'deepseek-ai/deepseek-r1-0528',               score: 86  }, // Reasoning
-  { id: 'moonshotai/kimi-k2-instruct',                score: 83  }, // Long context
-  { id: 'gemini-2.5-flash',                           score: 81  },
+  // ── NVIDIA NIM free tier (ranked by quality for writing) ──────────────────
+  { id: 'mistralai/mistral-medium-3.5-128b',          score: 89  },
+  { id: 'moonshotai/kimi-k2-instruct',                score: 85  },
+  { id: 'deepseek-ai/deepseek-r1-0528',               score: 83  },
+  { id: 'gemini-2.5-flash',                           score: 80  },
   { id: 'gpt-4o-mini',                                score: 78  },
-  { id: 'claude-haiku-4-20250414',                    score: 75  },
-  { id: 'qwen/qwen3-235b-a22b',                       score: 72  }, // Deep reasoning
-  { id: 'nvidia/llama-3.3-nemotron-super-49b-v1',     score: 70  }, // Fast
-  { id: 'meta/llama-3.3-70b-instruct',                score: 68  }, // Reliable general
-  { id: '01-ai/yi-large',                             score: 65  }, // Light tasks
+  { id: 'nvidia/llama-3.3-nemotron-super-49b-v1',     score: 75  },
+  { id: 'claude-haiku-4-20250414',                    score: 73  },
+  { id: 'meta/llama-3.3-70b-instruct',                score: 70  },
+  { id: 'qwen/qwen3-235b-a22b',                       score: 67  },
+  { id: '01-ai/yi-large',                             score: 63  },
   // ── GLM always-on fallbacks ────────────────────────────────────────────────
   { id: 'glm-4-plus',                                 score: 60  },
   { id: 'glm-4-long',                                 score: 55  },
@@ -54,29 +54,38 @@ const MODEL_PRIORITY: { id: string; score: number }[] = [
 ];
 
 /**
- * Picks the best model available by walking MODEL_PRIORITY top-to-bottom and
- * returning the first entry that exists in AVAILABLE_MODELS.
+ * Picks the best available model for restructuring by walking RESTRUCTURE_MODEL_PRIORITY
+ * top-to-bottom and returning the first entry that exists in AVAILABLE_MODELS.
  * The backend ai-provider.ts handles per-key health and rotation — the
- * frontend just needs to nominate a starting model.
+ * frontend just nominates the starting model.
  */
 function pickBestModel(): AIModelConfig {
-  for (const entry of MODEL_PRIORITY) {
+  for (const entry of RESTRUCTURE_MODEL_PRIORITY) {
     const model = AVAILABLE_MODELS.find((m) => m.id === entry.id);
     if (model) return model;
   }
   return AVAILABLE_MODELS[0];
 }
 
-/* ---------- helpers ---------- */
-
-const baseProgressSteps = [
-  'Analyzing job requirements...',
-  'Comparing CV skills with job needs...',
-  'Restructuring work experience...',
-  'Optimizing personal statement...',
-  'Tailoring skills section...',
-  'Enhancing bullet points...',
-  'Finalizing tailored CV...',
+/* ---------- Progress phases — aligned with real backend work ----------
+ *
+ * These messages map to what the backend actually does during restructuring:
+ * 1. Connect to model (immediate)
+ * 2. Read CV + job analysis
+ * 3. Integrate keywords into experience bullets
+ * 4. Rewrite personal statement
+ * 5. Reorder and optimise skills
+ * 6. Finalise document structure
+ * 7. Return result
+ */
+const RESTRUCTURE_PROGRESS_PHASES = [
+  'Reading your CV and job requirements...',
+  'Integrating job keywords into experience...',
+  'Rewriting bullet points with impact metrics...',
+  'Crafting your executive personal statement...',
+  'Reordering skills by job relevance...',
+  'Optimising ATS keyword coverage...',
+  'Finalising document structure...',
 ];
 
 /* Confetti particle config for success state */
@@ -115,11 +124,15 @@ export function ProcessingStep() {
     setSelectedModel,
   } = useCVBuilderStore();
 
-  const progressIndexRef   = useRef(0);
+  const progressIndexRef    = useRef(0);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef        = useRef<number>(0);
   const [hasStarted, setHasStarted]       = useState(false);
   const [progressIndex, setProgressIndex] = useState(0);
   const [activeModel, setActiveModel]     = useState<AIModelConfig>(pickBestModel);
+  // Which model actually responded (may differ from initial if backend fell back)
+  const [actualModel, setActualModel]     = useState<string | null>(null);
+  const [didFallback, setDidFallback]     = useState(false);
   // Track which model IDs have already been tried so retry avoids repeats
   const triedModelsRef = useRef<Set<string>>(new Set());
 
@@ -151,13 +164,19 @@ export function ProcessingStep() {
       setIsRestructuring(true);
       setRestructureError(null);
       setModelUsed(modelId);
+      setActualModel(null);
+      setDidFallback(false);
       progressIndexRef.current = 0;
+      startTimeRef.current = Date.now();
       setHasStarted(true);
       triedModelsRef.current.add(modelId);
 
-      const steps = [`Connecting to ${modelConfig.name}...`, ...baseProgressSteps];
+      const steps = [`Connecting to ${modelConfig.name}...`, ...RESTRUCTURE_PROGRESS_PHASES];
       setRestructureProgress(steps[0]);
 
+      // Adaptive interval: phase through steps over ~20s regardless of model speed.
+      // For fast models the interval fires but the result arrives before it matters.
+      // For slow models users see meaningful phase updates every 3s.
       progressIntervalRef.current = setInterval(() => {
         progressIndexRef.current = Math.min(progressIndexRef.current + 1, steps.length - 1);
         setProgressIndex(progressIndexRef.current);
@@ -171,8 +190,17 @@ export function ProcessingStep() {
           progressIntervalRef.current = null;
         }
         setProgressIndex(steps.length - 1);
+
+        // Detect backend fallback: model returned != model requested
+        const returnedModel = result.model;
+        setActualModel(returnedModel);
+        if (returnedModel && returnedModel !== modelId) {
+          setDidFallback(true);
+          console.warn(`[processing-step] Backend fell back: ${modelId} → ${returnedModel}`);
+        }
+
         setTailoredCv(result.cv);
-        setModelUsed(result.model);
+        setModelUsed(returnedModel);
         setRestructureProgress('CV tailored successfully!');
         toast({ title: 'CV Restructured!', description: 'Your CV has been tailored for the target role.' });
         setTimeout(() => setStep('output'), 1200);
@@ -187,15 +215,15 @@ export function ProcessingStep() {
         toast({ title: 'Restructuring Error', description: message, variant: 'destructive' });
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [parsedCv, analyzedJob, jobDescText, setIsRestructuring, setRestructureError, setRestructureProgress, setModelUsed, setTailoredCv, setStep, setSelectedModel]
   );
 
   /** Retry with the next untried model in the priority list */
   const handleAutoRetry = useCallback(() => {
-    const next = MODEL_PRIORITY.find(
+    const next = RESTRUCTURE_MODEL_PRIORITY.find(
       (entry) => !triedModelsRef.current.has(entry.id) && AVAILABLE_MODELS.some((m) => m.id === entry.id)
     );
-    // Absolute fallback: glm-4-plus is always in AVAILABLE_MODELS
     const nextModel = next
       ? AVAILABLE_MODELS.find((m) => m.id === next.id)!
       : AVAILABLE_MODELS.find((m) => m.id === 'glm-4-plus')!;
@@ -214,7 +242,6 @@ export function ProcessingStep() {
     startRestructuring(currentId);
   }, [modelUsed, activeModel.id, startRestructuring, setRestructureError]);
 
-  // Determine current phase
   const phase: 'processing' | 'success' | 'error' = isRestructuring
     ? 'processing'
     : restructureError
@@ -224,7 +251,7 @@ export function ProcessingStep() {
   const progressPercent = (() => {
     if (phase === 'success') return 100;
     if (phase === 'processing') {
-      return Math.min(Math.round(((progressIndex + 1) / (baseProgressSteps.length + 1)) * 100), 95);
+      return Math.min(Math.round(((progressIndex + 1) / (RESTRUCTURE_PROGRESS_PHASES.length + 1)) * 100), 95);
     }
     return 0;
   })();
@@ -274,7 +301,7 @@ export function ProcessingStep() {
               >
                 <Sparkles className="w-4 h-4 text-primary" />
                 <span className="text-xs text-muted-foreground font-light">
-                  Auto-selected best available model
+                  Auto-selected best quality model for CV writing
                 </span>
                 <Badge variant="outline" className="border-[#b9b9f9] text-primary rounded-[4px] text-[10px] h-5">
                   {activeModel.name}
@@ -298,9 +325,9 @@ export function ProcessingStep() {
                       </motion.div>
                     </div>
 
-                    <h3 className="text-xl font-light text-foreground mb-2 tracking-tight">AI is Working</h3>
+                    <h3 className="text-xl font-light text-foreground mb-2 tracking-tight">AI is Restructuring</h3>
                     <p className="text-sm text-muted-foreground mb-4 font-light">
-                      Restructuring your CV to match the target role
+                      Tailoring your CV for the target role with ATS optimisation
                     </p>
 
                     <Badge variant="outline" className="mb-6 border-[#b9b9f9] text-primary rounded-[4px]">
@@ -335,7 +362,7 @@ export function ProcessingStep() {
                     </div>
 
                     <p className="text-[10px] text-muted-foreground mt-4 font-light">
-                      If this model is unavailable, the system will automatically try the next best option.
+                      If this model is slow or unavailable, the backend will automatically try the next best option.
                     </p>
                   </div>
                 </CardContent>
@@ -375,11 +402,21 @@ export function ProcessingStep() {
                       ))}
                     </div>
                     <h3 className="text-xl font-light text-foreground mb-2 tracking-tight">CV Tailored Successfully!</h3>
-                    <p className="text-sm text-muted-foreground mb-4 font-light">Your CV has been optimized for the target role</p>
-                    <Badge className="bg-secondary text-primary border border-[#b9b9f9] rounded-[4px]">
-                      <Zap className="w-3 h-3 mr-1" />
-                      Model: {modelUsed || activeModel.name}
-                    </Badge>
+                    <p className="text-sm text-muted-foreground mb-4 font-light">Your CV has been optimised for the target role</p>
+
+                    {/* Model used — highlight if backend fell back to a different model */}
+                    <div className="flex flex-col items-center gap-1.5">
+                      <Badge className="bg-secondary text-primary border border-[#b9b9f9] rounded-[4px]">
+                        <Zap className="w-3 h-3 mr-1" />
+                        {actualModel || modelUsed || activeModel.name}
+                      </Badge>
+                      {didFallback && (
+                        <p className="text-[10px] text-muted-foreground font-light">
+                          Auto-switched from {activeModel.name} for best available quality
+                        </p>
+                      )}
+                    </div>
+
                     <p className="text-xs text-muted-foreground mt-4 font-light">Redirecting to output...</p>
                   </div>
                 </CardContent>
@@ -410,7 +447,7 @@ export function ProcessingStep() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                    {/* Try next best model automatically */}
+                    {/* Try next best model */}
                     <Button
                       className="bg-primary hover:bg-[#4434d4] text-white rounded-[4px] font-normal shadow-stripe-sm"
                       onClick={handleAutoRetry}
@@ -428,18 +465,39 @@ export function ProcessingStep() {
                       <RotateCcw className="w-4 h-4 mr-2" />
                       Retry {activeModel.name}
                     </Button>
+
+                    {/* Go back and re-analyse */}
+                    <Button
+                      variant="ghost"
+                      className="text-muted-foreground hover:text-foreground rounded-[4px] font-normal"
+                      onClick={() => setStep('job-desc')}
+                    >
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Back to Job Description
+                    </Button>
                   </div>
 
-                  {/* Show remaining untried models */}
+                  {/* Remaining untried models */}
                   <div className="mt-5 text-center">
-                    <p className="text-[10px] text-muted-foreground font-light mb-2">Remaining models in queue:</p>
+                    <p className="text-[10px] text-muted-foreground font-light mb-2">Models remaining in queue:</p>
                     <div className="flex flex-wrap justify-center gap-1.5">
-                      {MODEL_PRIORITY.filter(
+                      {RESTRUCTURE_MODEL_PRIORITY.filter(
                         (e) => !triedModelsRef.current.has(e.id) && AVAILABLE_MODELS.some((m) => m.id === e.id)
-                      ).map((e) => {
+                      ).slice(0, 6).map((e) => {
                         const m = AVAILABLE_MODELS.find((x) => x.id === e.id)!;
                         return (
-                          <Badge key={e.id} variant="outline" className="text-[10px] rounded-[4px] border-border text-muted-foreground">
+                          <Badge
+                            key={e.id}
+                            variant="outline"
+                            className="text-[10px] rounded-[4px] border-border text-muted-foreground cursor-pointer hover:border-primary hover:text-primary transition-colors"
+                            onClick={() => {
+                              triedModelsRef.current.add(e.id);
+                              setRestructureError(null);
+                              setHasStarted(false);
+                              startRestructuring(e.id);
+                            }}
+                          >
+                            <ArrowRight className="w-2.5 h-2.5 mr-1" />
                             {m.name}
                           </Badge>
                         );

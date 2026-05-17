@@ -740,6 +740,160 @@ const OPENAI_MODELS    = ['gpt-4o-mini', 'gpt-4o'] as const;
 const ANTHROPIC_MODELS = ['claude-haiku-4-20250414', 'claude-sonnet-4-20250514'] as const;
 const GOOGLE_MODELS    = ['gemini-2.5-flash', 'gemini-2.5-pro'] as const;
 
+// ---- Task-specific model routing ----
+
+export type AITaskType = 'parse' | 'analyze' | 'restructure' | 'general';
+
+/**
+ * Preferred model order per task type — filter to available providers at call time.
+ *
+ * parse       → speed first: fast JSON extraction, low latency
+ * analyze     → reasoning + speed: keyword/requirement analysis
+ * restructure → quality first: professional CV writing
+ * general     → balanced default
+ */
+export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
+  parse: [
+    // Fast NVIDIA models with reliable structured output
+    'meta/llama-3.3-70b-instruct',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'glm-4-flash',                            // always-on fast fallback
+    'gemini-2.5-flash',
+    'gpt-4o-mini',
+    'claude-haiku-4-20250414',
+    'mistralai/mistral-medium-3.5-128b',
+    'glm-4-plus',
+  ],
+  analyze: [
+    // Reasoning models first for accurate keyword/requirement extraction
+    'deepseek-ai/deepseek-r1-0528',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'mistralai/mistral-medium-3.5-128b',
+    'moonshotai/kimi-k2-instruct',
+    'glm-4-plus',
+    'gemini-2.5-flash',
+    'gpt-4o-mini',
+    'claude-haiku-4-20250414',
+    'glm-4-flash',
+  ],
+  restructure: [
+    // Quality writing models first — latency tradeoff is justified here
+    'claude-sonnet-4-20250514',
+    'gpt-4o',
+    'mistralai/mistral-medium-3.5-128b',      // best free-tier quality
+    'gemini-2.5-pro',
+    'moonshotai/kimi-k2-instruct',            // long context, quality
+    'deepseek-ai/deepseek-r1-0528',
+    'gemini-2.5-flash',
+    'gpt-4o-mini',
+    'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'claude-haiku-4-20250414',
+    'meta/llama-3.3-70b-instruct',
+    'glm-4-plus',
+    'glm-4-long',
+    'glm-4-flash',
+  ],
+  general: NVIDIA_MODEL_IDS_FAST_FIRST,
+};
+
+/** Returns the ordered preference list for a task. */
+export function getPreferredModelsForTask(task: AITaskType): readonly string[] {
+  return TASK_MODEL_PREFERENCES[task];
+}
+
+/** Returns the best currently-healthy model available for the given task. */
+export function pickBestModelForTask(task: AITaskType): string {
+  for (const modelId of TASK_MODEL_PREFERENCES[task]) {
+    const provider = getProvider(modelId);
+    if (!hasProviderCredentials(provider)) continue;
+    if (provider === 'nvidia' && !isNvidiaModelHealthy(modelId)) continue;
+    return modelId;
+  }
+  // GLM is the unconditional safety net (ZAI SDK or API key)
+  return hasProviderCredentials('glm') || process.env.ZAI_SDK_FALLBACK === '1'
+    ? 'glm-4-flash'
+    : 'glm-4-flash'; // will error gracefully if truly no key
+}
+
+/**
+ * Task-aware AI race — uses the task-specific model preference chain instead of
+ * the global rotation list. Races raceCount models in parallel, falls back
+ * sequentially through the rest. GLM safety-nets are always appended.
+ *
+ * @param hintModel  Optional model to place first (e.g. user-selected model in UI).
+ */
+export async function callAIRaceForTask(
+  task: AITaskType,
+  messages: AIMessage[],
+  raceCount = 2,
+  temperature?: number,
+  hintModel?: string,
+): Promise<AIResponse> {
+  const prefs = [...TASK_MODEL_PREFERENCES[task]];
+
+  // Respect caller hint by inserting it at position 0 (deduplicated)
+  if (hintModel && !prefs.includes(hintModel)) prefs.unshift(hintModel);
+  else if (hintModel) {
+    const idx = prefs.indexOf(hintModel);
+    if (idx > 0) { prefs.splice(idx, 1); prefs.unshift(hintModel); }
+  }
+
+  // Filter to healthy, available models
+  const eligible: string[] = prefs.filter((m) => {
+    const p = getProvider(m);
+    if (!hasProviderCredentials(p)) return false;
+    if (p === 'nvidia' && !isNvidiaModelHealthy(m)) return false;
+    return true;
+  });
+
+  // Always append GLM safety nets at end if not already present
+  for (const glmId of ['glm-4-flash', 'glm-4-plus']) {
+    if (!eligible.includes(glmId) && hasProviderCredentials('glm')) {
+      eligible.push(glmId);
+    }
+  }
+
+  if (eligible.length === 0) {
+    throw new AIModelFailedError([{
+      provider: 'glm', model: 'glm-4-flash', kind: 'missing_key',
+      message: 'No eligible models for task. Configure at least one provider API key.',
+    }]);
+  }
+
+  const callModel = async (modelId: string): Promise<AIResponse> => {
+    const provider = getProvider(modelId);
+    let content: string | null = null;
+    switch (provider) {
+      case 'nvidia':    content = await callNvidia(messages, modelId, temperature); break;
+      case 'openai':    content = await callOpenAI(messages, modelId, temperature); break;
+      case 'anthropic': content = await callAnthropic(messages, modelId, temperature); break;
+      case 'google':    content = await callGemini(messages, modelId, temperature); break;
+      default:          content = await callGLM(messages, modelId); break;
+    }
+    if (!content) throw new Error(`Empty response from ${modelId}`);
+    return { content, model: modelId, provider };
+  };
+
+  const racers = eligible.slice(0, Math.min(raceCount, eligible.length));
+  try {
+    return await Promise.any(racers.map(callModel));
+  } catch {
+    // All racers failed — sequential fallback through the rest
+    const remaining = eligible.slice(racers.length);
+    const diagnostics: AIProviderFailureDiagnostic[] = [];
+    for (const modelId of remaining) {
+      const provider = getProvider(modelId);
+      try {
+        return await callModel(modelId);
+      } catch (err) {
+        if (err instanceof AIProviderError) diagnostics.push(err.diagnostic);
+        else diagnostics.push({ provider, model: modelId, kind: 'unknown_error', message: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    throw new AIModelFailedError(diagnostics);
+  }
+}
+
 const FALLBACK_MODEL_MAP: Record<string, string> = {
   'mistralai/mistral-medium-3.5-128b': 'deepseek-ai/deepseek-r1-0528',
   'deepseek-ai/deepseek-r1-0528':      'moonshotai/kimi-k2-instruct',

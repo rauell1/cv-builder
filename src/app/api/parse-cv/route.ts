@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import {
-  callAIRace,
+  callAIRaceForTask,
   hasAnyProviderCredentials,
-  autoSelectModel,
+  pickBestModelForTask,
 } from '@/lib/ai-provider';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
+import { extractJSON, safeJSONParse } from '@/lib/json-utils';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
 import { checkRateLimit, resolveClientIp } from '@/lib/rate-limit';
@@ -18,59 +19,8 @@ export const maxDuration = 45;
 const MAX_CV_LENGTH = 50_000;
 
 // ---------------------------------------------------------------------------
-// JSON helpers
+// Validation
 // ---------------------------------------------------------------------------
-
-function extractJSON(text: string): string | null {
-  if (!text || typeof text !== 'string') return null;
-  const codeMatch = /```(?:json)?\s*\n?([\s\S]*?)```/.exec(text);
-  if (codeMatch) { const c = codeMatch[1].trim(); if (c.startsWith('{')) return c; }
-  let depth = 0, start = -1, inString = false, escape = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (escape) { escape = false; continue; }
-    if (ch === '\\' && inString) { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === '{') { if (depth === 0) start = i; depth++; }
-    else if (ch === '}') { depth--; if (depth === 0 && start !== -1) return text.substring(start, i + 1); }
-  }
-  return null;
-}
-
-function fixCommonJSONIssues(json: string): string {
-  return json
-    .replace(/,\s*([\]}])/g, '$1')
-    .replace(/'([^']+)'\s*:/g, '"$1":')
-    .replace(/:\s*'([^']*?)'/g, ': "$1"')
-    .replace(/[\[,]\s*'([^']*?)'/g, (m) => m.replace(/'/g, '"'));
-}
-
-function fixUnescapedNewlinesInStrings(json: string): string {
-  let result = '', inString = false, escape = false;
-  for (let i = 0; i < json.length; i++) {
-    const ch = json[i];
-    if (escape) { result += ch; escape = false; continue; }
-    if (ch === '\\' && inString) { result += ch; escape = true; continue; }
-    if (ch === '"') { inString = !inString; result += ch; continue; }
-    if (inString) {
-      if (ch === '\n') { result += '\\n'; continue; }
-      if (ch === '\r') { result += '\\r'; continue; }
-      if (ch === '\t') { result += '\\t'; continue; }
-    }
-    result += ch;
-  }
-  return result;
-}
-
-function safeJSONParse(raw: string): unknown {
-  try { return JSON.parse(raw); } catch { /* */ }
-  try { return JSON.parse(fixCommonJSONIssues(raw)); } catch { /* */ }
-  try { return JSON.parse(fixUnescapedNewlinesInStrings(raw)); } catch { /* */ }
-  try { return JSON.parse(fixCommonJSONIssues(fixUnescapedNewlinesInStrings(raw))); } catch { /* */ }
-  try { return JSON.parse(fixCommonJSONIssues(fixUnescapedNewlinesInStrings(raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')))); } catch { /* */ }
-  throw new Error(`JSON parse failed. Raw (first 300 chars): ${raw.substring(0, 300)}`);
-}
 
 function validateAndNormalize(obj: unknown): ParsedCV {
   if (!obj || typeof obj !== 'object') throw new Error('Not a valid object');
@@ -169,7 +119,7 @@ function parseBuiltIn(cvText: string): ParsedCV {
 }
 
 // ---------------------------------------------------------------------------
-// Core parsing — races 3 models in parallel for maximum speed
+// Core parsing — races fast parsing models in parallel for maximum speed
 // ---------------------------------------------------------------------------
 
 interface ParseResult {
@@ -186,16 +136,13 @@ async function parseCvCore(cvText: string): Promise<ParseResult> {
     return { parsedCv: parseBuiltIn(cvText), usedModel: 'builtin', source: 'builtin' };
   }
 
-  const primaryModel = autoSelectModel('simple');
-
-  // Race top-3 fast models in parallel — first valid JSON response wins
-  const aiResult = await callAIRace(
+  // Race top-3 fast parsing models in parallel — first valid JSON response wins
+  const aiResult = await callAIRaceForTask(
+    'parse',
     [
       { role: 'system', content: CV_PARSE_SYSTEM_PROMPT },
       { role: 'user',   content: cvText },
     ],
-    primaryModel,
-    'simple',
     3,   // race 3 models simultaneously
     0.1, // low temperature = deterministic JSON
   );
@@ -208,12 +155,16 @@ async function parseCvCore(cvText: string): Promise<ParseResult> {
   // JSON unparseable – single strict-prompt retry (no sleep)
   console.warn('[parse-cv] Race JSON unparseable, trying strict retry...');
   try {
-    const retryResult = await callAIRace(
+    const primaryModel = pickBestModelForTask('parse');
+    const retryResult = await callAIRaceForTask(
+      'parse',
       [
         { role: 'system', content: 'You are a CV parser. Return ONLY valid raw JSON starting with {. No markdown.' },
         { role: 'user',   content: `Parse this CV into JSON:\n\n${cvText.substring(0, 10_000)}` },
       ],
-      primaryModel, 'simple', 2, 0.1,
+      2,
+      0.1,
+      primaryModel,
     );
     const retryCv = tryParseResponse(retryResult.content);
     if (retryCv) {
