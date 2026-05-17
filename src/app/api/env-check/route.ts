@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
   // Count keys per non-NVIDIA provider (safe — counts only, no values)
   const keyCounts: Record<string, number> = {};
-  for (const provider of ['glm', 'openai', 'anthropic', 'google'] as const) {
+  for (const provider of ['glm', 'openai', 'anthropic', 'google', 'pekpik'] as const) {
     keyCounts[provider] = getAllProviderKeys(provider).length;
   }
 
@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
       openai:    { configured: details.status.openai,    keyCount: keyCounts.openai,    sourcesFound: details.sources.openai },
       anthropic: { configured: details.status.anthropic, keyCount: keyCounts.anthropic, sourcesFound: details.sources.anthropic },
       google:    { configured: details.status.google,    keyCount: keyCounts.google,    sourcesFound: details.sources.google },
+      pekpik:    { configured: details.status.pekpik,    keyCount: keyCounts.pekpik,    sourcesFound: details.sources.pekpik, envVar: 'PEKPIK_API_KEY' },
       glm:       { configured: details.status.glm,       keyCount: keyCounts.glm,       sourcesFound: details.sources.glm },
     },
     zaiSdkFallback: details.zaiSdkFallback,
@@ -84,6 +85,7 @@ export async function GET(request: NextRequest) {
         openai:    'OPENAI_API_KEY',
         anthropic: 'ANTHROPIC_API_KEY',
         google:    'GOOGLE_AI_API_KEY',
+        pekpik:    'PEKPIK_API_KEY (base URL: https://aiapiv2.pekpik.com/v1)',
         glm:       'ZHIPU_API_KEY',
       },
     },

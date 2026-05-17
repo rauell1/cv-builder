@@ -6,6 +6,7 @@
  *   - OpenAI          (OPENAI_API_KEY)
  *   - Anthropic       (ANTHROPIC_API_KEY)
  *   - Google Gemini   (GOOGLE_AI_API_KEY / GEMINI_API_KEY)
+ *   - Pekpik          (PEKPIK_API_KEY) — OpenAI-compatible proxy at aiapiv2.pekpik.com
  *   - NVIDIA NIM      (per-slot keys below)
  *
  * NVIDIA env-var layout — EXACT names as set in Vercel:
@@ -46,7 +47,7 @@ async function getZAI() {
 
 // ---- Types ----
 
-export type AIProvider = 'glm' | 'openai' | 'anthropic' | 'google' | 'nvidia';
+export type AIProvider = 'glm' | 'openai' | 'anthropic' | 'google' | 'nvidia' | 'pekpik';
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -210,6 +211,7 @@ const PROVIDER_KEY_ALIASES: Record<Exclude<AIProvider, 'nvidia'>, string[]> = {
   openai:    ['OPENAI_API_KEY', 'OPENAI_KEY'],
   anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
   google:    ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
+  pekpik:    ['PEKPIK_API_KEY', 'PEKPIK_KEY'],
 };
 
 function getAllProviderKeysNonNvidia(provider: Exclude<AIProvider, 'nvidia'>): string[] {
@@ -371,6 +373,7 @@ export function hasAnyProviderCredentials(): boolean {
     Boolean(getProviderApiKey('openai')) ||
     Boolean(getProviderApiKey('anthropic')) ||
     Boolean(getProviderApiKey('google')) ||
+    Boolean(getProviderApiKey('pekpik')) ||
     hasNvidiaCredentials() ||
     process.env.ZAI_SDK_FALLBACK === '1'
   );
@@ -382,6 +385,7 @@ export function getProviderCredentialStatus(): Record<AIProvider, boolean> {
     openai:    Boolean(getProviderApiKey('openai')),
     anthropic: Boolean(getProviderApiKey('anthropic')),
     google:    Boolean(getProviderApiKey('google')),
+    pekpik:    Boolean(getProviderApiKey('pekpik')),
     nvidia:    hasNvidiaCredentials(),
   };
 }
@@ -394,9 +398,9 @@ export function getProviderCredentialDetails(): {
 } {
   const status = getProviderCredentialStatus();
   const sources: Record<AIProvider, string[]> = {
-    glm: [], openai: [], anthropic: [], google: [], nvidia: [],
+    glm: [], openai: [], anthropic: [], google: [], pekpik: [], nvidia: [],
   };
-  for (const provider of ['glm', 'openai', 'anthropic', 'google'] as Exclude<AIProvider, 'nvidia'>[]) {
+  for (const provider of ['glm', 'openai', 'anthropic', 'google', 'pekpik'] as Exclude<AIProvider, 'nvidia'>[]) {
     for (const alias of PROVIDER_KEY_ALIASES[provider]) {
       if (readEnvValue(alias)) sources[provider].push(alias);
     }
@@ -415,10 +419,18 @@ export function getProviderCredentialDetails(): {
   };
 }
 
+// ---- Pekpik config ----
+
+const PEKPIK_BASE_URL = 'https://aiapiv2.pekpik.com/v1';
+
+// Models served exclusively via pekpik (takes priority over the gpt- prefix → openai routing)
+const PEKPIK_MODEL_IDS = new Set(['gpt-5.4', 'gpt-5', 'gpt-4.5']);
+
 // ---- Utility ----
 
 export function getProvider(modelId: string): AIProvider {
   if (modelId.startsWith('glm-'))        return 'glm';
+  if (PEKPIK_MODEL_IDS.has(modelId))     return 'pekpik';
   if (modelId.startsWith('gpt-'))        return 'openai';
   if (modelId.startsWith('claude-'))     return 'anthropic';
   if (modelId.startsWith('gemini-'))     return 'google';
@@ -539,6 +551,7 @@ function modelTimeout(modelId: string): number {
     if (entry.speed === 'medium') return 35_000;
     return 55_000;
   }
+  if (PEKPIK_MODEL_IDS.has(modelId))  return 30_000;
   if (modelId.startsWith('gpt-'))    return 25_000;
   if (modelId.startsWith('claude-')) return 30_000;
   if (modelId.startsWith('gemini-')) return 25_000;
@@ -639,6 +652,35 @@ async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 
     if (err instanceof AIProviderError) throw err;
     const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
     throw new AIProviderError({ provider: 'openai', model: modelId, kind: isTimeout ? 'timeout' : 'network_error', message: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function callPekpik(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
+  const apiKey = pickKeyNonNvidia('pekpik');
+  if (!apiKey) throw new AIProviderError({ provider: 'pekpik', model: modelId, kind: 'missing_key', message: 'Missing Pekpik API key (set PEKPIK_API_KEY in Vercel env vars)' });
+  const timeout = modelTimeout(modelId);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    const res = await fetch(`${PEKPIK_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: modelId, messages, temperature }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) {
+      const errText = await res.text();
+      if (res.status === 401 || res.status === 403) markKeyDownNonNvidia('pekpik', apiKey);
+      throw new AIProviderError({ provider: 'pekpik', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (err) {
+    clearTimeout(timer);
+    if (err instanceof AIProviderError) throw err;
+    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+    throw new AIProviderError({ provider: 'pekpik', model: modelId, kind: isTimeout ? 'timeout' : 'network_error', message: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -822,6 +864,7 @@ export async function callAI(
       case 'anthropic': return callAnthropic(messages, modelId, temperature);
       case 'google':    return callGemini(messages, modelId, temperature);
       case 'nvidia':    return callNvidia(messages, modelId, temperature);
+      case 'pekpik':    return callPekpik(messages, modelId, temperature);
       default:          return callGLM(messages, modelId);
     }
   } catch (err) {
@@ -890,6 +933,7 @@ function hasProviderCredentials(provider: AIProvider): boolean {
     case 'openai':    return Boolean(getProviderApiKey('openai'));
     case 'anthropic': return Boolean(getProviderApiKey('anthropic'));
     case 'google':    return Boolean(getProviderApiKey('google'));
+    case 'pekpik':    return Boolean(getProviderApiKey('pekpik'));
     case 'nvidia':    return hasNvidiaCredentials();
     default:          return false;
   }
@@ -920,6 +964,7 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   parse: [
     'meta/llama-3.3-70b-instruct',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'gpt-5.4',
     'glm-4-flash',
     'gemini-2.5-flash',
     'gpt-4o-mini',
@@ -930,6 +975,7 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   analyze: [
     'meta/llama-3.3-70b-instruct',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'gpt-5.4',
     'glm-4-flash',
     'glm-4-plus',
     'gemini-2.5-flash',
@@ -942,6 +988,7 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
   score: [
     'meta/llama-3.3-70b-instruct',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
+    'gpt-5.4',
     'glm-4-flash',
     'gemini-2.5-flash',
     'gpt-4o-mini',
@@ -950,6 +997,7 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'mistralai/mistral-medium-3.5-128b',
   ],
   restructure: [
+    'gpt-5.4',
     'mistralai/mistral-medium-3.5-128b',
     'moonshotai/kimi-k2-instruct',
     'claude-sonnet-4-20250514',
@@ -966,6 +1014,7 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'glm-4-flash',
   ],
   cover_letter: [
+    'gpt-5.4',
     'mistralai/mistral-medium-3.5-128b',
     'moonshotai/kimi-k2-instruct',
     'claude-sonnet-4-20250514',
@@ -979,6 +1028,7 @@ export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
     'glm-4-flash',
   ],
   general: [
+    'gpt-5.4',
     'meta/llama-3.3-70b-instruct',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'mistralai/mistral-medium-3.5-128b',
@@ -1067,6 +1117,7 @@ export async function callAIRaceForTask(
       case 'openai':    content = await callOpenAI(messages, modelId, temperature); break;
       case 'anthropic': content = await callAnthropic(messages, modelId, temperature); break;
       case 'google':    content = await callGemini(messages, modelId, temperature); break;
+      case 'pekpik':    content = await callPekpik(messages, modelId, temperature); break;
       default:          content = await callGLM(messages, modelId); break;
     }
     if (!content) throw new Error(`Empty response from ${modelId}`);

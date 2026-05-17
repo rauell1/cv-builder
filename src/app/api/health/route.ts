@@ -24,6 +24,7 @@ const PROVIDER_ENV_ALIASES: Record<AIProvider, string[]> = {
   openai:    ['OPENAI_API_KEY', 'OPENAI_KEY'],
   anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
   google:    ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
+  pekpik:    ['PEKPIK_API_KEY', 'PEKPIK_KEY'],
   nvidia:    ['NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY'],
 };
 
@@ -86,6 +87,7 @@ export async function GET(request: NextRequest) {
         openai:    details.status.openai,
         anthropic: details.status.anthropic,
         google:    details.status.google,
+        pekpik:    details.status.pekpik,
         nvidia:    details.status.nvidia,
         zaiSdkFallback: details.zaiSdkFallback,
       },
