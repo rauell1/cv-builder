@@ -48,13 +48,10 @@ import { toast } from '@/hooks/use-toast';
    Constants
    ═══════════════════════════════════════════════════════════ */
 
-// Allow TXT, DOCX and PDF uploads. PDF will be routed through the /api/extract-file pipeline
-// which uses native text extraction first and falls back to AI OCR when needed.
-const ACCEPTED_EXTENSIONS = ['.txt', '.docx', '.pdf'];
+const ACCEPTED_EXTENSIONS = ['.txt', '.docx'];
 const ACCEPTED_MIME_TYPES = [
   'text/plain',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/pdf',
 ];
 const AUTO_PARSE_MIN_LENGTH = 50;
 
@@ -170,11 +167,12 @@ export function CvInputStep() {
         const timeout = setTimeout(() => controller.abort(), 5000);
         const res = await fetch('/api/extract-file', { method: 'HEAD', signal: controller.signal });
         clearTimeout(timeout);
-        setServerOnline(res.ok || res.status === 405);
+        setServerOnline(res.ok || res.status === 405); // 405 = method not allowed but server is up
       } catch {
         setServerOnline(false);
       }
     };
+    // Check once on mount, then every 30s
     checkServer();
     const interval = setInterval(checkServer, 30_000);
     return () => clearInterval(interval);
@@ -187,12 +185,15 @@ export function CvInputStep() {
   const [extractError, setExtractError] = useState<string | null>(null);
   const [extractWarning, setExtractWarning] = useState<string | null>(null);
 
+  // Full extraction result (metadata for quality display)
   const [extractionResult, setExtractionResult] = useState<ExtractFileResult | null>(null);
 
+  // In-progress extraction info (for progress indicator)
   const [processingFileName, setProcessingFileName] = useState<string | null>(null);
   const [processingFileType, setProcessingFileType] = useState<FileTypeCategory>('text');
   const [extractionPhase, setExtractionPhase] = useState(0);
 
+  // Text preview
   const [showFullPreview, setShowFullPreview] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
 
@@ -206,13 +207,16 @@ export function CvInputStep() {
       return;
     }
 
+    // Phase 1 starts immediately
     setExtractionPhase(1);
 
     const isPdfOrImage = processingFileType === 'pdf' || processingFileType === 'image';
 
+    // Phase 2 after 1 second
     const t1 = setTimeout(() => setExtractionPhase(2), 1000);
     phaseTimersRef.current.push(t1);
 
+    // Phase 3 for OCR-sensitive formats
     if (isPdfOrImage) {
       const t2 = setTimeout(() => setExtractionPhase(3), 2000);
       phaseTimersRef.current.push(t2);
@@ -243,6 +247,7 @@ export function CvInputStep() {
     try {
       const result = await parseCv(rawCvText, sessionId || undefined);
       setParsedCv(result.data);
+      // Store sessionId and model in Zustand for downstream steps
       if (result.sessionId) setSessionId(result.sessionId);
       if (result.model) setModelUsed(result.model);
       toast({
@@ -263,6 +268,7 @@ export function CvInputStep() {
   }, [rawCvText, sessionId, setIsParsing, setParseError, setParsedCv, setSessionId, setModelUsed]);
 
   /* ── File Extraction ── */
+  // Store last uploaded file for retry
   const lastFileRef = useRef<File | null>(null);
   const [lastFileName, setLastFileName] = useState<string | null>(null);
 
@@ -271,12 +277,13 @@ export function CvInputStep() {
       if (!isAcceptedFile(file)) {
         toast({
           title: 'Invalid File',
-          description: 'Please upload a .txt, .docx or .pdf file, or paste your CV text directly.',
+          description: 'Please upload a .txt or .docx file, or paste your CV text directly.',
           variant: 'destructive',
         });
         return;
       }
 
+      // Warn for large files (>5MB) but still allow upload
       const FIVE_MB = 5 * 1024 * 1024;
       if (file.size > FIVE_MB) {
         toast({
@@ -286,9 +293,11 @@ export function CvInputStep() {
         });
       }
 
+      // Store file for retry
       lastFileRef.current = file;
       setLastFileName(file.name);
 
+      // Reset previous extraction state
       setExtractError(null);
       setExtractWarning(null);
       setExtractionResult(null);
@@ -301,13 +310,18 @@ export function CvInputStep() {
       try {
         const result = await extractFile(file, { fast: false, parse: false, timeoutMs: 90_000 });
 
+        // Populate the paste textarea so user can see/edit
         setRawCvText(result.text);
+
+        // Store full extraction result for quality display
         setExtractionResult(result);
 
+        // Show warning if present (e.g., scanned PDF)
         if (result.warning) {
           setExtractWarning(result.warning);
         }
 
+        // Store extraction metadata in Zustand
         setExtractionMeta({
           method: result.extractionMethod,
           confidence: result.confidence,
@@ -321,6 +335,7 @@ export function CvInputStep() {
           description: `Extracted ${result.text.length.toLocaleString()} characters from ${file.name}.`,
         });
 
+        // Prefer server-side parsed data from extract-file when available
         if (result.data) {
           setParsedCv(result.data);
           if (result.model) setModelUsed(result.model);
@@ -336,6 +351,7 @@ export function CvInputStep() {
             variant: 'destructive',
           });
         } else if (result.text.trim().length > AUTO_PARSE_MIN_LENGTH) {
+          // Fallback: parse extracted text in a separate call
           setIsParsing(true);
           setParseError(null);
           try {
@@ -361,6 +377,7 @@ export function CvInputStep() {
         }
       } catch (err) {
         const rawMessage = err instanceof Error ? err.message : 'Failed to extract file content';
+        // Distinguish error types for better UX
         const isNetworkError = rawMessage === 'NETWORK_ERROR' ||
           rawMessage.includes('Failed to fetch') ||
           rawMessage.includes('NetworkError');
@@ -405,7 +422,7 @@ export function CvInputStep() {
     [setRawCvText, sessionId, setIsParsing, setParseError, setParsedCv, setSessionId, setModelUsed, setExtractionMeta],
   );
 
-  /* ── Retry Upload ── */
+  /* ── Retry Upload (same file) ── */
   const [retryCount, setRetryCount] = useState(0);
   const handleRetryUpload = useCallback(() => {
     if (lastFileRef.current) {
@@ -439,6 +456,7 @@ export function CvInputStep() {
     setIsDragging(false);
   }, []);
 
+  /* ── Drop zone keyboard handler ── */
   const handleDropZoneKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -449,7 +467,7 @@ export function CvInputStep() {
     [],
   );
 
-  /* ── Reset ── */
+  /* ── Reset handler ── */
   const handleReset = useCallback(() => {
     setParsedCv(null);
     setRawCvText('');
@@ -463,7 +481,7 @@ export function CvInputStep() {
     setLastFileName(null);
   }, [setParsedCv, setRawCvText]);
 
-  /* ── Phase config ── */
+  /* ── Phase configuration for progress indicator ── */
   const showOcrPhase = processingFileType === 'pdf' || processingFileType === 'image';
   const phaseConfig = [
     { number: 1, label: 'Read', icon: <FileUp className="w-4 h-4" /> },
@@ -490,6 +508,7 @@ export function CvInputStep() {
         </Button>
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-medium text-foreground tracking-tight">Step 1 of 4: Upload Your CV</h2>
+          {/* Server status indicator */}
           {!serverOnline && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
@@ -539,8 +558,6 @@ export function CvInputStep() {
                 {extractError.includes('unreachable') ? 'Server Unreachable' :
                  extractError.includes('busy') ? 'Server Busy' :
                  extractError.includes('timed out') ? 'Request Timed Out' :
-                 extractError.includes('font encoding') || extractError.includes('custom font') ? 'PDF Encoding Issue' :
-                 extractError.includes('garbled') || extractError.includes('Could not extract') ? 'Cannot Read This PDF' :
                  'File Extraction Failed'}
               </AlertTitle>
               <AlertDescription>
@@ -588,7 +605,9 @@ export function CvInputStep() {
         )}
       </AnimatePresence>
 
-      {/* ── Quality Report Card ── */}
+      {/* ═══════════════════════════════════════════════════
+          Quality Report Card (shown after extraction)
+          ═══════════════════════════════════════════════════ */}
       <AnimatePresence>
         {extractionResult && !extractError && (
           <motion.div
@@ -599,6 +618,7 @@ export function CvInputStep() {
             className="mb-4"
           >
             <Card className="border-border bg-white shadow-stripe-sm rounded-2xl relative overflow-hidden">
+              {/* Gradient accent line at top */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-[#b9b9f9] to-primary" />
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -614,6 +634,7 @@ export function CvInputStep() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* ── Score / Method / Confidence ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Quality Score */}
                   <div
@@ -634,6 +655,7 @@ export function CvInputStep() {
                       {qualityReport?.qualityScore ?? 0}
                       <span className="text-sm font-normal text-muted-foreground/60">/100</span>
                     </p>
+                    {/* Custom progress bar (not shadcn Progress to allow color customization) */}
                     <div className="h-2 w-full bg-black/5 rounded-full overflow-hidden mt-2.5">
                       <div
                         className={`h-full rounded-full transition-all duration-700 ${getQualityBarColor(qualityReport?.qualityScore ?? 0)}`}
@@ -690,7 +712,7 @@ export function CvInputStep() {
                   </div>
                 </div>
 
-                {/* Stats row */}
+                {/* ── Stats row with divider dots ── */}
                 <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                   <div className="flex items-center gap-1">
                     <FileText className="w-3 h-3" />
@@ -707,7 +729,7 @@ export function CvInputStep() {
                   </div>
                 </div>
 
-                {/* Missing Sections */}
+                {/* ── Missing Sections (softer amber) ── */}
                 {qualityReport && qualityReport.missingSections.length > 0 && (
                   <div className="flex items-start gap-2 bg-amber-50/40 border border-amber-200/60 rounded-xl p-3">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
@@ -731,7 +753,9 @@ export function CvInputStep() {
         )}
       </AnimatePresence>
 
-      {/* ── Text Preview Panel ── */}
+      {/* ═══════════════════════════════════════════════════
+          Text Preview Panel (collapsible, after extraction)
+          ═══════════════════════════════════════════════════ */}
       <AnimatePresence>
         {extractionResult && !extractError && extractionResult.text.trim().length > 0 && (
           <motion.div
@@ -772,6 +796,7 @@ export function CvInputStep() {
                           : extractionResult.text.slice(0, 500) +
                             (extractionResult.text.length > 500 ? '...' : '')}
                       </pre>
+                      {/* Faded overlay when truncated — subtle gradient fade */}
                       {!showFullPreview && extractionResult.text.length > 500 && (
                         <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-muted via-muted/60 to-transparent pointer-events-none" />
                       )}
@@ -813,7 +838,9 @@ export function CvInputStep() {
         )}
       </AnimatePresence>
 
-      {/* ── Suggestions ── */}
+      {/* ═══════════════════════════════════════════════════
+          Suggestions Display
+          ═══════════════════════════════════════════════════ */}
       <AnimatePresence>
         {extractionResult &&
           !extractError &&
@@ -872,7 +899,9 @@ export function CvInputStep() {
           )}
       </AnimatePresence>
 
-      {/* ── Tabs ── */}
+      {/* ═══════════════════════════════════════════════════
+          Tabs
+          ═══════════════════════════════════════════════════ */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="paste" className="data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none">
@@ -906,8 +935,10 @@ export function CvInputStep() {
 
         {/* ── Upload Tab ── */}
         <TabsContent value="upload">
+          {/* Multi-step progress indicator */}
           {isExtracting && (
             <div className="border-2 border-[#b9b9f9] border-dashed rounded-2xl p-10 text-center bg-secondary/40">
+              {/* Phase step indicators */}
               <div className="flex items-center justify-center gap-1 mb-6">
                 {phaseConfig.map((phase, index) => {
                   const isActive = extractionPhase === phase.number;
@@ -923,6 +954,7 @@ export function CvInputStep() {
                               isCompleted || isActive ? 'bg-primary' : 'bg-border'
                             }`}
                           />
+                          {/* Shimmer overlay on active connector */}
                           {(isCompleted || isActive) && (
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
                           )}
@@ -930,7 +962,9 @@ export function CvInputStep() {
                       )}
                       <motion.div
                         initial={false}
-                        animate={{ scale: isActive ? 1.1 : 1 }}
+                        animate={{
+                          scale: isActive ? 1.1 : 1,
+                        }}
                         transition={{ duration: 0.3 }}
                         className="flex flex-col items-center gap-1.5"
                       >
@@ -968,6 +1002,7 @@ export function CvInputStep() {
                 })}
               </div>
 
+              {/* Phase description — visually distinct container */}
               <AnimatePresence mode="wait">
                 <motion.div
                   key={extractionPhase}
@@ -992,6 +1027,7 @@ export function CvInputStep() {
             </div>
           )}
 
+          {/* Drop zone (hidden during extraction) */}
           {!isExtracting && (
             <div
               role="button"
@@ -1022,6 +1058,7 @@ export function CvInputStep() {
                   const file = e.target.files?.[0];
                   if (file) {
                     handleFileUpload(file);
+                    // Reset file input so same file can be re-uploaded
                     e.target.value = '';
                   }
                 }}
@@ -1035,11 +1072,11 @@ export function CvInputStep() {
                 {isDragging ? 'Drop your file here' : 'Drag & drop your CV file'}
               </p>
               <p className="text-xs text-muted-foreground mb-4">or click to browse your computer</p>
+              {/* File type icons in visually appealing pill badges */}
               <div className="flex items-center justify-center gap-2 flex-wrap">
                 {[
                   { icon: <File className="w-3.5 h-3.5" />, label: 'TXT', color: 'text-blue-500', bg: 'bg-blue-50' },
                   { icon: <FileText className="w-3.5 h-3.5" />, label: 'DOCX', color: 'text-violet-600', bg: 'bg-violet-50' },
-                  { icon: <FileText className="w-3.5 h-3.5" />, label: 'PDF', color: 'text-red-500', bg: 'bg-red-50' },
                 ].map((item) => (
                   <div key={item.label} className={`flex items-center gap-1.5 text-[10px] font-medium ${item.color} ${item.bg} rounded-full px-2.5 py-1 border border-transparent`}>
                     {item.icon}
@@ -1052,7 +1089,9 @@ export function CvInputStep() {
         </TabsContent>
       </Tabs>
 
-      {/* ── Action Buttons ── */}
+      {/* ═══════════════════════════════════════════════════
+          Action Buttons
+          ═══════════════════════════════════════════════════ */}
       <div className="flex justify-end mt-4 gap-3">
         {!parsedCv && (
           <Button
@@ -1075,7 +1114,9 @@ export function CvInputStep() {
         )}
       </div>
 
-      {/* ── Parse Error ── */}
+      {/* ═══════════════════════════════════════════════════
+          Parse Error State
+          ═══════════════════════════════════════════════════ */}
       <AnimatePresence>
         {parseError && (
           <motion.div
@@ -1121,7 +1162,9 @@ export function CvInputStep() {
         )}
       </AnimatePresence>
 
-      {/* ── Success State ── */}
+      {/* ═══════════════════════════════════════════════════
+          Success State — Parsed Data (enhanced with quality)
+          ═══════════════════════════════════════════════════ */}
       <AnimatePresence>
         {parsedCv && (
           <motion.div
@@ -1138,6 +1181,7 @@ export function CvInputStep() {
                     <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                     <CardTitle className="text-base text-emerald-800">CV Parsed Successfully</CardTitle>
                   </div>
+                  {/* Quality & confidence badges from extraction */}
                   {extractionResult && qualityReport && (
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge
@@ -1164,6 +1208,7 @@ export function CvInputStep() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Low confidence warning */}
                 {extractionResult && extractionResult.confidence < 70 && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
@@ -1221,7 +1266,7 @@ export function CvInputStep() {
                   </div>
                 </div>
 
-                {/* Stats */}
+                {/* Experience / Education / Skills stat cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="bg-white rounded-lg p-3 border border-border">
                     <div className="flex items-center gap-1.5 mb-2">
@@ -1233,6 +1278,7 @@ export function CvInputStep() {
                     </p>
                     <p className="text-[10px] text-muted-foreground/70">positions found</p>
                   </div>
+
                   <div className="bg-white rounded-lg p-3 border border-border">
                     <div className="flex items-center gap-1.5 mb-2">
                       <GraduationCap className="w-3.5 h-3.5 text-emerald-500" />
@@ -1243,6 +1289,7 @@ export function CvInputStep() {
                     </p>
                     <p className="text-[10px] text-muted-foreground/70">entries found</p>
                   </div>
+
                   <div className="bg-white rounded-lg p-3 border border-border">
                     <div className="flex items-center gap-1.5 mb-2">
                       <Code2 className="w-3.5 h-3.5 text-primary" />
@@ -1278,6 +1325,7 @@ export function CvInputStep() {
 
                 <Separator />
 
+                {/* Navigation */}
                 <div className="flex justify-between items-center">
                   <Button
                     variant="ghost"

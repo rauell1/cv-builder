@@ -25,136 +25,93 @@ export interface ParseCvResult {
 }
 
 export async function parseCv(cvText: string, sessionId?: string): Promise<ParseCvResult> {
-  const MAX_RETRIES = 2;
-  const RETRY_DELAYS = [3000, 6000];
-  let lastError: Error | null = null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45_000); // 45s timeout for provider fallback chains
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 65_000); // 65s — above server maxDuration=60
+  try {
+    const response = await fetch('/api/parse-cv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cvText, sessionId }),
+      signal: controller.signal,
+    });
 
-    try {
-      const response = await fetch('/api/parse-cv', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cvText, sessionId }),
-        signal: controller.signal,
-      });
+    clearTimeout(timeoutId);
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        let errorMessage = `Parse failed (HTTP ${response.status})`;
-        try {
-          const bodyText = await response.text();
-          if (bodyText) {
-            try {
-              const errorData = JSON.parse(bodyText);
-              errorMessage = errorData.error || errorMessage;
-            } catch {
-              errorMessage = `Parse failed (HTTP ${response.status}): ${bodyText.substring(0, 300)}`;
-            }
+    if (!response.ok) {
+      let errorMessage = `Parse failed (HTTP ${response.status})`;
+      try {
+        const bodyText = await response.text();
+        if (bodyText) {
+          try {
+            const errorData = JSON.parse(bodyText);
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            errorMessage = `Parse failed (HTTP ${response.status}): ${bodyText.substring(0, 300)}`;
           }
-        } catch { }
-
-        if ((response.status === 503 || response.status === 504) && attempt < MAX_RETRIES) {
-          lastError = new Error(errorMessage);
-          await sleep(RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)]);
-          continue;
         }
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json() as ApiResponse<ParsedCV> & { cached?: boolean; parseTimeMs?: number };
-      if (!result.success) throw new Error(result.error);
-      return {
-        data: result.data,
-        sessionId: result.sessionId,
-        model: result.model,
-        cached: result.cached,
-        parseTimeMs: result.parseTimeMs,
-      };
-    } catch (err) {
-      clearTimeout(timeoutId);
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        const msg = 'CV parsing timed out. The server may be busy — please try again.';
-        if (attempt < MAX_RETRIES) { lastError = new Error(msg); await sleep(RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)]); continue; }
-        throw new Error(msg);
-      }
-      if (attempt < MAX_RETRIES && !(err instanceof Error && err.message.includes('timed out'))) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        await sleep(RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)]);
-        continue;
-      }
-      throw err;
+      } catch { }
+      throw new Error(errorMessage);
     }
-  }
 
-  throw lastError || new Error('CV parsing failed after multiple attempts. Please try again.');
+    const result = await response.json() as ApiResponse<ParsedCV> & { cached?: boolean; parseTimeMs?: number };
+    if (!result.success) throw new Error(result.error);
+    return {
+      data: result.data,
+      sessionId: result.sessionId,
+      model: result.model,
+      cached: result.cached,
+      parseTimeMs: result.parseTimeMs,
+    };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('CV parsing timed out. The server may be busy — please try again.');
+    }
+    throw err;
+  }
 }
 
 export async function analyzeJob(jobDescText: string): Promise<JobAnalysis> {
-  const MAX_RETRIES = 2;
-  const RETRY_DELAYS = [3000, 6000]; // 3s, 6s — give the server's sequential fallback time to run
-  let lastError: Error | null = null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20_000); // 20s timeout
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45_000);
+  try {
+    const response = await fetch('/api/analyze-job', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobDescText }),
+      signal: controller.signal,
+    });
 
-    try {
-      const response = await fetch('/api/analyze-job', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobDescText }),
-        signal: controller.signal,
-      });
+    clearTimeout(timeoutId);
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        let errorMessage = `Job analysis failed (HTTP ${response.status})`;
-        try {
-          const bodyText = await response.text();
-          if (bodyText) {
-            try {
-              const errorData = JSON.parse(bodyText);
-              errorMessage = errorData.error || errorMessage;
-            } catch {
-              errorMessage = `Job analysis failed (HTTP ${response.status}): ${bodyText.substring(0, 300)}`;
-            }
+    if (!response.ok) {
+      let errorMessage = `Job analysis failed (HTTP ${response.status})`;
+      try {
+        const bodyText = await response.text();
+        if (bodyText) {
+          try {
+            const errorData = JSON.parse(bodyText);
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            errorMessage = `Job analysis failed (HTTP ${response.status}): ${bodyText.substring(0, 300)}`;
           }
-        } catch { }
-
-        // 503 = all providers failed — retry with backoff (rate limit may clear)
-        if (response.status === 503 && attempt < MAX_RETRIES) {
-          const delay = RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)];
-          lastError = new Error(errorMessage);
-          await sleep(delay);
-          continue;
         }
-
-        throw new Error(errorMessage);
-      }
-
-      const result: ApiResponse<JobAnalysis> = await response.json();
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    } catch (err) {
-      clearTimeout(timeoutId);
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new Error('Job analysis timed out before the AI could finish. The server may be busy — please try again in a few seconds.');
-      }
-      if (attempt < MAX_RETRIES && !(err instanceof Error && err.message.includes('timed out'))) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        await sleep(RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)]);
-        continue;
-      }
-      throw err;
+      } catch { }
+      throw new Error(errorMessage);
     }
-  }
 
-  throw lastError || new Error('Job analysis failed after multiple attempts. Please try again.');
+    const result: ApiResponse<JobAnalysis> = await response.json();
+    if (!result.success) throw new Error(result.error);
+    return result.data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Job analysis timed out. The server may be busy — please try again.');
+    }
+    throw err;
+  }
 }
 
 export async function restructureCv(
@@ -163,53 +120,34 @@ export async function restructureCv(
   jobDescText: string,
   modelId?: string
 ): Promise<{ cv: ParsedCV; model: string }> {
-  const MAX_RETRIES = 1;
-  const RETRY_DELAYS = [5000];
-  let lastError: Error | null = null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120_000); // 120s timeout (AI restructuring can be slow for complex CVs)
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 65_000); // 65s — slightly above server maxDuration=60
+  try {
+    const response = await fetch('/api/restructure-cv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parsedCv, jobAnalysis, jobDescText, modelId }),
+      signal: controller.signal,
+    });
 
-    try {
-      const response = await fetch('/api/restructure-cv', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parsedCv, jobAnalysis, jobDescText, modelId }),
-        signal: controller.signal,
-      });
+    clearTimeout(timeoutId);
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Failed to restructure CV' }));
-        const errorMessage = error.error || 'Failed to restructure CV';
-        if ((response.status === 503 || response.status === 504) && attempt < MAX_RETRIES) {
-          lastError = new Error(errorMessage);
-          await sleep(RETRY_DELAYS[0]);
-          continue;
-        }
-        throw new Error(errorMessage);
-      }
-
-      const result: ApiResponse<ParsedCV> = await response.json();
-      if (!result.success) throw new Error(result.error);
-      return { cv: result.data, model: result.model };
-    } catch (err) {
-      clearTimeout(timeoutId);
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new Error('CV restructuring timed out. The server may be busy — please try again.');
-      }
-      if (attempt < MAX_RETRIES) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        await sleep(RETRY_DELAYS[0]);
-        continue;
-      }
-      throw err;
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Failed to restructure CV' }));
+      throw new Error(error.error || 'Failed to restructure CV');
     }
-  }
 
-  throw lastError || new Error('CV restructuring failed after multiple attempts. Please try again.');
+    const result: ApiResponse<ParsedCV> = await response.json();
+    if (!result.success) throw new Error(result.error);
+    return { cv: result.data, model: result.model };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('CV restructuring timed out. The server may be busy — please try again.');
+    }
+    throw err;
+  }
 }
 
 export async function generatePdf(cvData: ParsedCV, format: CVFormatId = 'europass'): Promise<Blob> {

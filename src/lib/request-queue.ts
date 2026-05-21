@@ -1,128 +1,347 @@
+// =============================================================================
+// Request Queue — Lightweight in-memory concurrency limiter
+// =============================================================================
+
 /**
- * Request Queue — limits concurrent AI calls to prevent cold-start avalanches.
- *
- * Concurrency bumped to 6 so multiple simultaneous users do not queue-block each other.
- * Queue timeout raised to 30 s (gives the AI race + sequential fallback enough headroom).
- * Priority support: high-priority callers (parse-cv, extract-file) jump the queue.
+ * Priority levels for queued requests.
+ * Higher-priority entries are dequeued first when a slot opens.
  */
+export type Priority = 'high' | 'normal' | 'low';
 
-type Task<T> = () => Promise<T>;
+/**
+ * Numeric weight for each priority (lower = higher priority).
+ */
+const PRIORITY_WEIGHT: Readonly<Record<Priority, number>> = {
+  high: 0,
+  normal: 1,
+  low: 2,
+};
 
-interface QueueEntry<T> {
-  task: Task<T>;
-  resolve: (value: T) => void;
-  reject: (reason?: unknown) => void;
-  priority: 'high' | 'normal';
-  enqueuedAt: number;
-}
-
+/**
+ * Real-time metrics snapshot returned by `RequestQueue.getMetrics()`.
+ */
 export interface QueueMetrics {
-  activeCount: number;
-  queueLength: number;
-  completedCount: number;
-  failedCount: number;
-  droppedCount: number;
-  averageWaitTimeMs: number;
-  totalProcessed: number;
+  /** Number of requests currently waiting in the queue. */
+  readonly queueLength: number;
+  /** Number of requests currently executing. */
+  readonly activeCount: number;
+  /** Total number of requests that completed successfully. */
+  readonly completedCount: number;
+  /** Total number of requests that rejected (user function threw). */
+  readonly failedCount: number;
+  /** Total number of requests dropped because they timed out. */
+  readonly droppedCount: number;
+  /** Average time (ms) a request spent waiting in the queue before starting. */
+  readonly averageWaitTimeMs: number;
+  /** Aggregate count of all requests ever enqueued. */
+  readonly totalProcessed: number;
 }
 
-class RequestQueue {
-  private concurrency: number;
-  private running = 0;
-  private queue: QueueEntry<unknown>[] = [];
-  private readonly queueTimeoutMs: number;
+/**
+ * Internal (non-generic) representation of a queued request.
+ *
+ * Using a non-generic type avoids contravariance issues when pushing
+ * `QueueEntry<T>` into a `QueueEntry<unknown>[]`.  The generic type
+ * information is captured at enqueue time via closures over the caller's
+ * `resolve` / `reject` callbacks and the wrapped `fn`.
+ */
+interface InternalQueueEntry {
+  /** The async function to execute once a concurrency slot is available. */
+  readonly fn: () => Promise<unknown>;
+  /** Priority used to order the queue. */
+  readonly priority: Priority;
+  /** Maximum time (ms) this entry may live in the queue system. */
+  readonly timeoutMs: number;
+  /** Resolve the Promise returned to the caller. */
+  resolve: (value: unknown) => void;
+  /** Reject the Promise returned to the caller. */
+  reject: (reason: unknown) => void;
+  /** High-resolution timestamp of when the entry was enqueued. */
+  readonly enqueuedAt: number;
+  /** Handle for the setTimeout that enforces the queue timeout. */
+  timer: ReturnType<typeof setTimeout>;
+  /** Whether the entry has already been settled (resolved or rejected). */
+  settled: boolean;
+  /** Whether the entry has been pulled from the queue and started executing. */
+  started: boolean;
+}
 
-  // metrics counters
-  private completedCount = 0;
-  private failedCount = 0;
-  private droppedCount = 0;
-  private totalWaitMs = 0;
-  private totalProcessed = 0;
+// =============================================================================
+// RequestQueue
+// =============================================================================
 
-  constructor(concurrency = 6, queueTimeoutMs = 30_000) {
-    this.concurrency    = concurrency;
-    this.queueTimeoutMs = queueTimeoutMs;
-  }
+/**
+ * A generic, in-memory request queue that limits concurrency to prevent
+ * resource exhaustion under high load.
+ *
+ * @typeParam T — The return type of queued functions (inferred per-call).
+ *
+ * @example
+ * ```ts
+ * const queue = new RequestQueue(5, 10_000);
+ *
+ * const result = await queue.enqueue(
+ *   () => callExternalAPI(payload),
+ *   'high',
+ *   15_000,
+ * );
+ * ```
+ *
+ * Features:
+ * - Configurable max concurrency and per-request timeout.
+ * - Three priority levels (`high` > `normal` > `low`).
+ * - Real-time metrics via `getMetrics()`.
+ * - Fully Promise-driven — no polling required.
+ */
+export class RequestQueue {
+  // ---------------------------------------------------------------------------
+  // Internal state
+  // ---------------------------------------------------------------------------
 
-  /** Enqueue with optional priority and per-item timeout. */
-  enqueue<T>(task: Task<T>, priority: 'high' | 'normal' = 'normal', _itemTimeoutMs?: number): Promise<T> {
-    return this.add(task, priority);
-  }
+  /** Pending entries sorted by priority (FIFO within the same priority). */
+  private readonly queue: InternalQueueEntry[] = [];
 
-  add<T>(task: Task<T>, priority: 'high' | 'normal' = 'normal'): Promise<T> {
+  /** Number of entries currently executing. */
+  private _activeCount = 0;
+
+  /** Lifetime counters for metrics. */
+  private _completedCount = 0;
+  private _failedCount = 0;
+  private _droppedCount = 0;
+
+  /** Accumulators for computing average wait time. */
+  private _totalWaitMs = 0;
+  private _waitSamples = 0;
+
+  // ---------------------------------------------------------------------------
+  // Constructor
+  // ---------------------------------------------------------------------------
+
+  /**
+   * @param maxConcurrency  Maximum number of requests that may execute
+   *                        concurrently.
+   * @param defaultTimeoutMs Default per-request timeout in milliseconds.  Covers
+   *                         both queue-wait time and execution time.
+   */
+  constructor(
+    private readonly maxConcurrency: number,
+    private readonly defaultTimeoutMs: number,
+  ) {}
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Enqueue an async function for execution.
+   *
+   * The returned `Promise` resolves with the function's result, or rejects if:
+   * - The per-request timeout elapses before the function settles.
+   * - The user-supplied function itself throws / rejects.
+   *
+   * @param fn        The async work to execute once a slot is available.
+   * @param priority  Queue ordering priority (default `'normal'`).
+   * @param timeoutMs Override the queue's default timeout for this request.
+   * @returns A `Promise<T>` that mirrors the result of `fn`.
+   */
+  enqueue<T>(
+    fn: () => Promise<T>,
+    priority: Priority = 'normal',
+    timeoutMs?: number,
+  ): Promise<T> {
+    const effectiveTimeout = timeoutMs ?? this.defaultTimeoutMs;
+
     return new Promise<T>((resolve, reject) => {
-      const entry: QueueEntry<unknown> = {
-        task: task as Task<unknown>,
+      const entry: InternalQueueEntry = {
+        fn: fn as () => Promise<unknown>,
+        priority,
+        timeoutMs: effectiveTimeout,
         resolve: resolve as (value: unknown) => void,
         reject,
-        priority,
-        enqueuedAt: Date.now(),
+        enqueuedAt: performance.now(),
+        timer: undefined!,
+        settled: false,
+        started: false,
       };
 
-      if (priority === 'high') {
-        this.queue.unshift(entry);
-      } else {
-        this.queue.push(entry);
-      }
+      // Arm the timeout timer — covers the entire lifecycle (wait + execute).
+      entry.timer = setTimeout(
+        () => this.handleTimeout(entry),
+        effectiveTimeout,
+      );
 
+      this.queue.push(entry);
       this.drain();
     });
   }
 
+  /**
+   * Return a snapshot of the current queue metrics.
+   */
+  getMetrics(): QueueMetrics {
+    return {
+      queueLength: this.queue.length,
+      activeCount: this._activeCount,
+      completedCount: this._completedCount,
+      failedCount: this._failedCount,
+      droppedCount: this._droppedCount,
+      averageWaitTimeMs:
+        this._waitSamples > 0
+          ? Math.round(this._totalWaitMs / this._waitSamples)
+          : 0,
+      totalProcessed:
+        this._completedCount + this._failedCount + this._droppedCount,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal scheduling
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Try to pull as many pending entries off the queue as concurrency allows.
+   * Called after every enqueue, completion, failure, and timeout.
+   */
   private drain(): void {
-    while (this.running < this.concurrency && this.queue.length > 0) {
+    // Sort by priority so high-priority entries are dequeued first.
+    // FIFO ordering is preserved within the same priority level (stable sort).
+    if (this.queue.length > 1) {
+      this.queue.sort(
+        (a, b) => PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority],
+      );
+    }
+
+    while (this._activeCount < this.maxConcurrency && this.queue.length > 0) {
       const entry = this.queue.shift()!;
 
-      if (Date.now() - entry.enqueuedAt > this.queueTimeoutMs) {
-        this.droppedCount++;
-        entry.reject(new Error('Request queue timeout: too many concurrent requests'));
+      // Entry may have already been settled by a timeout race.
+      if (entry.settled) {
         continue;
       }
 
-      const waitMs = Date.now() - entry.enqueuedAt;
-      this.totalWaitMs += waitMs;
-      this.totalProcessed++;
-      this.running++;
+      clearTimeout(entry.timer);
+      entry.started = true;
+      this._activeCount++;
 
-      entry
-        .task()
-        .then((result) => {
-          this.completedCount++;
-          entry.resolve(result);
-        })
-        .catch((err: unknown) => {
-          this.failedCount++;
-          entry.reject(err);
-        })
-        .finally(() => {
-          this.running--;
-          this.drain();
-        });
+      // Record wait time (time spent sitting in the queue before execution).
+      const waitMs = performance.now() - entry.enqueuedAt;
+      this._totalWaitMs += waitMs;
+      this._waitSamples++;
+
+      // Fire-and-forget — the entry's resolve/reject settles the caller's
+      // Promise; `this.drain()` is called in the finally block to fill freed
+      // slots.
+      this.execute(entry).catch(() => {
+        // Exceptions from `execute` are already routed to `entry.reject`.
+      });
     }
   }
 
-  get pendingCount(): number { return this.queue.length; }
-  get runningCount(): number { return this.running; }
-
-  setConcurrency(n: number): void {
-    this.concurrency = Math.max(1, n);
-    this.drain();
+  /**
+   * Execute a single queue entry, routing success/failure to the entry's
+   * resolve/reject and decrementing the active counter when done.
+   */
+  private async execute(entry: InternalQueueEntry): Promise<void> {
+    try {
+      const result = await entry.fn();
+      this.settleSuccess(entry, result);
+    } catch (error) {
+      this.settleFailure(entry, error);
+    } finally {
+      this._activeCount = Math.max(0, this._activeCount - 1);
+      // Schedule the next drain on the microtask queue so the call-stack
+      // doesn't grow unboundedly under sustained load.
+      queueMicrotask(() => this.drain());
+    }
   }
 
-  getMetrics(): QueueMetrics {
-    return {
-      activeCount:       this.running,
-      queueLength:       this.queue.length,
-      completedCount:    this.completedCount,
-      failedCount:       this.failedCount,
-      droppedCount:      this.droppedCount,
-      averageWaitTimeMs: this.totalProcessed > 0
-        ? Math.round(this.totalWaitMs / this.totalProcessed)
-        : 0,
-      totalProcessed:    this.totalProcessed,
-    };
+  // ---------------------------------------------------------------------------
+  // Settlement helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Resolve an entry if it hasn't already been settled (e.g. by a timeout).
+   */
+  private settleSuccess(entry: InternalQueueEntry, value: unknown): void {
+    if (entry.settled) return;
+    entry.settled = true;
+    this._completedCount++;
+    entry.resolve(value);
+  }
+
+  /**
+   * Reject an entry if it hasn't already been settled (e.g. by a timeout).
+   */
+  private settleFailure(entry: InternalQueueEntry, reason: unknown): void {
+    if (entry.settled) return;
+    entry.settled = true;
+    this._failedCount++;
+    entry.reject(reason);
+  }
+
+  /**
+   * Handle a timeout: remove the entry from the queue (if still pending) or
+   * mark it as timed-out (if already executing).  In either case the caller's
+   * Promise is rejected and metrics are updated.
+   */
+  private handleTimeout(entry: InternalQueueEntry): void {
+    if (entry.settled) return;
+
+    // If the entry is still waiting in the queue, splice it out.
+    const idx = this.queue.indexOf(entry);
+    if (idx !== -1) {
+      this.queue.splice(idx, 1);
+    }
+
+    entry.settled = true;
+    this._droppedCount++;
+
+    const elapsed = Math.round(performance.now() - entry.enqueuedAt);
+    const phase = entry.started ? 'executing' : 'waiting in queue';
+    entry.reject(
+      new Error(
+        `RequestQueue timeout: request timed out after ${elapsed}ms ` +
+          `(${phase}, limit ${entry.timeoutMs}ms)`,
+      ),
+    );
+
+    // If the entry was active when the timeout fired we need to free its slot
+    // and try to schedule the next pending request.
+    if (entry.started) {
+      this._activeCount = Math.max(0, this._activeCount - 1);
+      queueMicrotask(() => this.drain());
+    }
   }
 }
 
-export const aiQueue = new RequestQueue(8, 30_000);
-export const requestQueue = new RequestQueue(10, 30_000);
+// =============================================================================
+// Singleton instances
+// =============================================================================
+
+/**
+ * General-purpose request queue.
+ *
+ * - Max concurrency: **200** (scaled for 1000+ concurrent users)
+ * - Default timeout: **10 000 ms** (10 s)
+ *
+ * Use for non-AI async work (DB writes, external HTTP calls, etc.).
+ */
+export const requestQueue = new RequestQueue(
+  /* maxConcurrency */ 200,
+  /* defaultTimeoutMs */ 10_000,
+);
+
+/**
+ * AI-specific request queue with stricter limits to protect LLM providers
+ * from rate-limit exhaustion.
+ *
+ * - Max concurrency: **80** (scaled for 1000+ concurrent users)
+ * - Default timeout: **15 000 ms** (15 s)
+ *
+ * Use for all AI / LLM API calls (chat completions, embeddings, image
+ * generation, etc.).
+ */
+export const aiQueue = new RequestQueue(
+  /* maxConcurrency */ 80,
+  /* defaultTimeoutMs */ 15_000,
+);

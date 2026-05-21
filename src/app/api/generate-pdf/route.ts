@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, PDFPage, PDFFont, StandardFonts } from 'pdf-lib';
-
-export const runtime = 'nodejs';
-export const maxDuration = 30;
 import type { ParsedCV, CVFormatId } from '@/lib/cv-types';
 import { buildContactParts, PAGE_WIDTH, PAGE_HEIGHT, splitTextIntoWordLines, embedNotoSansFont } from '@/lib/pdf-utils';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';

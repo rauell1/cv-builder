@@ -14,6 +14,10 @@ export const AI_CONFIG = {
   MAX_TOKENS_DEFAULT: 4096,
   /** Higher max tokens for complex restructuring tasks */
   MAX_TOKENS_RESTRUCTURE: 8192,
+  /** Timeout in ms for AI API calls (covers GLM, OpenAI, Anthropic, Google) */
+  AI_CALL_TIMEOUT_MS: 60_000,
+  /** Timeout in ms for VLM file extraction (PDF/image OCR) — can be slower */
+  VLM_CALL_TIMEOUT_MS: 90_000,
 } as const;
 
 export const INPUT_LIMITS = {

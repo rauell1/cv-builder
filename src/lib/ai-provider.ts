@@ -1,46 +1,19 @@
 /**
  * Centralized AI Provider Module
  *
- * Supports:
- *   - GLM / Zhipu AI  (ZHIPU_API_KEY / GLM_API_KEY / BIGMODEL_API_KEY)
- *   - OpenAI          (OPENAI_API_KEY)
- *   - Anthropic       (ANTHROPIC_API_KEY)
- *   - Google Gemini   (GOOGLE_AI_API_KEY / GEMINI_API_KEY)
- *   - Pekpik          (PEKPIK_API_KEY) — OpenAI-compatible proxy at aiapiv2.pekpik.com
- *   - NVIDIA NIM      (per-slot keys below)
+ * Provides a single `callAI()` gateway for all LLM interactions.
  *
- * NVIDIA env-var layout — EXACT names as set in Vercel:
- *   NVIDIA_MISTRAL_KEYS  (also reads NVIDIA_MISTRAL_KEY)  — Mistral keys
- *   NVIDIA_DEEPSEEK_KEYS (also reads NVIDIA_DEEPSEEK_KEY) — DeepSeek keys
- *   NVIDIA_KIMI_KEYS     (also reads NVIDIA_KIMI_KEY)     — Kimi keys
- *   NVIDIA_MISTRAL_MODEL — override model id  (optional)
- *   NVIDIA_DEEPSEEK_MODEL— override model id  (optional)
- *   NVIDIA_KIMI_MODEL    — override model id  (optional)
- *   NVIDIA_MISTRAL_URL   — override base URL  (optional)
- *   NVIDIA_DEEPSEEK_URL  — override base URL  (optional)
- *   NVIDIA_KIMI_URL      — override base URL  (optional)
- *   NVIDIA_API_KEY       — generic pool used as last resort
+ * GLM models are supported via two methods (in priority order):
+ *   1. z-ai-web-dev-sdk  — works automatically in the Z.ai development environment.
+ *   2. Zhipu AI REST API — used when ZHIPU_API_KEY env var is set (for Vercel / external deployments).
  *
- * Pekpik env-var layout — per-model-family slots (set in Vercel):
- *   PEKPIK_API_KEY       — generic pool (gpt-5.4, backward compat)
- *   PEKPIK_GPT55_KEY     — gpt-5.5 keys (comma-sep)
- *   PEKPIK_CLAUDE_KEYS   — claude-opus-4-7 keys (comma-sep, also PEKPIK_CLAUDE_KEY)
- *   PEKPIK_GEMINI_KEYS   — gemini-2.5-flash keys via Pekpik (comma-sep, also PEKPIK_GEMINI_KEY)
- *   PEKPIK_DEEPSEEK_KEYS — deepseek-chat keys via Pekpik (comma-sep, also PEKPIK_DEEPSEEK_KEY)
- *   PEKPIK_SMART_KEYS    — smart-chat keys (comma-sep, also PEKPIK_SMART_KEY)
- *   PEKPIK_KIMI_KEYS     — kimi-k2.5 keys via Pekpik (comma-sep, also PEKPIK_KIMI_KEY)
- * Pekpik models with conflicting names (e.g. gemini-2.5-flash) are
- * referenced as "pekpik/gemini-2.5-flash" in TASK_MODEL_PREFERENCES so the
- * router can distinguish them from the native Google / Anthropic variants.
- *
- * Speed optimizations:
- *   - callAIRaceForTask(): fires top-3 models in parallel, first winner returned
- *   - Per-model timeouts tuned to each provider's p95 latency
- *   - Non-blocking background healer restores keys every 60 s
- *   - Each NVIDIA model has independent key pools + health state
+ * Usage:
+ *   import { callAI } from '@/lib/ai-provider';
+ *   const response = await callAI(messages, 'glm-4-plus');
  */
 
-// ---- Lazy ZAI SDK instance ----
+// ---- Lazy ZAI SDK instance (dynamic import avoids module-level side-effects at build time) ----
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _zai: any | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,6 +23,7 @@ async function getZAI() {
   if (_zai) return _zai;
   if (_zaiInitPromise) return _zaiInitPromise;
   _zaiInitPromise = (async () => {
+    // Dynamic import prevents the SDK from running module-level code during Next.js build.
     const ZAI = (await import('z-ai-web-dev-sdk')).default;
     _zai = await ZAI.create();
     return _zai;
@@ -57,9 +31,9 @@ async function getZAI() {
   return _zaiInitPromise;
 }
 
-// ---- Types ----
+// ---- Type Exports ----
 
-export type AIProvider = 'glm' | 'openai' | 'anthropic' | 'google' | 'nvidia' | 'pekpik';
+export type AIProvider = 'glm' | 'openai' | 'anthropic' | 'google';
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -90,6 +64,7 @@ export interface AIProviderFailureDiagnostic {
 
 class AIProviderError extends Error {
   readonly diagnostic: AIProviderFailureDiagnostic;
+
   constructor(diagnostic: AIProviderFailureDiagnostic) {
     super(`[${diagnostic.provider}:${diagnostic.model}] ${diagnostic.kind}: ${diagnostic.message}`);
     this.name = 'AIProviderError';
@@ -99,293 +74,60 @@ class AIProviderError extends Error {
 
 export class AIModelFailedError extends Error {
   readonly diagnostics: AIProviderFailureDiagnostic[];
+
   constructor(diagnostics: AIProviderFailureDiagnostic[]) {
-    super('All AI models failed. Check that at least one provider API key is configured.');
+    super('AI model failed. Please try again. Check that at least one provider API key is configured correctly.');
     this.name = 'AIModelFailedError';
     this.diagnostics = diagnostics;
   }
 }
 
-// ---- Key health tracking ----
+const PROVIDER_KEY_ALIASES: Record<AIProvider, string[]> = {
+  glm: ['ZHIPU_API_KEY', 'GLM_API_KEY', 'BIGMODEL_API_KEY'],
+  openai: ['OPENAI_API_KEY', 'OPENAI_KEY'],
+  anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
+  google: ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
+};
 
-const COOLDOWN_MS = 2 * 60_000; // 2 minutes
+type ResolvedEnv = { value: string; source: string } | null;
 
-interface KeyHealth {
-  key: string;
-  status: 'healthy' | 'down';
-  downSince?: number;
-}
-
-const keyHealthMap = new Map<string, KeyHealth[]>();
-const nvidiaModelHealth = new Map<string, number>();
-
-function initKeyHealth(poolKey: string, keys: string[]): void {
-  if (!keyHealthMap.has(poolKey)) {
-    keyHealthMap.set(poolKey, keys.map((k) => ({ key: k, status: 'healthy' })));
-  } else {
-    const pool = keyHealthMap.get(poolKey)!;
-    for (const k of keys) {
-      if (!pool.find((e) => e.key === k)) pool.push({ key: k, status: 'healthy' });
-    }
-  }
-}
-
-function pickHealthyKeyFromPool(poolKey: string): string | null {
-  const pool = keyHealthMap.get(poolKey) ?? [];
-  const now = Date.now();
-  for (const entry of pool) {
-    if (entry.status === 'down' && entry.downSince && now - entry.downSince >= COOLDOWN_MS) {
-      entry.status = 'healthy';
-    }
-  }
-  const healthy = pool.filter((e) => e.status === 'healthy');
-  if (healthy.length === 0) return null;
-  return healthy[Math.floor(Math.random() * healthy.length)].key;
-}
-
-function markKeyDownInPool(poolKey: string, key: string): void {
-  const pool = keyHealthMap.get(poolKey) ?? [];
-  const entry = pool.find((e) => e.key === key);
-  if (entry) { entry.status = 'down'; entry.downSince = Date.now(); }
-}
-
-function isNvidiaModelHealthy(modelId: string): boolean {
-  const downSince = nvidiaModelHealth.get(modelId);
-  if (!downSince) return true;
-  if (Date.now() - downSince >= COOLDOWN_MS) {
-    nvidiaModelHealth.delete(modelId);
-    return true;
-  }
-  return false;
-}
-
-function markNvidiaModelDown(modelId: string): void {
-  nvidiaModelHealth.set(modelId, Date.now());
-}
-
-// Background healer
-if (typeof setInterval !== 'undefined' && typeof window === 'undefined') {
-  setInterval(() => {
-    const now = Date.now();
-    for (const pool of keyHealthMap.values()) {
-      for (const entry of pool) {
-        if (entry.status === 'down' && entry.downSince && now - entry.downSince >= COOLDOWN_MS) {
-          entry.status = 'healthy';
-        }
-      }
-    }
-    for (const [id, downSince] of nvidiaModelHealth.entries()) {
-      if (now - downSince >= COOLDOWN_MS) nvidiaModelHealth.delete(id);
-    }
-  }, 60_000);
-}
-
-// ---- Env resolution ----
-
-function readEnvValue(key: string): string | null {
+function resolveEnvValue(key: string): ResolvedEnv {
   const env = typeof process !== 'undefined' ? process.env : undefined;
   if (!env) return null;
-  const candidates = [
-    env[key],
-    env[`NEXT_PUBLIC_${key}`],
-    env[key.toLowerCase()],
-    env[`next_public_${key.toLowerCase()}`],
+
+  const candidates: { name: string; value: string | undefined }[] = [
+    { name: key, value: env[key] },
+    { name: `NEXT_PUBLIC_${key}`, value: env[`NEXT_PUBLIC_${key}`] },
+    { name: key.toLowerCase(), value: env[key.toLowerCase()] },
+    { name: `next_public_${key.toLowerCase()}`, value: env[`next_public_${key.toLowerCase()}`] },
   ];
-  for (const v of candidates) {
-    const trimmed = v?.trim();
-    if (trimmed) return trimmed;
-  }
-  return null;
-}
 
-function splitKeys(raw: string | null): string[] {
-  if (!raw) return [];
-  return raw.split(',').map((s) => s.trim()).filter(Boolean);
-}
-
-/**
- * Read keys from multiple possible env var names and deduplicate.
- * This handles both plural (KEYS) and singular (KEY) naming conventions,
- * matching whatever the user set in Vercel.
- */
-function readMultiKeyEnv(...varNames: string[]): string[] {
-  const found: string[] = [];
-  for (const varName of varNames) {
-    found.push(...splitKeys(readEnvValue(varName)));
-  }
-  return [...new Set(found)];
-}
-
-// ---- Generic (non-NVIDIA) provider key aliases ----
-
-const PROVIDER_KEY_ALIASES: Record<Exclude<AIProvider, 'nvidia'>, string[]> = {
-  glm:       ['ZHIPU_API_KEY', 'GLM_API_KEY', 'BIGMODEL_API_KEY'],
-  openai:    ['OPENAI_API_KEY', 'OPENAI_KEY'],
-  anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
-  google:    ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
-  pekpik:    ['PEKPIK_API_KEY', 'PEKPIK_KEY'],
-};
-
-function getAllProviderKeysNonNvidia(provider: Exclude<AIProvider, 'nvidia'>): string[] {
-  const found: string[] = [];
-  for (const alias of PROVIDER_KEY_ALIASES[provider]) {
-    found.push(...splitKeys(readEnvValue(alias)));
-  }
-  const unique = [...new Set(found)];
-  initKeyHealth(provider, unique);
-  return unique;
-}
-
-function pickKeyNonNvidia(provider: Exclude<AIProvider, 'nvidia'>): string | null {
-  const keys = getAllProviderKeysNonNvidia(provider);
-  if (keys.length === 0) return null;
-  return pickHealthyKeyFromPool(provider) ?? keys[0];
-}
-
-function markKeyDownNonNvidia(provider: Exclude<AIProvider, 'nvidia'>, key: string): void {
-  markKeyDownInPool(provider, key);
-}
-
-// ---- NVIDIA per-model key / URL / model-id config ----
-//
-// Each slot reads from BOTH plural (KEYS) and singular (KEY) env var names
-// so that whatever the user set in Vercel is found automatically.
-
-export type NvidiaSlot = 'MISTRAL' | 'DEEPSEEK' | 'KIMI';
-
-const NVIDIA_SLOT_DEFAULTS: Record<NvidiaSlot, { defaultModel: string; defaultUrl: string }> = {
-  MISTRAL:  { defaultModel: 'mistralai/mistral-medium-3.5-128b',  defaultUrl: 'https://integrate.api.nvidia.com/v1' },
-  DEEPSEEK: { defaultModel: 'deepseek-ai/deepseek-r1-0528',       defaultUrl: 'https://integrate.api.nvidia.com/v1' },
-  KIMI:     { defaultModel: 'moonshotai/kimi-k2-instruct',        defaultUrl: 'https://integrate.api.nvidia.com/v1' },
-};
-
-// Additional aliases per slot — covers both KEYS and KEY naming conventions
-const NVIDIA_SLOT_KEY_ALIASES: Record<NvidiaSlot, string[]> = {
-  MISTRAL:  ['NVIDIA_MISTRAL_KEYS', 'NVIDIA_MISTRAL_KEY'],
-  DEEPSEEK: ['NVIDIA_DEEPSEEK_KEYS', 'NVIDIA_DEEPSEEK_KEY'],
-  KIMI:     ['NVIDIA_KIMI_KEYS', 'NVIDIA_KIMI_KEY', 'KIMI_KEYS', 'KIMI_KEY'],
-};
-
-const modelToSlot: Map<string, NvidiaSlot> = new Map();
-
-function getNvidiaSlotConfig(slot: NvidiaSlot): {
-  keys: string[];
-  modelId: string;
-  baseUrl: string;
-} {
-  // Read keys from all alias names (handles both KEYS and KEY naming)
-  const keys = readMultiKeyEnv(...NVIDIA_SLOT_KEY_ALIASES[slot]);
-  const modelId = readEnvValue(`NVIDIA_${slot}_MODEL`) ?? NVIDIA_SLOT_DEFAULTS[slot].defaultModel;
-  const baseUrl = (readEnvValue(`NVIDIA_${slot}_URL`) ?? NVIDIA_SLOT_DEFAULTS[slot].defaultUrl).replace(/\/$/, '');
-  const poolKey = `nvidia:${slot}`;
-  initKeyHealth(poolKey, keys);
-  modelToSlot.set(modelId, slot);
-  return { keys, modelId, baseUrl };
-}
-
-function getGenericNvidiaKeys(): string[] {
-  const keys = readMultiKeyEnv('NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY', 'NVIDIA_KEY');
-  initKeyHealth('nvidia:generic', keys);
-  return keys;
-}
-
-function pickNvidiaKey(modelId: string): { key: string; baseUrl: string } | null {
-  const slot = modelToSlot.get(modelId);
-  if (slot) {
-    const poolKey = `nvidia:${slot}`;
-    const overrideUrl = (readEnvValue(`NVIDIA_${slot}_URL`) ?? NVIDIA_SLOT_DEFAULTS[slot].defaultUrl).replace(/\/$/, '');
-    const key = pickHealthyKeyFromPool(poolKey);
-    if (key) return { key, baseUrl: overrideUrl };
-  }
-  // Fall through to generic pool
-  const genericKey = pickHealthyKeyFromPool('nvidia:generic');
-  if (genericKey) return { key: genericKey, baseUrl: 'https://integrate.api.nvidia.com/v1' };
-  // Last resort: try any slot that has healthy keys
-  for (const s of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
-    const k = pickHealthyKeyFromPool(`nvidia:${s}`);
-    if (k) {
-      const url = (readEnvValue(`NVIDIA_${s}_URL`) ?? NVIDIA_SLOT_DEFAULTS[s].defaultUrl).replace(/\/$/, '');
-      return { key: k, baseUrl: url };
+  for (const candidate of candidates) {
+    if (!candidate.value) continue;
+    const trimmed = candidate.value.trim();
+    if (trimmed.length > 0) {
+      return { value: trimmed, source: candidate.name };
     }
   }
   return null;
 }
 
-function markNvidiaKeyDown(modelId: string, key: string): void {
-  const slot = modelToSlot.get(modelId);
-  if (slot) markKeyDownInPool(`nvidia:${slot}`, key);
-  else markKeyDownInPool('nvidia:generic', key);
-}
-
-function hasNvidiaCredentials(): boolean {
-  const slots: NvidiaSlot[] = ['MISTRAL', 'DEEPSEEK', 'KIMI'];
-  let found = false;
-  for (const slot of slots) {
-    const { keys } = getNvidiaSlotConfig(slot);
-    if (keys.length > 0) found = true;
-  }
-  if (getGenericNvidiaKeys().length > 0) found = true;
-  return found;
-}
-
-// ---- Diagnostics export (used by /api/env-check) ----
-
-export function getNvidiaSlotDiagnostics(): Record<NvidiaSlot, { keyCount: number; modelId: string; baseUrl: string; healthyKeys: number }> {
-  const result = {} as Record<NvidiaSlot, { keyCount: number; modelId: string; baseUrl: string; healthyKeys: number }>;
-  for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
-    const { keys, modelId, baseUrl } = getNvidiaSlotConfig(slot);
-    const pool = keyHealthMap.get(`nvidia:${slot}`) ?? [];
-    const healthyKeys = pool.filter((e) => e.status === 'healthy').length;
-    result[slot] = { keyCount: keys.length, modelId, baseUrl, healthyKeys };
-  }
-  return result;
-}
-
-// ---- Public key API ----
-
-export function getAllProviderKeys(provider: AIProvider): string[] {
-  if (provider === 'nvidia') {
-    const slots: NvidiaSlot[] = ['MISTRAL', 'DEEPSEEK', 'KIMI'];
-    const all: string[] = [];
-    for (const slot of slots) all.push(...getNvidiaSlotConfig(slot).keys);
-    all.push(...getGenericNvidiaKeys());
-    return [...new Set(all)];
-  }
-  return getAllProviderKeysNonNvidia(provider);
+function readEnvValue(key: string): string | null {
+  const resolved = resolveEnvValue(key);
+  return resolved ? resolved.value : null;
 }
 
 export function getProviderApiKey(provider: AIProvider): string | null {
-  if (provider === 'nvidia') {
-    const generic = pickHealthyKeyFromPool('nvidia:generic');
-    if (generic) return generic;
-    for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
-      const k = pickHealthyKeyFromPool(`nvidia:${slot}`);
-      if (k) return k;
-    }
-    return null;
+  const keys = PROVIDER_KEY_ALIASES[provider] || [];
+  for (const key of keys) {
+    const value = readEnvValue(key);
+    if (value) return value;
   }
-  return pickKeyNonNvidia(provider);
+  return null;
 }
 
 export function getProviderKeyNames(provider: AIProvider): string[] {
-  if (provider === 'nvidia') {
-    return [
-      'NVIDIA_MISTRAL_KEYS', 'NVIDIA_MISTRAL_KEY',
-      'NVIDIA_DEEPSEEK_KEYS', 'NVIDIA_DEEPSEEK_KEY',
-      'NVIDIA_KIMI_KEYS', 'NVIDIA_KIMI_KEY',
-      'NVIDIA_API_KEY',
-    ];
-  }
-  if (provider === 'pekpik') {
-    const names = [...PROVIDER_KEY_ALIASES['pekpik']];
-    for (const slot of Object.keys(PEKPIK_SLOT_CONFIG) as PekpikSlot[]) {
-      for (const alias of PEKPIK_SLOT_CONFIG[slot].aliases) {
-        if (!names.includes(alias)) names.push(alias);
-      }
-    }
-    return names;
-  }
-  return PROVIDER_KEY_ALIASES[provider] ?? [];
+  return PROVIDER_KEY_ALIASES[provider] || [];
 }
 
 export function hasAnyProviderCredentials(): boolean {
@@ -394,20 +136,16 @@ export function hasAnyProviderCredentials(): boolean {
     Boolean(getProviderApiKey('openai')) ||
     Boolean(getProviderApiKey('anthropic')) ||
     Boolean(getProviderApiKey('google')) ||
-    hasPekpikCredentials() ||
-    hasNvidiaCredentials() ||
     process.env.ZAI_SDK_FALLBACK === '1'
   );
 }
 
 export function getProviderCredentialStatus(): Record<AIProvider, boolean> {
   return {
-    glm:       Boolean(getProviderApiKey('glm') || process.env.ZAI_SDK_FALLBACK === '1'),
-    openai:    Boolean(getProviderApiKey('openai')),
+    glm: Boolean(getProviderApiKey('glm') || process.env.ZAI_SDK_FALLBACK === '1'),
+    openai: Boolean(getProviderApiKey('openai')),
     anthropic: Boolean(getProviderApiKey('anthropic')),
-    google:    Boolean(getProviderApiKey('google')),
-    pekpik:    hasPekpikCredentials(),
-    nvidia:    hasNvidiaCredentials(),
+    google: Boolean(getProviderApiKey('google')),
   };
 }
 
@@ -418,29 +156,20 @@ export function getProviderCredentialDetails(): {
   zaiSdkFallback: boolean;
 } {
   const status = getProviderCredentialStatus();
-  const sources: Record<AIProvider, string[]> = {
-    glm: [], openai: [], anthropic: [], google: [], pekpik: [], nvidia: [],
-  };
-  for (const provider of ['glm', 'openai', 'anthropic', 'google'] as Exclude<AIProvider, 'nvidia' | 'pekpik'>[]) {
-    for (const alias of PROVIDER_KEY_ALIASES[provider]) {
-      if (readEnvValue(alias)) sources[provider].push(alias);
+  const sources = {} as Record<AIProvider, string[]>;
+
+  (Object.keys(PROVIDER_KEY_ALIASES) as AIProvider[]).forEach((provider) => {
+    const aliases = PROVIDER_KEY_ALIASES[provider] || [];
+    const found: string[] = [];
+    for (const alias of aliases) {
+      const resolved = resolveEnvValue(alias);
+      if (resolved) {
+        found.push(resolved.source);
+      }
     }
-  }
-  // Pekpik: check generic key + all per-slot keys
-  for (const alias of PROVIDER_KEY_ALIASES['pekpik']) {
-    if (readEnvValue(alias)) sources.pekpik.push(alias);
-  }
-  for (const slot of Object.keys(PEKPIK_SLOT_CONFIG) as PekpikSlot[]) {
-    for (const alias of PEKPIK_SLOT_CONFIG[slot].aliases) {
-      if (readEnvValue(alias) && !sources.pekpik.includes(alias)) sources.pekpik.push(alias);
-    }
-  }
-  for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
-    for (const alias of NVIDIA_SLOT_KEY_ALIASES[slot]) {
-      if (readEnvValue(alias)) sources.nvidia.push(alias);
-    }
-  }
-  if (readEnvValue('NVIDIA_API_KEY')) sources.nvidia.push('NVIDIA_API_KEY');
+    sources[provider] = Array.from(new Set(found));
+  });
+
   return {
     anyConfigured: hasAnyProviderCredentials(),
     status,
@@ -449,104 +178,13 @@ export function getProviderCredentialDetails(): {
   };
 }
 
-// ---- Pekpik config ----
-
-const PEKPIK_BASE_URL = 'https://aiapiv2.pekpik.com/v1';
-
-// gpt-5.x models unique to Pekpik (no native OpenAI equivalent) — no prefix conflict
-const PEKPIK_OWN_MODELS = new Set(['gpt-5.4', 'gpt-5.5', 'gpt-5', 'gpt-4.5']);
-
-export type PekpikSlot = 'GPT54' | 'GPT55' | 'CLAUDE_OPUS' | 'GEMINI_FLASH' | 'DEEPSEEK' | 'SMART' | 'KIMI';
-
-// Per-slot: which model ID to send to the Pekpik API, plus env var aliases for key pool.
-// "pekpik/X" model IDs (used in TASK_MODEL_PREFERENCES) strip the prefix before the API call.
-const PEKPIK_SLOT_CONFIG: Record<PekpikSlot, { apiModel: string; aliases: string[] }> = {
-  GPT54:        { apiModel: 'gpt-5.4',          aliases: ['PEKPIK_API_KEY', 'PEKPIK_KEY', 'PEKPIK_GPT54_KEY', 'PEKPIK_GPT54_KEYS'] },
-  GPT55:        { apiModel: 'gpt-5.5',          aliases: ['PEKPIK_GPT55_KEY', 'PEKPIK_GPT55_KEYS'] },
-  CLAUDE_OPUS:  { apiModel: 'claude-opus-4-7',  aliases: ['PEKPIK_CLAUDE_KEYS', 'PEKPIK_CLAUDE_KEY'] },
-  GEMINI_FLASH: { apiModel: 'gemini-2.5-flash', aliases: ['PEKPIK_GEMINI_KEYS', 'PEKPIK_GEMINI_KEY'] },
-  DEEPSEEK:     { apiModel: 'deepseek-chat',    aliases: ['PEKPIK_DEEPSEEK_KEYS', 'PEKPIK_DEEPSEEK_KEY'] },
-  SMART:        { apiModel: 'smart-chat',       aliases: ['PEKPIK_SMART_KEYS', 'PEKPIK_SMART_KEY'] },
-  KIMI:         { apiModel: 'kimi-k2.5',        aliases: ['PEKPIK_KIMI_KEYS', 'PEKPIK_KIMI_KEY'] },
-};
-
-// Maps user-facing model ID (as used in TASK_MODEL_PREFERENCES) → Pekpik slot
-const PEKPIK_MODEL_TO_SLOT = new Map<string, PekpikSlot>([
-  ['gpt-5.4',                    'GPT54'],
-  ['gpt-5',                      'GPT54'],
-  ['gpt-4.5',                    'GPT54'],
-  ['gpt-5.5',                    'GPT55'],
-  ['pekpik/claude-opus-4-7',     'CLAUDE_OPUS'],
-  ['pekpik/gemini-2.5-flash',    'GEMINI_FLASH'],
-  ['pekpik/deepseek-chat',       'DEEPSEEK'],
-  ['pekpik/smart-chat',          'SMART'],
-  ['pekpik/kimi-k2.5',           'KIMI'],
-]);
-
-function getPekpikSlotKeys(slot: PekpikSlot): string[] {
-  const { aliases } = PEKPIK_SLOT_CONFIG[slot];
-  const keys = readMultiKeyEnv(...aliases);
-  initKeyHealth(`pekpik:${slot}`, keys);
-  return keys;
-}
-
-function pickPekpikKey(modelId: string): string | null {
-  const slot = PEKPIK_MODEL_TO_SLOT.get(modelId);
-  if (slot) {
-    const poolKey = `pekpik:${slot}`;
-    getPekpikSlotKeys(slot); // ensures pool is initialized
-    return pickHealthyKeyFromPool(poolKey);
-  }
-  return pickKeyNonNvidia('pekpik');
-}
-
-function markPekpikKeyDown(modelId: string, key: string): void {
-  const slot = PEKPIK_MODEL_TO_SLOT.get(modelId);
-  if (slot) markKeyDownInPool(`pekpik:${slot}`, key);
-  else markKeyDownNonNvidia('pekpik', key);
-}
-
-function hasPekpikCredentials(): boolean {
-  if (getAllProviderKeysNonNvidia('pekpik').length > 0) return true;
-  for (const slot of Object.keys(PEKPIK_SLOT_CONFIG) as PekpikSlot[]) {
-    if (getPekpikSlotKeys(slot).length > 0) return true;
-  }
-  return false;
-}
-
-export function getPekpikSlotDiagnostics(): Record<PekpikSlot, { keyCount: number; apiModel: string; healthyKeys: number }> {
-  const result = {} as Record<PekpikSlot, { keyCount: number; apiModel: string; healthyKeys: number }>;
-  for (const slot of Object.keys(PEKPIK_SLOT_CONFIG) as PekpikSlot[]) {
-    const keys = getPekpikSlotKeys(slot);
-    const pool = keyHealthMap.get(`pekpik:${slot}`) ?? [];
-    result[slot] = {
-      keyCount: keys.length,
-      apiModel: PEKPIK_SLOT_CONFIG[slot].apiModel,
-      healthyKeys: pool.filter((e) => e.status === 'healthy').length,
-    };
-  }
-  return result;
-}
-
-// ---- Utility ----
+// ---- Utility Functions ----
 
 export function getProvider(modelId: string): AIProvider {
-  if (modelId.startsWith('pekpik/'))     return 'pekpik';  // namespaced pekpik models
-  if (modelId.startsWith('glm-'))        return 'glm';
-  if (PEKPIK_OWN_MODELS.has(modelId))   return 'pekpik';  // gpt-5.4, gpt-5.5, etc.
-  if (modelId.startsWith('gpt-'))        return 'openai';
-  if (modelId.startsWith('claude-'))     return 'anthropic';
-  if (modelId.startsWith('gemini-'))     return 'google';
-  if (
-    modelId.startsWith('mistralai/') ||
-    modelId.startsWith('deepseek-ai/') ||
-    modelId.startsWith('moonshotai/') ||
-    modelId.startsWith('qwen/') ||
-    modelId.startsWith('nvidia/') ||
-    modelId.startsWith('meta/') ||
-    modelId.startsWith('01-ai/') ||
-    NVIDIA_MODELS.some((m) => m.id === modelId)
-  ) return 'nvidia';
+  if (modelId.startsWith('glm-')) return 'glm';
+  if (modelId.startsWith('gpt-')) return 'openai';
+  if (modelId.startsWith('claude-')) return 'anthropic';
+  if (modelId.startsWith('gemini-')) return 'google';
   return 'glm';
 }
 
@@ -556,151 +194,89 @@ export function estimateComplexity(
   totalBullets: number,
   projectCount: number
 ): 'simple' | 'standard' | 'complex' {
-  if (cvLength > 6000 || jobLength > 4000 || totalBullets > 30 || projectCount > 10) return 'complex';
-  if (cvLength < 2000 && jobLength < 1500 && totalBullets < 10) return 'simple';
+  if (cvLength > 6000 || jobLength > 4000 || totalBullets > 30 || projectCount > 10) {
+    return 'complex';
+  }
+  if (cvLength < 2000 && jobLength < 1500 && totalBullets < 10) {
+    return 'simple';
+  }
   return 'standard';
 }
 
 export function autoSelectModel(complexity: 'simple' | 'standard' | 'complex'): string {
-  if (hasNvidiaCredentials()) {
-    switch (complexity) {
-      case 'complex':  return 'meta/llama-3.3-70b-instruct';
-      case 'standard': return 'meta/llama-3.3-70b-instruct';
-      case 'simple':   return 'meta/llama-3.3-70b-instruct';
-    }
-  }
   switch (complexity) {
-    case 'complex':  return 'glm-4-long';
+    case 'complex': return 'glm-4-long';
     case 'standard': return 'glm-4-plus';
-    case 'simple':   return 'glm-4-flash';
+    case 'simple': return 'glm-4-flash';
   }
 }
 
-// ---- NVIDIA NIM model registry ----
+// ---- Provider Implementations ----
 
-export interface NvidiaModelEntry {
-  id: string;
-  displayName: string;
-  baseScore: number;
-  contextWindow?: number;
-  tags: string[];
-  speed: 'fast' | 'medium' | 'slow';
-}
-
-export const NVIDIA_MODELS: NvidiaModelEntry[] = [
-  {
-    id: 'meta/llama-3.3-70b-instruct',
-    displayName: 'Llama 3.3 70b Instruct',
-    baseScore: 0.82,
-    contextWindow: 128_000,
-    tags: ['general', 'cv', 'fast'],
-    speed: 'fast',
-  },
-  {
-    id: 'nvidia/llama-3.3-nemotron-super-49b-v1',
-    displayName: 'Nemotron Super 49b',
-    baseScore: 0.85,
-    contextWindow: 128_000,
-    tags: ['fast', 'cv'],
-    speed: 'fast',
-  },
-  {
-    id: 'deepseek-ai/deepseek-r1-0528',
-    displayName: 'DeepSeek-R1-0528',
-    baseScore: 0.93,
-    contextWindow: 64_000,
-    tags: ['reasoning', 'coding', 'cv'],
-    speed: 'medium',
-  },
-  {
-    id: 'mistralai/mistral-medium-3.5-128b',
-    displayName: 'Mistral Medium 3.5 128b',
-    baseScore: 0.95,
-    contextWindow: 128_000,
-    tags: ['coding', 'agentic', 'cv'],
-    speed: 'medium',
-  },
-  {
-    id: 'moonshotai/kimi-k2-instruct',
-    displayName: 'Kimi K2 Instruct',
-    baseScore: 0.91,
-    contextWindow: 128_000,
-    tags: ['multimodal', 'coding', 'cv'],
-    speed: 'medium',
-  },
-  {
-    id: '01-ai/yi-large',
-    displayName: 'Yi Large',
-    baseScore: 0.88,
-    contextWindow: 32_000,
-    tags: ['general', 'cv'],
-    speed: 'medium',
-  },
-  {
-    id: 'qwen/qwen3-235b-a22b',
-    displayName: 'Qwen3 235b-A22b',
-    baseScore: 0.80,
-    contextWindow: 32_000,
-    tags: ['reasoning', 'cv'],
-    speed: 'slow',
-  },
-];
-
-function modelTimeout(modelId: string): number {
-  const entry = NVIDIA_MODELS.find((m) => m.id === modelId);
-  if (entry) {
-    // Bumped timeouts: fast=20s, medium=35s, slow=55s
-    if (entry.speed === 'fast')   return 20_000;
-    if (entry.speed === 'medium') return 35_000;
-    return 55_000;
-  }
-  if (modelId.startsWith('pekpik/'))  return 30_000;
-  if (PEKPIK_OWN_MODELS.has(modelId)) return 30_000;
-  if (modelId.startsWith('gpt-'))    return 25_000;
-  if (modelId.startsWith('claude-')) return 30_000;
-  if (modelId.startsWith('gemini-')) return 25_000;
-  if (modelId.startsWith('glm-'))    return 20_000;
-  return 35_000;
-}
-
-// ---- Provider call implementations ----
-
-async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs = 20_000): Promise<string | null> {
+async function callGLMviaSDK(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
   try {
     const zai = await getZAI();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     const completion = await zai.chat.completions.create({
       model: modelId,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      messages: messages.map(m => ({ role: m.role, content: m.content })),
       thinking: { type: 'disabled' },
     });
+
     clearTimeout(timer);
-    return completion.choices?.[0]?.message?.content || null;
+    const content = completion.choices?.[0]?.message?.content;
+    return content || null;
   } catch (err) {
     console.warn('GLM SDK call failed:', err instanceof Error ? err.message : String(err));
     return null;
   }
 }
 
-async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs = 20_000): Promise<string | null> {
-  const apiKey = pickKeyNonNvidia('glm');
-  if (!apiKey) throw new AIProviderError({ provider: 'glm', model: modelId, kind: 'missing_key', message: 'Missing GLM API key' });
+/**
+ * Call GLM via the direct Zhipu AI REST API using ZHIPU_API_KEY.
+ * Used as the primary path when deployed outside the Z.ai ecosystem (e.g. Vercel).
+ */
+async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
+  const apiKey = getProviderApiKey('glm');
+  if (!apiKey) {
+    throw new AIProviderError({
+      provider: 'glm',
+      model: modelId,
+      kind: 'missing_key',
+      message: 'Missing GLM API key',
+    });
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: modelId, messages: messages.map((m) => ({ role: m.role, content: m.content })) }),
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+      }),
       signal: controller.signal,
     });
     clearTimeout(timer);
     if (!res.ok) {
       let errText = '';
       try { errText = await res.text(); } catch { /* ignore */ }
-      if (res.status === 401 || res.status === 403) markKeyDownNonNvidia('glm', apiKey);
-      throw new AIProviderError({ provider: 'glm', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
+      const snippet = errText.substring(0, 400);
+      throw new AIProviderError({
+        provider: 'glm',
+        model: modelId,
+        kind: 'http_error',
+        status: res.status,
+        message: snippet || `HTTP ${res.status}`,
+      });
     }
     const data = await res.json();
     return data.choices?.[0]?.message?.content || null;
@@ -708,242 +284,98 @@ async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs =
     clearTimeout(timer);
     if (err instanceof AIProviderError) throw err;
     const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
-    throw new AIProviderError({ provider: 'glm', model: modelId, kind: isTimeout ? 'timeout' : 'network_error', message: err instanceof Error ? err.message : String(err) });
+    throw new AIProviderError({
+      provider: 'glm',
+      model: modelId,
+      kind: isTimeout ? 'timeout' : 'network_error',
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
-async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 20_000): Promise<string | null> {
-  const zhipuKey = pickKeyNonNvidia('glm');
+async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
+  // Prefer direct REST API when ZHIPU_API_KEY is set (works in all environments).
+  const zhipuKey = getProviderApiKey('glm');
   if (zhipuKey) {
     try {
       const result = await callGLMviaAPI(messages, modelId, timeoutMs);
       if (result) return result;
     } catch (err) {
+      // Only fall through to SDK when explicitly enabled; otherwise surface diagnostics.
       if (process.env.ZAI_SDK_FALLBACK === '1') {
-        console.warn('Zhipu REST failed, falling back to SDK:', err instanceof Error ? err.message : String(err));
+        console.warn('Zhipu AI REST API call failed, falling back to Z.ai SDK:', err instanceof Error ? err.message : String(err));
       } else {
         throw err;
       }
     }
   }
-  if (process.env.ZAI_SDK_FALLBACK === '1') return callGLMviaSDK(messages, modelId, timeoutMs);
-  throw new AIProviderError({ provider: 'glm', model: modelId, kind: 'missing_key', message: 'Missing GLM API key and ZAI_SDK_FALLBACK is not enabled' });
+
+  // Fall back to z-ai-web-dev-sdk (only works in Z.ai environment).
+  if (process.env.ZAI_SDK_FALLBACK === '1') {
+    return callGLMviaSDK(messages, modelId, timeoutMs);
+  }
+
+  // No REST key and no SDK fallback: surface a clear diagnostic.
+  throw new AIProviderError({
+    provider: 'glm',
+    model: modelId,
+    kind: 'missing_key',
+    message: 'Missing GLM API key and ZAI_SDK_FALLBACK is not enabled',
+  });
 }
 
-async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
-  const apiKey = pickKeyNonNvidia('openai');
-  if (!apiKey) throw new AIProviderError({ provider: 'openai', model: modelId, kind: 'missing_key', message: 'Missing OpenAI API key' });
-  const timeout = modelTimeout(modelId);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callGLMVision(messages: any[], modelId: string, _timeoutMs = 35_000): Promise<string | null> {
+  try {
+    const zai = await getZAI();
+    const completion = await zai.chat.completions.createVision({
+      model: modelId,
+      messages,
+    });
+    const content = completion.choices?.[0]?.message?.content;
+    return content || null;
+  } catch (err) {
+    console.warn(`GLM Vision model ${modelId} failed:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callOpenAIVision(messages: any[], modelId: string, timeoutMs = 30_000): Promise<string | null> {
+  const apiKey = getProviderApiKey('openai');
+  if (!apiKey) {
+    throw new AIProviderError({
+      provider: 'openai',
+      model: modelId,
+      kind: 'missing_key',
+      message: 'Missing OpenAI API key',
+    });
+  }
+
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: modelId, messages, temperature }),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      const errText = await res.text();
-      if (res.status === 401 || res.status === 403) markKeyDownNonNvidia('openai', apiKey);
-      throw new AIProviderError({ provider: 'openai', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
-    }
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content || null;
-  } catch (err) {
-    clearTimeout(timer);
-    if (err instanceof AIProviderError) throw err;
-    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
-    throw new AIProviderError({ provider: 'openai', model: modelId, kind: isTimeout ? 'timeout' : 'network_error', message: err instanceof Error ? err.message : String(err) });
-  }
-}
-
-async function callPekpik(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
-  // Strip pekpik/ namespace prefix to get the actual model ID for the API call
-  const apiModelId = modelId.startsWith('pekpik/') ? modelId.slice(7) : modelId;
-
-  const apiKey = pickPekpikKey(modelId);
-  if (!apiKey) {
-    const slot = PEKPIK_MODEL_TO_SLOT.get(modelId);
-    const envHint = slot ? PEKPIK_SLOT_CONFIG[slot].aliases[0] : 'PEKPIK_API_KEY';
-    throw new AIProviderError({
-      provider: 'pekpik',
-      model: modelId,
-      kind: 'missing_key',
-      message: `Missing Pekpik API key for ${apiModelId} (set ${envHint} in Vercel env vars)`,
-    });
-  }
-
-  const timeout = modelTimeout(modelId);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    const res = await fetch(`${PEKPIK_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: apiModelId, messages, temperature }),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      const errText = await res.text();
-      if (res.status === 401 || res.status === 403) markPekpikKeyDown(modelId, apiKey);
-      if (res.status === 429) markPekpikKeyDown(modelId, apiKey);
-      throw new AIProviderError({ provider: 'pekpik', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
-    }
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content || null;
-  } catch (err) {
-    clearTimeout(timer);
-    if (err instanceof AIProviderError) throw err;
-    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
-    throw new AIProviderError({ provider: 'pekpik', model: modelId, kind: isTimeout ? 'timeout' : 'network_error', message: err instanceof Error ? err.message : String(err) });
-  }
-}
-
-async function callAnthropic(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
-  const apiKey = pickKeyNonNvidia('anthropic');
-  if (!apiKey) throw new AIProviderError({ provider: 'anthropic', model: modelId, kind: 'missing_key', message: 'Missing Anthropic API key' });
-  const timeout = modelTimeout(modelId);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    let systemContent = '';
-    const anthropicMessages: { role: string; content: string }[] = [];
-    for (const msg of messages) {
-      if (msg.role === 'system') { systemContent += (systemContent ? '\n' : '') + msg.content; }
-      else anthropicMessages.push({ role: msg.role, content: msg.content });
-    }
-    if (anthropicMessages.length > 0 && anthropicMessages[0].role !== 'user') {
-      anthropicMessages.unshift({ role: 'user', content: 'Please proceed.' });
-    }
-    const body: Record<string, unknown> = { model: modelId, messages: anthropicMessages, max_tokens: 8192, temperature };
-    if (systemContent) body.system = systemContent;
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      const errText = await res.text();
-      if (res.status === 401 || res.status === 403) markKeyDownNonNvidia('anthropic', apiKey);
-      throw new AIProviderError({ provider: 'anthropic', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
-    }
-    const data = await res.json();
-    return data.content?.[0]?.text || null;
-  } catch (err) {
-    clearTimeout(timer);
-    if (err instanceof AIProviderError) throw err;
-    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
-    throw new AIProviderError({ provider: 'anthropic', model: modelId, kind: isTimeout ? 'timeout' : 'network_error', message: err instanceof Error ? err.message : String(err) });
-  }
-}
-
-async function callGemini(messages: AIMessage[], modelId: string, temperature = 0.3): Promise<string | null> {
-  const apiKey = pickKeyNonNvidia('google');
-  if (!apiKey) throw new AIProviderError({ provider: 'google', model: modelId, kind: 'missing_key', message: 'Missing Google AI API key' });
-  const timeout = modelTimeout(modelId);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    let systemInstruction: string | undefined;
-    const contents: { role: string; parts: { text: string }[] }[] = [];
-    for (const msg of messages) {
-      if (msg.role === 'system') { systemInstruction = msg.content; }
-      else contents.push({ role: msg.role === 'assistant' ? 'model' : 'user', parts: [{ text: msg.content }] });
-    }
-    const body: Record<string, unknown> = { contents, generationConfig: { temperature } };
-    if (systemInstruction) body.systemInstruction = { parts: [{ text: systemInstruction }] };
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal }
-    );
-    clearTimeout(timer);
-    if (!res.ok) {
-      const errText = await res.text();
-      if (res.status === 401 || res.status === 403) markKeyDownNonNvidia('google', apiKey);
-      throw new AIProviderError({ provider: 'google', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
-    }
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
-  } catch (err) {
-    clearTimeout(timer);
-    if (err instanceof AIProviderError) throw err;
-    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
-    throw new AIProviderError({ provider: 'google', model: modelId, kind: isTimeout ? 'timeout' : 'network_error', message: err instanceof Error ? err.message : String(err) });
-  }
-}
-
-async function callNvidia(
-  messages: AIMessage[],
-  modelId: string,
-  temperature = 0.3,
-  timeoutMs?: number
-): Promise<string | null> {
-  for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
-    getNvidiaSlotConfig(slot);
-  }
-
-  if (!isNvidiaModelHealthy(modelId)) {
-    throw new AIProviderError({
-      provider: 'nvidia',
-      model: modelId,
-      kind: 'provider_error',
-      message: `Model ${modelId} is in cooldown`,
-    });
-  }
-
-  const picked = pickNvidiaKey(modelId);
-  if (!picked) {
-    throw new AIProviderError({
-      provider: 'nvidia',
-      model: modelId,
-      kind: 'missing_key',
-      message: [
-        `No healthy NVIDIA key for ${modelId}.`,
-        'Set one of: NVIDIA_MISTRAL_KEYS, NVIDIA_MISTRAL_KEY,',
-        'NVIDIA_DEEPSEEK_KEYS, NVIDIA_DEEPSEEK_KEY,',
-        'NVIDIA_KIMI_KEYS, NVIDIA_KIMI_KEY, or NVIDIA_API_KEY',
-        'in Vercel → Project → Settings → Environment Variables.',
-        'Visit /api/env-check to see which vars are currently found.',
-      ].join(' '),
-    });
-  }
-  const { key: apiKey, baseUrl } = picked;
-  const timeout = timeoutMs ?? modelTimeout(modelId);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-
-  try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model: modelId,
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        temperature,
-        max_tokens: 4096,
+        messages,
+        temperature: 0,
       }),
       signal: controller.signal,
     });
+
     clearTimeout(timer);
 
     if (!res.ok) {
       const errText = await res.text();
-      if (res.status === 401 || res.status === 403) {
-        markNvidiaKeyDown(modelId, apiKey);
-        markNvidiaModelDown(modelId);
-      } else if (res.status === 429 || res.status >= 500) {
-        markNvidiaModelDown(modelId);
-      }
       throw new AIProviderError({
-        provider: 'nvidia',
+        provider: 'openai',
         model: modelId,
         kind: 'http_error',
         status: res.status,
@@ -957,9 +389,8 @@ async function callNvidia(
     clearTimeout(timer);
     if (err instanceof AIProviderError) throw err;
     const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
-    if (isTimeout) markNvidiaModelDown(modelId);
     throw new AIProviderError({
-      provider: 'nvidia',
+      provider: 'openai',
       model: modelId,
       kind: isTimeout ? 'timeout' : 'network_error',
       message: err instanceof Error ? err.message : String(err),
@@ -967,7 +398,182 @@ async function callNvidia(
   }
 }
 
-// ---- Public gateway ----
+async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+  const apiKey = getProviderApiKey('openai');
+  if (!apiKey) {
+    throw new AIProviderError({
+      provider: 'openai',
+      model: modelId,
+      kind: 'missing_key',
+      message: 'Missing OpenAI API key',
+    });
+  }
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ model: modelId, messages, temperature }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new AIProviderError({
+        provider: 'openai',
+        model: modelId,
+        kind: 'http_error',
+        status: res.status,
+        message: errText.substring(0, 400) || `HTTP ${res.status}`,
+      });
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (err) {
+    if (err instanceof AIProviderError) throw err;
+    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+    throw new AIProviderError({
+      provider: 'openai',
+      model: modelId,
+      kind: isTimeout ? 'timeout' : 'network_error',
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+async function callAnthropic(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+  const apiKey = getProviderApiKey('anthropic');
+  if (!apiKey) {
+    throw new AIProviderError({
+      provider: 'anthropic',
+      model: modelId,
+      kind: 'missing_key',
+      message: 'Missing Anthropic API key',
+    });
+  }
+
+  try {
+    let systemContent = '';
+    const anthropicMessages: { role: string; content: string }[] = [];
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        systemContent += (systemContent ? '\n' : '') + msg.content;
+      } else {
+        anthropicMessages.push({ role: msg.role, content: msg.content });
+      }
+    }
+    if (anthropicMessages.length > 0 && anthropicMessages[0].role !== 'user') {
+      anthropicMessages.unshift({ role: 'user', content: 'Please proceed.' });
+    }
+
+    const body: Record<string, unknown> = {
+      model: modelId,
+      messages: anthropicMessages,
+      max_tokens: 8192,
+      temperature,
+    };
+    if (systemContent) body.system = systemContent;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new AIProviderError({
+        provider: 'anthropic',
+        model: modelId,
+        kind: 'http_error',
+        status: res.status,
+        message: errText.substring(0, 400) || `HTTP ${res.status}`,
+      });
+    }
+    const data = await res.json();
+    return data.content?.[0]?.text || null;
+  } catch (err) {
+    if (err instanceof AIProviderError) throw err;
+    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+    throw new AIProviderError({
+      provider: 'anthropic',
+      model: modelId,
+      kind: isTimeout ? 'timeout' : 'network_error',
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+async function callGemini(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+  const apiKey = getProviderApiKey('google');
+  if (!apiKey) {
+    throw new AIProviderError({
+      provider: 'google',
+      model: modelId,
+      kind: 'missing_key',
+      message: 'Missing Google AI API key',
+    });
+  }
+
+  try {
+    let systemInstruction: string | undefined;
+    const contents: { role: string; parts: { text: string }[] }[] = [];
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        systemInstruction = msg.content;
+      } else {
+        contents.push({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }],
+        });
+      }
+    }
+
+    const body: Record<string, unknown> = {
+      contents,
+      generationConfig: { temperature },
+    };
+    if (systemInstruction) {
+      body.systemInstruction = { parts: [{ text: systemInstruction }] };
+    }
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }
+    );
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new AIProviderError({
+        provider: 'google',
+        model: modelId,
+        kind: 'http_error',
+        status: res.status,
+        message: errText.substring(0, 400) || `HTTP ${res.status}`,
+      });
+    }
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch (err) {
+    if (err instanceof AIProviderError) throw err;
+    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+    throw new AIProviderError({
+      provider: 'google',
+      model: modelId,
+      kind: isTimeout ? 'timeout' : 'network_error',
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+// ---- Public Gateway ----
 
 export async function callAI(
   messages: AIMessage[],
@@ -977,57 +583,16 @@ export async function callAI(
   try {
     const provider = getProvider(modelId);
     switch (provider) {
-      case 'glm':       return callGLM(messages, modelId);
-      case 'openai':    return callOpenAI(messages, modelId, temperature);
+      case 'glm': return callGLM(messages, modelId);
+      case 'openai': return callOpenAI(messages, modelId, temperature);
       case 'anthropic': return callAnthropic(messages, modelId, temperature);
-      case 'google':    return callGemini(messages, modelId, temperature);
-      case 'nvidia':    return callNvidia(messages, modelId, temperature);
-      case 'pekpik':    return callPekpik(messages, modelId, temperature);
-      default:          return callGLM(messages, modelId);
+      case 'google': return callGemini(messages, modelId, temperature);
+      default: return callGLM(messages, modelId);
     }
   } catch (err) {
+    // Keep existing behavior for direct callers: failures collapse to null.
     console.warn(`AI call failed for ${modelId}:`, err instanceof Error ? err.message : String(err));
     return null;
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function callGLMVision(messages: any[], modelId: string, _timeoutMs = 35_000): Promise<string | null> {
-  try {
-    const zai = await getZAI();
-    const completion = await zai.chat.completions.createVision({ model: modelId, messages });
-    return completion.choices?.[0]?.message?.content || null;
-  } catch (err) {
-    console.warn(`GLM Vision ${modelId} failed:`, err instanceof Error ? err.message : err);
-    return null;
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function callOpenAIVision(messages: any[], modelId: string, timeoutMs = 30_000): Promise<string | null> {
-  const apiKey = pickKeyNonNvidia('openai');
-  if (!apiKey) throw new AIProviderError({ provider: 'openai', model: modelId, kind: 'missing_key', message: 'Missing OpenAI API key' });
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: modelId, messages, temperature: 0 }),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new AIProviderError({ provider: 'openai', model: modelId, kind: 'http_error', status: res.status, message: errText.substring(0, 400) || `HTTP ${res.status}` });
-    }
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content || null;
-  } catch (err) {
-    clearTimeout(timer);
-    if (err instanceof AIProviderError) throw err;
-    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
-    throw new AIProviderError({ provider: 'openai', model: modelId, kind: isTimeout ? 'timeout' : 'network_error', message: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -1037,278 +602,201 @@ export async function callAIVision(
   timeoutMs = 30_000
 ): Promise<string | null> {
   const provider = getProvider(modelId);
-  if (provider === 'openai') return callOpenAIVision(messages, modelId, timeoutMs);
+
+  if (provider === 'openai') {
+    return callOpenAIVision(messages, modelId, timeoutMs);
+  }
+
   const glmAttempt = await callGLMVision(messages, modelId, timeoutMs);
   if (glmAttempt) return glmAttempt;
+
+  // Fallback to OpenAI vision when GLM vision is unavailable or fails.
   return callOpenAIVision(messages, 'gpt-4o-mini', timeoutMs);
 }
 
-// ---- Fallback chain & rotation ----
+const FALLBACK_MODEL_MAP: Record<string, string> = {
+  'glm-4-flash': 'glm-4-plus',
+  'glm-4-plus': 'glm-4-flash',
+  'glm-4-long': 'glm-4-plus',
+  'gpt-4o': 'glm-4-plus',
+  'gpt-4o-mini': 'glm-4-flash',
+  'claude-sonnet-4-20250514': 'glm-4-plus',
+  'claude-haiku-4-20250414': 'glm-4-flash',
+  'gemini-2.5-flash': 'glm-4-flash',
+  'gemini-2.5-pro': 'glm-4-plus',
+};
+
+const OPENAI_MODELS = ['gpt-4o-mini', 'gpt-4o'] as const;
+const ANTHROPIC_MODELS = ['claude-haiku-4-20250414', 'claude-sonnet-4-20250514'] as const;
+const GOOGLE_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'] as const;
+const MODEL_ROTATION_ORDER = [
+  'glm-4-flash',
+  'glm-4-plus',
+  'glm-4-long',
+  'gpt-4o-mini',
+  'gpt-4o',
+  'claude-haiku-4-20250414',
+  'claude-sonnet-4-20250514',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+] as const;
+
+let modelRotationIndex = 0;
 
 function hasProviderCredentials(provider: AIProvider): boolean {
   switch (provider) {
-    case 'glm':       return Boolean(getProviderApiKey('glm') || process.env.ZAI_SDK_FALLBACK === '1');
-    case 'openai':    return Boolean(getProviderApiKey('openai'));
-    case 'anthropic': return Boolean(getProviderApiKey('anthropic'));
-    case 'google':    return Boolean(getProviderApiKey('google'));
-    case 'pekpik':    return hasPekpikCredentials();
-    case 'nvidia':    return hasNvidiaCredentials();
-    default:          return false;
+    case 'glm':
+      // GLM works with ZHIPU_API_KEY, or explicitly enabled SDK fallback.
+      return Boolean(getProviderApiKey('glm') || process.env.ZAI_SDK_FALLBACK === '1');
+    case 'openai':
+      return Boolean(getProviderApiKey('openai'));
+    case 'anthropic':
+      return Boolean(getProviderApiKey('anthropic'));
+    case 'google':
+      return Boolean(getProviderApiKey('google'));
+    default:
+      return false;
   }
 }
 
-const NVIDIA_MODEL_IDS_FAST_FIRST = [...NVIDIA_MODELS]
-  .sort((a, b) => {
-    const speedOrder = { fast: 0, medium: 1, slow: 2 };
-    const speedDiff = speedOrder[a.speed] - speedOrder[b.speed];
-    return speedDiff !== 0 ? speedDiff : b.baseScore - a.baseScore;
-  })
-  .map((m) => m.id);
-
-const OPENAI_MODELS    = ['gpt-4o-mini', 'gpt-4o'] as const;
-const ANTHROPIC_MODELS = ['claude-haiku-4-20250414', 'claude-sonnet-4-20250514'] as const;
-const GOOGLE_MODELS    = ['gemini-2.5-flash', 'gemini-2.5-pro'] as const;
-
-void OPENAI_MODELS;
-void ANTHROPIC_MODELS;
-void GOOGLE_MODELS;
-void NVIDIA_MODEL_IDS_FAST_FIRST;
-
-// ---- Task-specific model routing ----
-
-export type AITaskType = 'parse' | 'analyze' | 'score' | 'restructure' | 'cover_letter' | 'general';
-
-// Model chain design:
-//   Slots 1-2  = primary race pair — Llama-70b (fast, 20s) + Mistral (quality, 35s).
-//               Both free NVIDIA. Llama almost always responds first (~10s).
-//   Slot 3     = pekpik/gemini-2.5-flash — independent rate limit (120 RPM via 6 Pekpik keys),
-//               included in parse-cv race triple. Sequential fallback #1 for all other tasks.
-//   Slots 4-5  = more Pekpik models — high combined RPM, independent from NVIDIA quota:
-//               pekpik/kimi-k2.5 (60 RPM), pekpik/deepseek-chat (80 RPM)
-//   Slot 6     = gpt-5.4 (backward compat generic PEKPIK_API_KEY)
-//   Slots 7-8  = remaining NVIDIA free sequential fallbacks
-//   Slot 9     = pekpik/claude-opus-4-7 — quality model (25 RPM) for restructure/cover_letter
-//   Slot 10+   = paid providers — last resort only
-export const TASK_MODEL_PREFERENCES: Record<AITaskType, readonly string[]> = {
-  parse: [
-    // ── race triple (raceCount=3 in parse-cv route) ──
-    'meta/llama-3.3-70b-instruct',        // #1 fast NVIDIA, ~10s
-    'mistralai/mistral-medium-3.5-128b',  // #2 quality NVIDIA, ~25s
-    'pekpik/gemini-2.5-flash',            // #3 Pekpik — 120 RPM, independent quota
-    // ── Pekpik sequential fallbacks (high capacity) ──
-    'pekpik/kimi-k2.5',                   // 60 RPM
-    'pekpik/deepseek-chat',               // 80 RPM
-    'gpt-5.4',                            // generic PEKPIK_API_KEY (backward compat)
-    // ── NVIDIA free sequential fallbacks ──
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'moonshotai/kimi-k2-instruct',
-    // ── quality Pekpik fallback ──
-    'pekpik/claude-opus-4-7',             // 25 RPM
-    // ── paid last resort ──
-    'gemini-2.5-flash',
-    'gpt-4o-mini',
-    'glm-4-flash',
-    'claude-haiku-4-20250414',
-  ],
-  analyze: [
-    // ── race pair (raceCount=2) ──
-    'meta/llama-3.3-70b-instruct',
-    'mistralai/mistral-medium-3.5-128b',
-    // ── Pekpik sequential fallbacks ──
-    'pekpik/gemini-2.5-flash',            // 120 RPM
-    'pekpik/deepseek-chat',               // 80 RPM
-    'pekpik/kimi-k2.5',                   // 60 RPM
-    'gpt-5.4',
-    // ── NVIDIA free sequential fallbacks ──
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'moonshotai/kimi-k2-instruct',
-    // ── paid last resort ──
-    'gemini-2.5-flash',
-    'gpt-4o-mini',
-    'glm-4-flash',
-    'claude-haiku-4-20250414',
-    'deepseek-ai/deepseek-r1-0528',
-  ],
-  score: [
-    // ── single model (raceCount=1) ──
-    'meta/llama-3.3-70b-instruct',
-    'mistralai/mistral-medium-3.5-128b',
-    // ── Pekpik sequential fallbacks ──
-    'pekpik/gemini-2.5-flash',
-    'pekpik/deepseek-chat',
-    'gpt-5.4',
-    // ── NVIDIA free fallbacks ──
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'moonshotai/kimi-k2-instruct',
-    // ── paid last resort ──
-    'gemini-2.5-flash',
-    'gpt-4o-mini',
-    'glm-4-flash',
-  ],
-  restructure: [
-    // ── race pair (raceCount=2) ──
-    'meta/llama-3.3-70b-instruct',
-    'mistralai/mistral-medium-3.5-128b',
-    // ── Pekpik sequential fallbacks (ordered by quality then capacity) ──
-    'pekpik/claude-opus-4-7',             // high quality for restructuring
-    'pekpik/gemini-2.5-flash',            // 120 RPM
-    'pekpik/kimi-k2.5',                   // 60 RPM
-    'pekpik/deepseek-chat',               // 80 RPM
-    'gpt-5.4',
-    // ── NVIDIA free sequential fallbacks ──
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'moonshotai/kimi-k2-instruct',
-    'deepseek-ai/deepseek-r1-0528',
-    // ── paid last resort ──
-    'claude-sonnet-4-20250514',
-    'gpt-4o',
-    'gemini-2.5-pro',
-    'gemini-2.5-flash',
-    'gpt-4o-mini',
-    'glm-4-plus',
-    'glm-4-long',
-    'glm-4-flash',
-  ],
-  cover_letter: [
-    // ── race pair (raceCount=2) ──
-    'meta/llama-3.3-70b-instruct',
-    'mistralai/mistral-medium-3.5-128b',
-    // ── Pekpik sequential fallbacks ──
-    'pekpik/claude-opus-4-7',             // high quality for writing
-    'pekpik/gemini-2.5-flash',            // 120 RPM
-    'pekpik/kimi-k2.5',                   // 60 RPM
-    'gpt-5.4',
-    // ── NVIDIA free sequential fallbacks ──
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'moonshotai/kimi-k2-instruct',
-    // ── paid last resort ──
-    'claude-sonnet-4-20250514',
-    'gpt-4o',
-    'gemini-2.5-pro',
-    'gemini-2.5-flash',
-    'gpt-4o-mini',
-    'glm-4-plus',
-    'glm-4-flash',
-  ],
-  general: [
-    // ── race pair (raceCount=2) ──
-    'meta/llama-3.3-70b-instruct',
-    'mistralai/mistral-medium-3.5-128b',
-    // ── Pekpik sequential fallbacks ──
-    'pekpik/gemini-2.5-flash',
-    'pekpik/deepseek-chat',
-    'pekpik/kimi-k2.5',
-    'gpt-5.4',
-    // ── NVIDIA free sequential fallbacks ──
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'moonshotai/kimi-k2-instruct',
-    'deepseek-ai/deepseek-r1-0528',
-    // ── paid last resort ──
-    'gemini-2.5-flash',
-    'gpt-4o-mini',
-    'glm-4-flash',
-  ],
-};
-
-export function getPreferredModelsForTask(task: AITaskType): readonly string[] {
-  return TASK_MODEL_PREFERENCES[task];
+function getProviderModelFallbacks(provider: AIProvider): string[] {
+  switch (provider) {
+    case 'openai':
+      return [...OPENAI_MODELS];
+    case 'anthropic':
+      return [...ANTHROPIC_MODELS];
+    case 'google':
+      return [...GOOGLE_MODELS];
+    case 'glm':
+      return ['glm-4-flash', 'glm-4-plus'];
+    default:
+      return [];
+  }
 }
 
-export function pickBestModelForTask(task: AITaskType): string {
-  for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
-    getNvidiaSlotConfig(slot);
+function buildFallbackChain(primaryModel: string): string[] {
+  const primaryProvider = getProvider(primaryModel);
+  const chain: string[] = [primaryModel];
+
+  const directFallback = FALLBACK_MODEL_MAP[primaryModel];
+  if (directFallback) chain.push(directFallback);
+
+  for (const model of getProviderModelFallbacks(primaryProvider)) {
+    chain.push(model);
   }
-  for (const modelId of TASK_MODEL_PREFERENCES[task]) {
-    const provider = getProvider(modelId);
-    if (!hasProviderCredentials(provider)) continue;
-    if (provider === 'nvidia' && !isNvidiaModelHealthy(modelId)) continue;
-    return modelId;
+
+  if (hasProviderCredentials('openai')) {
+    chain.push(...OPENAI_MODELS);
   }
-  return hasProviderCredentials('glm') || process.env.ZAI_SDK_FALLBACK === '1'
-    ? 'glm-4-flash'
-    : 'glm-4-flash';
+  if (hasProviderCredentials('anthropic')) {
+    chain.push(...ANTHROPIC_MODELS);
+  }
+  if (hasProviderCredentials('google')) {
+    chain.push(...GOOGLE_MODELS);
+  }
+
+  // Always keep GLM as a last-resort path for Z.ai runtime / ZHIPU_API_KEY setups.
+  chain.push('glm-4-flash', 'glm-4-plus');
+
+  return [...new Set(chain)].filter(Boolean);
 }
 
-export async function callAIRaceForTask(
-  task: AITaskType,
+export function getNextRotatingModel(preferredModel?: string): string {
+  const seed = preferredModel || 'glm-4-flash';
+  const pool = [
+    ...MODEL_ROTATION_ORDER,
+    ...buildFallbackChain(seed),
+  ];
+
+  const enabled = [...new Set(pool)].filter((model) => hasProviderCredentials(getProvider(model)));
+  if (enabled.length === 0) return seed;
+
+  const idx = modelRotationIndex % enabled.length;
+  modelRotationIndex = (modelRotationIndex + 1) % enabled.length;
+  return enabled[idx];
+}
+
+export async function callAIWithFallback(
   messages: AIMessage[],
-  raceCount = 3, // Bumped from 2 to 3 — more parallel racers = faster first response
-  temperature?: number,
-  hintModel?: string,
+  modelId: string,
+  _complexity?: 'simple' | 'standard' | 'complex',
+  temperature?: number
 ): Promise<AIResponse> {
-  for (const slot of ['MISTRAL', 'DEEPSEEK', 'KIMI'] as NvidiaSlot[]) {
-    getNvidiaSlotConfig(slot);
-  }
+  const candidates = buildFallbackChain(modelId);
+  const failedProviders = new Set<AIProvider>();
+  const diagnostics: AIProviderFailureDiagnostic[] = [];
 
-  const prefs = [...TASK_MODEL_PREFERENCES[task]];
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    const provider = getProvider(candidate);
 
-  if (hintModel && !prefs.includes(hintModel)) prefs.unshift(hintModel);
-  else if (hintModel) {
-    const idx = prefs.indexOf(hintModel);
-    if (idx > 0) { prefs.splice(idx, 1); prefs.unshift(hintModel); }
-  }
-
-  const eligible: string[] = prefs.filter((m) => {
-    const p = getProvider(m);
-    if (!hasProviderCredentials(p)) return false;
-    if (p === 'nvidia' && !isNvidiaModelHealthy(m)) return false;
-    return true;
-  });
-
-  for (const glmId of ['glm-4-flash', 'glm-4-plus']) {
-    if (!eligible.includes(glmId) && hasProviderCredentials('glm')) {
-      eligible.push(glmId);
+    if (!hasProviderCredentials(provider)) {
+      continue;
     }
-  }
 
-  if (eligible.length === 0) {
-    throw new AIModelFailedError([{
-      provider: 'glm',
-      model: 'glm-4-flash',
-      kind: 'missing_key',
-      message: [
-        'No eligible models for task. Configure at least one of:',
-        'NVIDIA_MISTRAL_KEYS, NVIDIA_MISTRAL_KEY,',
-        'NVIDIA_DEEPSEEK_KEYS, NVIDIA_DEEPSEEK_KEY,',
-        'NVIDIA_KIMI_KEYS, NVIDIA_KIMI_KEY,',
-        'OPENAI_API_KEY, ANTHROPIC_API_KEY,',
-        'GOOGLE_AI_API_KEY, or ZHIPU_API_KEY',
-        'in Vercel → Project → Settings → Environment Variables.',
-        'Visit /api/env-check for a live diagnostic.',
-      ].join(' '),
-    }]);
-  }
-
-  const callModel = async (modelId: string): Promise<AIResponse> => {
-    const provider = getProvider(modelId);
-    let content: string | null = null;
-    switch (provider) {
-      case 'nvidia':    content = await callNvidia(messages, modelId, temperature); break;
-      case 'openai':    content = await callOpenAI(messages, modelId, temperature); break;
-      case 'anthropic': content = await callAnthropic(messages, modelId, temperature); break;
-      case 'google':    content = await callGemini(messages, modelId, temperature); break;
-      case 'pekpik':    content = await callPekpik(messages, modelId, temperature); break;
-      default:          content = await callGLM(messages, modelId); break;
+    if (failedProviders.has(provider)) {
+      continue;
     }
-    if (!content) throw new Error(`Empty response from ${modelId}`);
-    return { content, model: modelId, provider };
-  };
 
-  const racers = eligible.slice(0, Math.min(raceCount, eligible.length));
-  try {
-    return await Promise.any(racers.map(callModel));
-  } catch {
-    const remaining = eligible.slice(racers.length);
-    const diagnostics: AIProviderFailureDiagnostic[] = [];
-    for (const modelId of remaining) {
-      const provider = getProvider(modelId);
-      try {
-        return await callModel(modelId);
-      } catch (err) {
-        if (err instanceof AIProviderError) diagnostics.push(err.diagnostic);
-        else diagnostics.push({ provider, model: modelId, kind: 'unknown_error', message: err instanceof Error ? err.message : String(err) });
+    if (i > 0) {
+      console.warn(`[AI] Model ${modelId} failed, trying fallback ${candidate}`);
+    }
+
+    try {
+      // Call provider functions without swallowing errors so we can surface diagnostics.
+      let content: string | null = null;
+      switch (provider) {
+        case 'glm':
+          content = await callGLM(messages, candidate);
+          break;
+        case 'openai':
+          content = await callOpenAI(messages, candidate, temperature);
+          break;
+        case 'anthropic':
+          content = await callAnthropic(messages, candidate, temperature);
+          break;
+        case 'google':
+          content = await callGemini(messages, candidate, temperature);
+          break;
+        default:
+          content = await callGLM(messages, candidate);
       }
+
+      if (content) {
+        return { content, model: candidate, provider };
+      }
+
+      diagnostics.push({
+        provider,
+        model: candidate,
+        kind: 'provider_error',
+        message: 'Empty response',
+      });
+      failedProviders.add(provider);
+    } catch (err) {
+      if (err instanceof AIProviderError) {
+        diagnostics.push(err.diagnostic);
+      } else {
+        diagnostics.push({
+          provider,
+          model: candidate,
+          kind: 'unknown_error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+      failedProviders.add(provider);
     }
-    throw new AIModelFailedError(diagnostics);
+  }
+
+  throw new AIModelFailedError(diagnostics);
+}
+
+export function getRequiredEnvKey(provider: AIProvider): string | null {
+  switch (provider) {
+    case 'glm': return null;
+    case 'openai': return 'OPENAI_API_KEY';
+    case 'anthropic': return 'ANTHROPIC_API_KEY';
+    case 'google': return 'GOOGLE_AI_API_KEY';
+    default: return null;
   }
 }
