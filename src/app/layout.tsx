@@ -18,7 +18,7 @@ const appMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://royokola.com"),
+  metadataBase: new URL("https://cv-builder.rauell.systems"),
   title: {
     default: "Roy Okola Otieno | Software Architect & Clean-Energy Developer",
     template: "%s | Roy Okola Otieno",
@@ -40,13 +40,19 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
+  verification: {
+    google: "YopMsxRCWbWYZU_ANAhcwd6ggCeArux5CR37WuXqXXA",
+    other: {
+      "msvalidate.01": "66CE208CF02793B41D19362E121494C6",
+    },
+  },
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
   openGraph: {
     title: "Roy Okola Otieno | Software Architect & Clean-Energy Developer",
     description: "Discover clean-energy platforms, e-mobility systems like Safaricharge, and engineering productivity tools.",
-    url: "https://royokola.com",
+    url: "https://cv-builder.rauell.systems",
     siteName: "Roy Okola Otieno Portfolio & Lab",
     type: "website",
     locale: "en_US",
@@ -66,10 +72,10 @@ export default function RootLayout({
   const orgJsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    "@id": "https://royokola.com/#organization",
+    "@id": "https://cv-builder.rauell.systems/#organization",
     "name": "Roy Okola Otieno Portfolio & Lab",
-    "url": "https://royokola.com",
-    "logo": "https://royokola.com/logo.png",
+    "url": "https://cv-builder.rauell.systems",
+    "logo": "https://cv-builder.rauell.systems/logo.png",
     "sameAs": [
       "https://github.com/rauell1",
       "https://x.com"
@@ -79,10 +85,10 @@ export default function RootLayout({
   const personJsonLd = {
     "@context": "https://schema.org",
     "@type": "Person",
-    "@id": "https://royokola.com/#person",
+    "@id": "https://cv-builder.rauell.systems/#person",
     "name": "Roy Okola Otieno",
-    "url": "https://royokola.com",
-    "image": "https://royokola.com/avatar.jpg",
+    "url": "https://cv-builder.rauell.systems",
+    "image": "https://cv-builder.rauell.systems/avatar.jpg",
     "jobTitle": "Senior Software Architect & Clean-Energy Tech Lead",
     "description": "Architecting electric vehicle charging software (Safaricharge), clean-energy systems (Greenwave), and AI-driven platforms.",
     "sameAs": [

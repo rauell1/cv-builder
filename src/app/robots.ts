@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://royokola.com';
+  const baseUrl = 'https://cv-builder.rauell.systems';
   return {
     rules: {
       userAgent: '*',

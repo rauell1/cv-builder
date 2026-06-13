@@ -103,7 +103,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     openGraph: {
       title: `${project.title} | Roy Okola Otieno Project`,
       description: project.description,
-      url: `https://royokola.com/projects/${project.slug}`,
+      url: `https://cv-builder.rauell.systems/projects/${project.slug}`,
       type: 'article',
     },
   };
@@ -123,15 +123,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
   const projectSchema = {
     "@context": "https://schema.org",
     "@type": "Project",
-    "@id": `https://royokola.com/projects/${project.slug}/#project`,
+    "@id": `https://cv-builder.rauell.systems/projects/${project.slug}/#project`,
     "name": project.title,
     "description": project.description,
-    "url": `https://royokola.com/projects/${project.slug}`,
+    "url": `https://cv-builder.rauell.systems/projects/${project.slug}`,
     "category": project.category,
     "creator": {
       "@type": "Person",
       "name": "Roy Okola Otieno",
-      "url": "https://royokola.com"
+      "url": "https://cv-builder.rauell.systems"
     },
     "provider": {
       "@type": "Organization",

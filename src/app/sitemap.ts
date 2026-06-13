@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://royokola.com';
+  const baseUrl = 'https://cv-builder.rauell.systems';
 
   const baseRoutes = [
     {
