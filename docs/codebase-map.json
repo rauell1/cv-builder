@@ -1,23 +1,224 @@
 {
   "version": {
-    "commit": "b9e5eb95113c7eacb140e8e1d19a1562c1ce0dd6",
-    "short": "b9e5eb9",
-    "generatedAt": "2026-04-11T01:41:54.329Z",
-    "baseCommit": "2ba2afed5a410e1b84c0b94b8bbad8df47b2b4d0",
+    "commit": "0f14c816308c4656e13162f0ab8b70b68a74d357",
+    "short": "0f14c81",
+    "generatedAt": "2026-06-13T14:41:19.013Z",
+    "baseCommit": "b9e5eb95113c7eacb140e8e1d19a1562c1ce0dd6",
     "changeSummary": [
-      "M\tdocs/codebase-map.json",
-      "M\tdocs/codebase-map.md"
+      "(could not diff against previous map commit)"
     ],
-    "diffStat": " docs/codebase-map.json | 37 +++++++++++++++++++++++++------------\n docs/codebase-map.md   | 21 +++++++++++++++++----\n 2 files changed, 42 insertions(+), 16 deletions(-)\n"
+    "diffStat": ""
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
     "incremental": false,
-    "hashChangedFiles": [],
-    "newFiles": [],
+    "hashChangedFiles": [
+      "middleware.ts",
+      "next.config.ts",
+      "prisma/schema.prisma",
+      "src/app/api/ai-chat/route.ts",
+      "src/app/api/analyze-job/route.ts",
+      "src/app/api/enhance-achievements/route.ts",
+      "src/app/api/extract-file/route.ts",
+      "src/app/api/generate-cover-letter-pdf/route.ts",
+      "src/app/api/generate-cover-letter/route.ts",
+      "src/app/api/generate-insights/route.ts",
+      "src/app/api/generate-pdf/route.ts",
+      "src/app/api/generate-script/route.ts",
+      "src/app/api/health/route.ts",
+      "src/app/api/parse-cv/route.ts",
+      "src/app/api/restructure-cv/route.ts",
+      "src/app/api/route.ts",
+      "src/app/api/score-cv/route.ts",
+      "src/app/builder/page.tsx",
+      "src/app/error.tsx",
+      "src/app/layout.tsx",
+      "src/app/not-found.tsx",
+      "src/app/page.tsx",
+      "src/app/projects/[slug]/page.tsx",
+      "src/app/projects/page.tsx",
+      "src/app/robots.ts",
+      "src/app/sitemap.ts",
+      "src/components/cv-builder/cv-input-step.tsx",
+      "src/components/cv-builder/job-desc-step.tsx",
+      "src/components/cv-builder/landing-page.tsx",
+      "src/components/cv-builder/output-step.tsx",
+      "src/components/cv-builder/processing-step.tsx",
+      "src/components/cv-builder/step-indicator.tsx",
+      "src/components/error-boundary.tsx",
+      "src/components/ui/accordion.tsx",
+      "src/components/ui/alert-dialog.tsx",
+      "src/components/ui/alert.tsx",
+      "src/components/ui/aspect-ratio.tsx",
+      "src/components/ui/avatar.tsx",
+      "src/components/ui/badge.tsx",
+      "src/components/ui/breadcrumb.tsx",
+      "src/components/ui/button.tsx",
+      "src/components/ui/calendar.tsx",
+      "src/components/ui/card.tsx",
+      "src/components/ui/carousel.tsx",
+      "src/components/ui/chart.tsx",
+      "src/components/ui/checkbox.tsx",
+      "src/components/ui/collapsible.tsx",
+      "src/components/ui/command.tsx",
+      "src/components/ui/context-menu.tsx",
+      "src/components/ui/dialog.tsx",
+      "src/components/ui/drawer.tsx",
+      "src/components/ui/dropdown-menu.tsx",
+      "src/components/ui/form.tsx",
+      "src/components/ui/hover-card.tsx",
+      "src/components/ui/input-otp.tsx",
+      "src/components/ui/input.tsx",
+      "src/components/ui/label.tsx",
+      "src/components/ui/menubar.tsx",
+      "src/components/ui/navigation-menu.tsx",
+      "src/components/ui/pagination.tsx",
+      "src/components/ui/popover.tsx",
+      "src/components/ui/progress.tsx",
+      "src/components/ui/radio-group.tsx",
+      "src/components/ui/resizable.tsx",
+      "src/components/ui/scroll-area.tsx",
+      "src/components/ui/select.tsx",
+      "src/components/ui/separator.tsx",
+      "src/components/ui/sheet.tsx",
+      "src/components/ui/sidebar.tsx",
+      "src/components/ui/skeleton.tsx",
+      "src/components/ui/slider.tsx",
+      "src/components/ui/sonner.tsx",
+      "src/components/ui/switch.tsx",
+      "src/components/ui/table.tsx",
+      "src/components/ui/tabs.tsx",
+      "src/components/ui/textarea.tsx",
+      "src/components/ui/toast.tsx",
+      "src/components/ui/toaster.tsx",
+      "src/components/ui/toggle-group.tsx",
+      "src/components/ui/toggle.tsx",
+      "src/components/ui/tooltip.tsx",
+      "src/hooks/use-mobile.ts",
+      "src/hooks/use-toast.ts",
+      "src/instrumentation.ts",
+      "src/lib/ai-provider.ts",
+      "src/lib/ai-rate-limit-paths.ts",
+      "src/lib/api-calls.ts",
+      "src/lib/config.ts",
+      "src/lib/cv-store.ts",
+      "src/lib/cv-types.ts",
+      "src/lib/db.ts",
+      "src/lib/pdf-utils.ts",
+      "src/lib/rate-limit.ts",
+      "src/lib/rate-limiter.ts",
+      "src/lib/request-queue.ts",
+      "src/lib/response-cache.ts",
+      "src/lib/sdk-retry.ts",
+      "src/lib/text-cleaning.ts",
+      "src/lib/utils.ts",
+      "watchdog.ts"
+    ],
+    "newFiles": [
+      "middleware.ts",
+      "next.config.ts",
+      "prisma/schema.prisma",
+      "src/app/api/ai-chat/route.ts",
+      "src/app/api/analyze-job/route.ts",
+      "src/app/api/enhance-achievements/route.ts",
+      "src/app/api/extract-file/route.ts",
+      "src/app/api/generate-cover-letter-pdf/route.ts",
+      "src/app/api/generate-cover-letter/route.ts",
+      "src/app/api/generate-insights/route.ts",
+      "src/app/api/generate-pdf/route.ts",
+      "src/app/api/generate-script/route.ts",
+      "src/app/api/health/route.ts",
+      "src/app/api/parse-cv/route.ts",
+      "src/app/api/restructure-cv/route.ts",
+      "src/app/api/route.ts",
+      "src/app/api/score-cv/route.ts",
+      "src/app/builder/page.tsx",
+      "src/app/error.tsx",
+      "src/app/layout.tsx",
+      "src/app/not-found.tsx",
+      "src/app/page.tsx",
+      "src/app/projects/[slug]/page.tsx",
+      "src/app/projects/page.tsx",
+      "src/app/robots.ts",
+      "src/app/sitemap.ts",
+      "src/components/cv-builder/cv-input-step.tsx",
+      "src/components/cv-builder/job-desc-step.tsx",
+      "src/components/cv-builder/landing-page.tsx",
+      "src/components/cv-builder/output-step.tsx",
+      "src/components/cv-builder/processing-step.tsx",
+      "src/components/cv-builder/step-indicator.tsx",
+      "src/components/error-boundary.tsx",
+      "src/components/ui/accordion.tsx",
+      "src/components/ui/alert-dialog.tsx",
+      "src/components/ui/alert.tsx",
+      "src/components/ui/aspect-ratio.tsx",
+      "src/components/ui/avatar.tsx",
+      "src/components/ui/badge.tsx",
+      "src/components/ui/breadcrumb.tsx",
+      "src/components/ui/button.tsx",
+      "src/components/ui/calendar.tsx",
+      "src/components/ui/card.tsx",
+      "src/components/ui/carousel.tsx",
+      "src/components/ui/chart.tsx",
+      "src/components/ui/checkbox.tsx",
+      "src/components/ui/collapsible.tsx",
+      "src/components/ui/command.tsx",
+      "src/components/ui/context-menu.tsx",
+      "src/components/ui/dialog.tsx",
+      "src/components/ui/drawer.tsx",
+      "src/components/ui/dropdown-menu.tsx",
+      "src/components/ui/form.tsx",
+      "src/components/ui/hover-card.tsx",
+      "src/components/ui/input-otp.tsx",
+      "src/components/ui/input.tsx",
+      "src/components/ui/label.tsx",
+      "src/components/ui/menubar.tsx",
+      "src/components/ui/navigation-menu.tsx",
+      "src/components/ui/pagination.tsx",
+      "src/components/ui/popover.tsx",
+      "src/components/ui/progress.tsx",
+      "src/components/ui/radio-group.tsx",
+      "src/components/ui/resizable.tsx",
+      "src/components/ui/scroll-area.tsx",
+      "src/components/ui/select.tsx",
+      "src/components/ui/separator.tsx",
+      "src/components/ui/sheet.tsx",
+      "src/components/ui/sidebar.tsx",
+      "src/components/ui/skeleton.tsx",
+      "src/components/ui/slider.tsx",
+      "src/components/ui/sonner.tsx",
+      "src/components/ui/switch.tsx",
+      "src/components/ui/table.tsx",
+      "src/components/ui/tabs.tsx",
+      "src/components/ui/textarea.tsx",
+      "src/components/ui/toast.tsx",
+      "src/components/ui/toaster.tsx",
+      "src/components/ui/toggle-group.tsx",
+      "src/components/ui/toggle.tsx",
+      "src/components/ui/tooltip.tsx",
+      "src/hooks/use-mobile.ts",
+      "src/hooks/use-toast.ts",
+      "src/instrumentation.ts",
+      "src/lib/ai-provider.ts",
+      "src/lib/ai-rate-limit-paths.ts",
+      "src/lib/api-calls.ts",
+      "src/lib/config.ts",
+      "src/lib/cv-store.ts",
+      "src/lib/cv-types.ts",
+      "src/lib/db.ts",
+      "src/lib/pdf-utils.ts",
+      "src/lib/rate-limit.ts",
+      "src/lib/rate-limiter.ts",
+      "src/lib/request-queue.ts",
+      "src/lib/response-cache.ts",
+      "src/lib/sdk-retry.ts",
+      "src/lib/text-cleaning.ts",
+      "src/lib/utils.ts",
+      "watchdog.ts"
+    ],
     "removedFiles": [],
     "packageJsonChanged": false,
-    "prismaChanged": false
+    "prismaChanged": true
   },
   "tree": [
     "middleware.ts",
@@ -54,10 +255,18 @@
     "      route.ts",
     "      score-cv/",
     "        route.ts",
+    "    builder/",
+    "      page.tsx",
     "    error.tsx",
     "    layout.tsx",
     "    not-found.tsx",
     "    page.tsx",
+    "    projects/",
+    "      [slug]/",
+    "        page.tsx",
+    "      page.tsx",
+    "    robots.ts",
+    "    sitemap.ts",
     "  components/",
     "    cv-builder/",
     "      cv-input-step.tsx",
@@ -225,6 +434,11 @@
       "risk": "medium"
     },
     {
+      "id": "src/app/builder/page.tsx",
+      "path": "src/app/builder/page.tsx",
+      "risk": "low"
+    },
+    {
       "id": "src/app/error.tsx",
       "path": "src/app/error.tsx",
       "risk": "low"
@@ -242,6 +456,26 @@
     {
       "id": "src/app/page.tsx",
       "path": "src/app/page.tsx",
+      "risk": "low"
+    },
+    {
+      "id": "src/app/projects/[slug]/page.tsx",
+      "path": "src/app/projects/[slug]/page.tsx",
+      "risk": "low"
+    },
+    {
+      "id": "src/app/projects/page.tsx",
+      "path": "src/app/projects/page.tsx",
+      "risk": "low"
+    },
+    {
+      "id": "src/app/robots.ts",
+      "path": "src/app/robots.ts",
+      "risk": "low"
+    },
+    {
+      "id": "src/app/sitemap.ts",
+      "path": "src/app/sitemap.ts",
       "risk": "low"
     },
     {
@@ -692,89 +926,190 @@
   ],
   "hotspots": [
     {
-      "file": "src/app/api/extract-file/route.ts",
-      "commitTouches": 15
+      "file": "src/lib/ai-provider.ts",
+      "commitTouches": 29
     },
     {
-      "file": "src/lib/ai-provider.ts",
-      "commitTouches": 14
+      "file": "src/app/api/extract-file/route.ts",
+      "commitTouches": 19
     },
     {
       "file": "src/app/api/parse-cv/route.ts",
-      "commitTouches": 8
+      "commitTouches": 18
     },
     {
       "file": "src/app/api/analyze-job/route.ts",
-      "commitTouches": 7
+      "commitTouches": 15
     },
     {
       "file": "src/components/cv-builder/cv-input-step.tsx",
-      "commitTouches": 7
-    },
-    {
-      "file": "src/app/api/ai-chat/route.ts",
-      "commitTouches": 6
-    },
-    {
-      "file": "src/lib/cv-types.ts",
-      "commitTouches": 4
-    },
-    {
-      "file": "src/app/layout.tsx",
-      "commitTouches": 4
-    },
-    {
-      "file": "src/app/api/generate-cover-letter-pdf/route.ts",
-      "commitTouches": 4
-    },
-    {
-      "file": "src/app/api/generate-pdf/route.ts",
-      "commitTouches": 4
+      "commitTouches": 12
     },
     {
       "file": "src/app/api/health/route.ts",
-      "commitTouches": 3
+      "commitTouches": 9
     },
     {
-      "file": "src/components/cv-builder/landing-page.tsx",
-      "commitTouches": 3
-    },
-    {
-      "file": "src/lib/api-calls.ts",
-      "commitTouches": 3
+      "file": "src/app/api/ai-chat/route.ts",
+      "commitTouches": 8
     },
     {
       "file": "src/app/api/generate-cover-letter/route.ts",
-      "commitTouches": 3
+      "commitTouches": 8
     },
     {
       "file": "src/app/api/restructure-cv/route.ts",
-      "commitTouches": 3
+      "commitTouches": 8
     },
     {
-      "file": "middleware.ts",
-      "commitTouches": 2
+      "file": "src/lib/api-calls.ts",
+      "commitTouches": 8
+    },
+    {
+      "file": "src/lib/cv-types.ts",
+      "commitTouches": 8
+    },
+    {
+      "file": "src/lib/request-queue.ts",
+      "commitTouches": 7
+    },
+    {
+      "file": "src/app/layout.tsx",
+      "commitTouches": 6
+    },
+    {
+      "file": "src/components/cv-builder/landing-page.tsx",
+      "commitTouches": 6
+    },
+    {
+      "file": "src/app/api/enhance-achievements/route.ts",
+      "commitTouches": 6
+    },
+    {
+      "file": "src/app/api/generate-cover-letter-pdf/route.ts",
+      "commitTouches": 6
+    },
+    {
+      "file": "src/app/api/generate-insights/route.ts",
+      "commitTouches": 6
+    },
+    {
+      "file": "src/app/api/generate-pdf/route.ts",
+      "commitTouches": 6
+    },
+    {
+      "file": "src/app/api/score-cv/route.ts",
+      "commitTouches": 6
     },
     {
       "file": "src/components/cv-builder/processing-step.tsx",
-      "commitTouches": 2
-    },
-    {
-      "file": "src/app/page.tsx",
-      "commitTouches": 2
-    },
-    {
-      "file": "src/components/cv-builder/job-desc-step.tsx",
-      "commitTouches": 2
-    },
-    {
-      "file": "src/lib/pdf-utils.ts",
-      "commitTouches": 2
+      "commitTouches": 6
     }
   ],
-  "affectedModules": [],
+  "affectedModules": [
+    "middleware.ts",
+    "next.config.ts",
+    "prisma/schema.prisma",
+    "src/app/api/ai-chat/route.ts",
+    "src/app/api/analyze-job/route.ts",
+    "src/app/api/enhance-achievements/route.ts",
+    "src/app/api/extract-file/route.ts",
+    "src/app/api/generate-cover-letter-pdf/route.ts",
+    "src/app/api/generate-cover-letter/route.ts",
+    "src/app/api/generate-insights/route.ts",
+    "src/app/api/generate-pdf/route.ts",
+    "src/app/api/generate-script/route.ts",
+    "src/app/api/health/route.ts",
+    "src/app/api/parse-cv/route.ts",
+    "src/app/api/restructure-cv/route.ts",
+    "src/app/api/route.ts",
+    "src/app/api/score-cv/route.ts",
+    "src/app/builder/page.tsx",
+    "src/app/error.tsx",
+    "src/app/layout.tsx",
+    "src/app/not-found.tsx",
+    "src/app/page.tsx",
+    "src/app/projects/[slug]/page.tsx",
+    "src/app/projects/page.tsx",
+    "src/app/robots.ts",
+    "src/app/sitemap.ts",
+    "src/components/cv-builder/cv-input-step.tsx",
+    "src/components/cv-builder/job-desc-step.tsx",
+    "src/components/cv-builder/landing-page.tsx",
+    "src/components/cv-builder/output-step.tsx",
+    "src/components/cv-builder/processing-step.tsx",
+    "src/components/cv-builder/step-indicator.tsx",
+    "src/components/error-boundary.tsx",
+    "src/components/ui/accordion.tsx",
+    "src/components/ui/alert-dialog.tsx",
+    "src/components/ui/alert.tsx",
+    "src/components/ui/aspect-ratio.tsx",
+    "src/components/ui/avatar.tsx",
+    "src/components/ui/badge.tsx",
+    "src/components/ui/breadcrumb.tsx",
+    "src/components/ui/button.tsx",
+    "src/components/ui/calendar.tsx",
+    "src/components/ui/card.tsx",
+    "src/components/ui/carousel.tsx",
+    "src/components/ui/chart.tsx",
+    "src/components/ui/checkbox.tsx",
+    "src/components/ui/collapsible.tsx",
+    "src/components/ui/command.tsx",
+    "src/components/ui/context-menu.tsx",
+    "src/components/ui/dialog.tsx",
+    "src/components/ui/drawer.tsx",
+    "src/components/ui/dropdown-menu.tsx",
+    "src/components/ui/form.tsx",
+    "src/components/ui/hover-card.tsx",
+    "src/components/ui/input-otp.tsx",
+    "src/components/ui/input.tsx",
+    "src/components/ui/label.tsx",
+    "src/components/ui/menubar.tsx",
+    "src/components/ui/navigation-menu.tsx",
+    "src/components/ui/pagination.tsx",
+    "src/components/ui/popover.tsx",
+    "src/components/ui/progress.tsx",
+    "src/components/ui/radio-group.tsx",
+    "src/components/ui/resizable.tsx",
+    "src/components/ui/scroll-area.tsx",
+    "src/components/ui/select.tsx",
+    "src/components/ui/separator.tsx",
+    "src/components/ui/sheet.tsx",
+    "src/components/ui/sidebar.tsx",
+    "src/components/ui/skeleton.tsx",
+    "src/components/ui/slider.tsx",
+    "src/components/ui/sonner.tsx",
+    "src/components/ui/switch.tsx",
+    "src/components/ui/table.tsx",
+    "src/components/ui/tabs.tsx",
+    "src/components/ui/textarea.tsx",
+    "src/components/ui/toast.tsx",
+    "src/components/ui/toaster.tsx",
+    "src/components/ui/toggle-group.tsx",
+    "src/components/ui/toggle.tsx",
+    "src/components/ui/tooltip.tsx",
+    "src/hooks/use-mobile.ts",
+    "src/hooks/use-toast.ts",
+    "src/instrumentation.ts",
+    "src/lib/ai-provider.ts",
+    "src/lib/ai-rate-limit-paths.ts",
+    "src/lib/api-calls.ts",
+    "src/lib/config.ts",
+    "src/lib/cv-store.ts",
+    "src/lib/cv-types.ts",
+    "src/lib/db.ts",
+    "src/lib/pdf-utils.ts",
+    "src/lib/rate-limit.ts",
+    "src/lib/rate-limiter.ts",
+    "src/lib/request-queue.ts",
+    "src/lib/response-cache.ts",
+    "src/lib/sdk-retry.ts",
+    "src/lib/text-cleaning.ts",
+    "src/lib/utils.ts",
+    "watchdog.ts"
+  ],
   "metrics": {
-    "fileCount": 95,
+    "fileCount": 100,
     "edgeCount": 3
   }
 }
