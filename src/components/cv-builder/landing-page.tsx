@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { useCVBuilderStore } from '@/lib/cv-store';
+import Link from 'next/link';
 import {
   AVAILABLE_MODELS,
   AI_PROVIDERS,
@@ -173,7 +173,6 @@ const fadeUp = {
 /* ── Component ─────────────────────────────────────────────── */
 
 export function LandingPage() {
-  const setStep = useCVBuilderStore((s) => s.setStep);
   const prefersReducedMotion = useReducedMotion();
 
   const scrollToSection = (sectionId: string) => {
@@ -248,12 +247,14 @@ export function LandingPage() {
 
           {/* CTA */}
           <Button
+            asChild
             size="sm"
-            onClick={() => setStep('cv-input')}
             className="h-8 px-4 text-xs bg-primary hover:bg-[#4434d4] text-white rounded-lg font-medium shadow-glow-sm transition-all duration-200 animate-pulse-ring"
           >
-            Get Started
-            <ArrowRight className="ml-1.5 w-3 h-3" />
+            <Link href="/builder">
+              Get Started
+              <ArrowRight className="ml-1.5 w-3 h-3" />
+            </Link>
           </Button>
         </div>
       </nav>
@@ -323,12 +324,14 @@ export function LandingPage() {
             {/* CTA Buttons */}
             <motion.div variants={itemVariants} className="flex items-center gap-3 flex-wrap justify-center">
               <Button
+                asChild
                 size="lg"
-                onClick={() => setStep('cv-input')}
                 className="h-13 px-9 text-sm bg-primary hover:bg-[#4434d4] text-white rounded-xl font-medium shadow-glow transition-all duration-200 hover:shadow-glow-sm"
               >
-                Build Your CV
-                <ArrowRight className="ml-2 w-4 h-4" />
+                <Link href="/builder">
+                  Build Your CV
+                  <ArrowRight className="ml-2 w-4 h-4" />
+                </Link>
               </Button>
               <Button
                 size="lg"
@@ -493,12 +496,14 @@ export function LandingPage() {
           {/* CTA under How It Works */}
           <motion.div variants={fadeUp} className="text-center mt-12">
             <Button
+              asChild
               size="lg"
-              onClick={() => setStep('cv-input')}
               className="h-12 px-8 text-sm bg-primary hover:bg-[#4434d4] text-white rounded-xl font-medium shadow-glow-sm transition-all duration-200"
             >
-              Start Building Now
-              <ArrowRight className="ml-2 w-4 h-4" />
+              <Link href="/builder">
+                Start Building Now
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Link>
             </Button>
           </motion.div>
         </motion.section>
@@ -684,12 +689,14 @@ export function LandingPage() {
                       </p>
                     </div>
                     <Button
+                      asChild
                       variant="outline"
-                      onClick={() => setStep('cv-input')}
                       className="shrink-0 border-primary/20 text-primary hover:bg-primary hover:text-white rounded-xl font-medium transition-all duration-200"
                     >
-                      Try It Now
-                      <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
+                      <Link href="/builder">
+                        Try It Now
+                        <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
+                      </Link>
                     </Button>
                   </div>
                 </CardContent>

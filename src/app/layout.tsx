@@ -18,24 +18,43 @@ const appMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI CV Builder - Intelligent Resume Optimization",
-  description: "Transform your CV with AI intelligence. Parse, analyze job descriptions, restructure your resume, and generate professional Europass PDFs powered by advanced AI models.",
-  keywords: ["CV Builder", "Resume", "AI", "Europass", "Job Application", "Career", "Tailored CV"],
-  authors: [{ name: "AI CV Builder" }],
+  metadataBase: new URL("https://royokola.com"),
+  title: {
+    default: "Roy Okola Otieno | Software Architect & Clean-Energy Developer",
+    template: "%s | Roy Okola Otieno",
+  },
+  description: "Personal portfolio of Roy Okola Otieno, featuring e-mobility, EV charging networks (Safaricharge), sustainability platforms (Greenwave), and AI-powered engineering tools (AI CV Builder).",
+  keywords: [
+    "Roy Okola Otieno",
+    "Software Architect Kenya",
+    "Safaricharge",
+    "Greenwave",
+    "Roam Energy",
+    "AI CV Builder",
+    "E-mobility Africa",
+    "Electric Vehicle Charging Kenya",
+    "Clean Tech Software Engineer",
+    "ATS Resume Optimizer"
+  ],
+  authors: [{ name: "Roy Okola Otieno" }],
+  alternates: {
+    canonical: "/",
+  },
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
   openGraph: {
-    title: "AI CV Builder - Intelligent Resume Optimization",
-    description: "Transform your CV with AI intelligence. Generate professional Europass PDFs.",
-    url: "https://chat.z.ai",
-    siteName: "AI CV Builder",
+    title: "Roy Okola Otieno | Software Architect & Clean-Energy Developer",
+    description: "Discover clean-energy platforms, e-mobility systems like Safaricharge, and engineering productivity tools.",
+    url: "https://royokola.com",
+    siteName: "Roy Okola Otieno Portfolio & Lab",
     type: "website",
+    locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "AI CV Builder - Intelligent Resume Optimization",
-    description: "Transform your CV with AI intelligence. Generate professional Europass PDFs.",
+    title: "Roy Okola Otieno | Software Architect & Clean-Energy Developer",
+    description: "Software engineering meets electric mobility and clean-energy infrastructure in East Africa.",
   },
 };
 
@@ -44,8 +63,53 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const orgJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": "https://royokola.com/#organization",
+    "name": "Roy Okola Otieno Portfolio & Lab",
+    "url": "https://royokola.com",
+    "logo": "https://royokola.com/logo.png",
+    "sameAs": [
+      "https://github.com/rauell1",
+      "https://x.com"
+    ]
+  };
+
+  const personJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "@id": "https://royokola.com/#person",
+    "name": "Roy Okola Otieno",
+    "url": "https://royokola.com",
+    "image": "https://royokola.com/avatar.jpg",
+    "jobTitle": "Senior Software Architect & Clean-Energy Tech Lead",
+    "description": "Architecting electric vehicle charging software (Safaricharge), clean-energy systems (Greenwave), and AI-driven platforms.",
+    "sameAs": [
+      "https://github.com/rauell1",
+      "https://x.com"
+    ],
+    "knowsAbout": [
+      "Software Engineering",
+      "Clean Mobility",
+      "Electric Vehicles",
+      "AI Systems",
+      "Next.js & Cloud Architecture"
+    ]
+  };
+
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+        />
+      </head>
       <body
         className={`${appSans.variable} ${appMono.variable} antialiased bg-background text-foreground`}
       >
@@ -56,3 +120,4 @@ export default function RootLayout({
     </html>
   );
 }
+
