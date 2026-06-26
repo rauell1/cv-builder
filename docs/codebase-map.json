@@ -1,28 +1,21 @@
 {
   "version": {
-    "commit": "d5bdcdffe181a1c68a495b36a124656f0e32d48a",
-    "short": "d5bdcdf",
-    "generatedAt": "2026-06-13T14:50:47.769Z",
-    "baseCommit": "0f14c816308c4656e13162f0ab8b70b68a74d357",
+    "commit": "83c5c76d443ceb0d73749c99b410ad5786671d86",
+    "short": "83c5c76",
+    "generatedAt": "2026-06-26T05:05:28.978Z",
+    "baseCommit": "d5bdcdffe181a1c68a495b36a124656f0e32d48a",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tsrc/app/layout.tsx",
-      "M\tsrc/app/projects/[slug]/page.tsx",
-      "M\tsrc/app/robots.ts",
-      "M\tsrc/app/sitemap.ts"
+      "M\tpackage-lock.json",
+      "M\tpackage.json"
     ],
-    "diffStat": " docs/codebase-map.json           | 433 ++++++++++++++++++++++++++++++++++-----\n docs/codebase-map.md             |  21 +-\n src/app/layout.tsx               |  22 +-\n src/app/projects/[slug]/page.tsx |   8 +-\n src/app/robots.ts                |   2 +-\n src/app/sitemap.ts               |   2 +-\n 6 files changed, 418 insertions(+), 70 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json | 326 ++--------------------------\n docs/codebase-map.md   |  17 +-\n package-lock.json      | 564 ++++++++++++++++++++++++++++++-------------------\n package.json           |   3 +\n 4 files changed, 381 insertions(+), 529 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": true,
-    "hashChangedFiles": [
-      "src/app/layout.tsx",
-      "src/app/projects/[slug]/page.tsx",
-      "src/app/robots.ts",
-      "src/app/sitemap.ts"
-    ],
+    "incremental": false,
+    "hashChangedFiles": [],
     "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
@@ -814,12 +807,7 @@
       "commitTouches": 6
     }
   ],
-  "affectedModules": [
-    "src/app/layout.tsx",
-    "src/app/projects/[slug]/page.tsx",
-    "src/app/robots.ts",
-    "src/app/sitemap.ts"
-  ],
+  "affectedModules": [],
   "metrics": {
     "fileCount": 100,
     "edgeCount": 3
