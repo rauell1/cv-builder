@@ -577,36 +577,44 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
 function resolveNvidiaParams(modelId: string): { url: string; modelName: string; apiKeys: string[] } {
   let url = 'https://integrate.api.nvidia.com/v1/chat/completions';
   let modelName = modelId;
-  let keysEnv: string | null = null;
+  let specificKeysStr: string | null = null;
 
   if (modelId.includes('glm-5.2') || modelId.includes('glm5')) {
     if (process.env.NVIDIA_GLM5_URL) url = process.env.NVIDIA_GLM5_URL;
-    keysEnv = process.env.NVIDIA_GLM5_KEYS || null;
+    specificKeysStr = process.env.NVIDIA_GLM5_KEYS || null;
   } else if (modelId.includes('nemotron') || modelId.includes('nemo')) {
     if (process.env.NVIDIA_NEMO_URL) url = process.env.NVIDIA_NEMO_URL;
     if (process.env.NVIDIA_NEMO_MODEL) modelName = process.env.NVIDIA_NEMO_MODEL;
   } else if (modelId.includes('deepseek')) {
     if (process.env.NVIDIA_DEEPSEEK_URL) url = process.env.NVIDIA_DEEPSEEK_URL;
     if (process.env.NVIDIA_DEEPSEEK_MODEL) modelName = process.env.NVIDIA_DEEPSEEK_MODEL;
-    keysEnv = process.env.NVIDIA_DEEPSEEK_KEYS || null;
+    specificKeysStr = process.env.NVIDIA_DEEPSEEK_KEYS || null;
   } else if (modelId.includes('kimi')) {
     if (process.env.NVIDIA_KIMI_URL) url = process.env.NVIDIA_KIMI_URL;
     if (process.env.NVIDIA_KIMI_MODEL) modelName = process.env.NVIDIA_KIMI_MODEL;
   } else if (modelId.includes('mistral')) {
     if (process.env.NVIDIA_MISTRAL_URL) url = process.env.NVIDIA_MISTRAL_URL;
     if (process.env.NVIDIA_MISTRAL_MODEL) modelName = process.env.NVIDIA_MISTRAL_MODEL;
-    keysEnv = process.env.NVIDIA_MISTRAL_KEYS || null;
+    specificKeysStr = process.env.NVIDIA_MISTRAL_KEYS || null;
   }
 
-  // Fall back to general NVIDIA key if model-specific keys are not set
-  if (!keysEnv) {
-    keysEnv = getProviderApiKey('nvidia');
+  const apiKeys: string[] = [];
+
+  // 1. Add model-specific keys first if configured
+  if (specificKeysStr) {
+    const parsed = specificKeysStr.split(',').map(k => k.trim()).filter(Boolean);
+    apiKeys.push(...parsed);
   }
 
-  // Parse comma-separated keys
-  const apiKeys = keysEnv
-    ? keysEnv.split(',').map(k => k.trim()).filter(Boolean)
-    : [];
+  // 2. Add general NVIDIA keys as fallback
+  const generalKeysStr = getProviderApiKey('nvidia');
+  if (generalKeysStr) {
+    const parsed = generalKeysStr.split(',').map(k => k.trim()).filter(Boolean);
+    apiKeys.push(...parsed);
+  }
+
+  // Remove duplicates while preserving order
+  const uniqueApiKeys = [...new Set(apiKeys)];
 
   // Ensure url ends with /chat/completions if it's just a base URL
   if (url && !url.endsWith('/chat/completions') && !url.endsWith('/completions')) {
@@ -617,7 +625,7 @@ function resolveNvidiaParams(modelId: string): { url: string; modelName: string;
     }
   }
 
-  return { url, modelName, apiKeys };
+  return { url, modelName, apiKeys: uniqueApiKeys };
 }
 
 async function callNvidia(messages: AIMessage[], modelId: string, temperature = 0.5, timeoutMs = 15_000): Promise<string | null> {
