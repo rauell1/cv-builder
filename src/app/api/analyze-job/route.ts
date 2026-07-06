@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
           { role: 'system', content: JOB_ANALYSIS_SYSTEM_PROMPT },
           { role: 'user', content: jobDescText },
         ],
-        getNextRotatingModel('nvidia/nemotron-3-ultra-550b-a55b'),
+        getNextRotatingModel('deepseek/deepseek-v4-pro'),
         'simple'
       ),
       'normal',

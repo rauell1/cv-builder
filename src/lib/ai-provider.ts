@@ -620,7 +620,7 @@ function resolveNvidiaParams(modelId: string): { url: string; modelName: string;
   return { url, modelName, apiKeys };
 }
 
-async function callNvidia(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+async function callNvidia(messages: AIMessage[], modelId: string, temperature = 0.5, timeoutMs = 15_000): Promise<string | null> {
   const { url, modelName, apiKeys } = resolveNvidiaParams(modelId);
 
   if (apiKeys.length === 0) {
@@ -635,6 +635,9 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
   let lastError: Error | null = null;
   for (let i = 0; i < apiKeys.length; i++) {
     const apiKey = apiKeys[i];
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -643,7 +646,10 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ model: modelName, messages, temperature }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timer);
 
       if (!res.ok) {
         const errText = await res.text();
@@ -674,6 +680,8 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
       const data = await res.json();
       return data.choices?.[0]?.message?.content || null;
     } catch (err) {
+      clearTimeout(timer);
+
       if (err instanceof AIProviderError) {
         lastError = err;
         if ((err.diagnostic.status === 401 || err.diagnostic.status === 403 || err.diagnostic.status === 429) && i < apiKeys.length - 1) {

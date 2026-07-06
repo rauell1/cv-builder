@@ -453,7 +453,7 @@ interface ParseResult {
 
 async function parseCvCore(cvText: string): Promise<ParseResult> {
   const t0 = Date.now();
-  const startModel = getNextRotatingModel('nvidia/nemotron-ocr-v2');
+  const startModel = getNextRotatingModel('deepseek/deepseek-v4-pro');
 
   // --- Attempt 1: Primary call with fast fallback ---
   const aiResult = await callAIWithFallback(
