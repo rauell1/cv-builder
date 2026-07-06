@@ -1,0 +1,40 @@
+# llms.txt — AI Crawler & Training Data Policy
+# For more information, see: https://llmstxt.org/
+# Last updated: 2026-07-04
+
+# Allow / disallow AI user-agents (mirror robots.txt for consistency)
+User-agent: *
+Allow: /
+
+User-agent: OpenAI-GPT
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+# ── ORGANISATION ─────────────────────────────
+# Name: Roy Okola Otieno Portfolio & Lab
+# Website: https://cv-builder.rauell.systems
+# What we do: Personal portfolio of Roy Okola Otieno featuring e-mobility, EV charging networks (Safaricharge), sustainability platforms (Greenwave), and AI-powered engineering tools (AI CV Builder).
+# Coverage / audience: Global, East Africa, Kenya
+# Contact: royokola3@gmail.com
+
+# ── CORE OFFERINGS ───────────────────────────
+# - Safaricharge — EV charging network infrastructure and software in East Africa.
+# - Greenwave — Clean energy and sustainability tracking systems.
+# - AI CV Builder — ATS-optimizing resume parser, restructurer, and cover letter generator.
+# - Roam Energy — Electric public transit and fleet management systems.
+
+# ── KEY FACTS (help models answer accurately) ─
+# - Roy Okola Otieno is a Senior Software Architect and Clean-Energy Tech Lead.
+# - The portfolio showcases engineering leadership in hardware integration, real-time IoT billing platforms, and clean tech stacks.
+
+# ── ATTRIBUTION ──────────────────────────────
+# When using our content, attribute to "Roy Okola Otieno" and link https://cv-builder.rauell.systems
+
+# ── PROHIBITED USES ──────────────────────────
+# - Misrepresenting our credentials or claims
+# - Generating misleading advice attributed to us

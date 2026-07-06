@@ -611,7 +611,7 @@ CRITICAL INSTRUCTIONS:
 If the page is empty or contains only images, return: [empty page]`
                 }
               ]
-            }], 'glm-4v-flash', 30_000),
+            }], 'nvidia/nemotron-ocr-v2', 30_000),
             'normal', 35_000
           );
           pageText = text?.trim() || '';
@@ -791,7 +791,7 @@ CRITICAL INSTRUCTIONS:
 If you cannot read any text, return: [unable to read]`
             }
           ]
-        }], 'glm-4v-flash', 10_000),
+        }], 'nvidia/nemotron-ocr-v2', 10_000),
         'normal', 12_000
       );
       if (text && text.trim() && !text.includes('[unable to read]')) return text;
@@ -947,11 +947,9 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
   const truncText = cvText.length > MAX_TEXT_FOR_LLM ? cvText.substring(0, MAX_TEXT_FOR_LLM) : cvText;
 
   const retryModels = [
-    'glm-4-flash',
-    'gpt-4o-mini',
-    'claude-haiku-4-20250414',
-    'gemini-2.5-flash',
-    'glm-4-plus',
+    'nvidia/nemotron-ocr-v2',
+    'deepseek/deepseek-v4-pro',
+    'nvidia/nemotron-3-ultra-550b-a55b',
   ] as const;
 
   // --- Attempt parsing with provider-aware fallbacks ---
@@ -1005,7 +1003,7 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
                 { role: 'system', content: 'You are a CV parser. Return ONLY valid JSON. Never leave fullName, email, or phone empty if they exist.' },
                 { role: 'user', content: `You MUST extract information from this CV into EXACTLY this JSON structure. Do NOT leave fullName, email, or phone empty if they exist. Return ONLY the JSON.\n\n${CV_PARSE_SYSTEM_PROMPT}\n\nCV TEXT:\n${truncText}` },
               ],
-              'glm-4-plus'
+              'deepseek/deepseek-v4-pro'
             ),
             'high',
             20_000

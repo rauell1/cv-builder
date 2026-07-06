@@ -33,7 +33,7 @@ async function getZAI() {
 
 // ---- Type Exports ----
 
-export type AIProvider = 'glm' | 'openai' | 'anthropic' | 'google';
+export type AIProvider = 'glm' | 'openai' | 'anthropic' | 'google' | 'nvidia';
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -87,6 +87,7 @@ const PROVIDER_KEY_ALIASES: Record<AIProvider, string[]> = {
   openai: ['OPENAI_API_KEY', 'OPENAI_KEY'],
   anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
   google: ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
+  nvidia: ['NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY'],
 };
 
 type ResolvedEnv = { value: string; source: string } | null;
@@ -132,6 +133,7 @@ export function getProviderKeyNames(provider: AIProvider): string[] {
 
 export function hasAnyProviderCredentials(): boolean {
   return (
+    Boolean(getProviderApiKey('nvidia')) ||
     Boolean(getProviderApiKey('glm')) ||
     Boolean(getProviderApiKey('openai')) ||
     Boolean(getProviderApiKey('anthropic')) ||
@@ -142,6 +144,7 @@ export function hasAnyProviderCredentials(): boolean {
 
 export function getProviderCredentialStatus(): Record<AIProvider, boolean> {
   return {
+    nvidia: Boolean(getProviderApiKey('nvidia')),
     glm: Boolean(getProviderApiKey('glm') || process.env.ZAI_SDK_FALLBACK === '1'),
     openai: Boolean(getProviderApiKey('openai')),
     anthropic: Boolean(getProviderApiKey('anthropic')),
@@ -181,6 +184,7 @@ export function getProviderCredentialDetails(): {
 // ---- Utility Functions ----
 
 export function getProvider(modelId: string): AIProvider {
+  if (modelId.startsWith('nvidia/') || modelId.startsWith('z-ai/') || modelId.startsWith('deepseek/')) return 'nvidia';
   if (modelId.startsWith('glm-')) return 'glm';
   if (modelId.startsWith('gpt-')) return 'openai';
   if (modelId.startsWith('claude-')) return 'anthropic';
@@ -204,11 +208,8 @@ export function estimateComplexity(
 }
 
 export function autoSelectModel(complexity: 'simple' | 'standard' | 'complex'): string {
-  switch (complexity) {
-    case 'complex': return 'glm-4-long';
-    case 'standard': return 'glm-4-plus';
-    case 'simple': return 'glm-4-flash';
-  }
+  // Consolidating on deepseek/deepseek-v4-pro for all writing and restructuring tasks.
+  return 'deepseek/deepseek-v4-pro';
 }
 
 // ---- Provider Implementations ----
@@ -573,6 +574,132 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
   }
 }
 
+function resolveNvidiaParams(modelId: string): { url: string; modelName: string; apiKeys: string[] } {
+  let url = 'https://integrate.api.nvidia.com/v1/chat/completions';
+  let modelName = modelId;
+  let keysEnv: string | null = null;
+
+  if (modelId.includes('glm-5.2') || modelId.includes('glm5')) {
+    if (process.env.NVIDIA_GLM5_URL) url = process.env.NVIDIA_GLM5_URL;
+    keysEnv = process.env.NVIDIA_GLM5_KEYS || null;
+  } else if (modelId.includes('nemotron') || modelId.includes('nemo')) {
+    if (process.env.NVIDIA_NEMO_URL) url = process.env.NVIDIA_NEMO_URL;
+    if (process.env.NVIDIA_NEMO_MODEL) modelName = process.env.NVIDIA_NEMO_MODEL;
+  } else if (modelId.includes('deepseek')) {
+    if (process.env.NVIDIA_DEEPSEEK_URL) url = process.env.NVIDIA_DEEPSEEK_URL;
+    if (process.env.NVIDIA_DEEPSEEK_MODEL) modelName = process.env.NVIDIA_DEEPSEEK_MODEL;
+    keysEnv = process.env.NVIDIA_DEEPSEEK_KEYS || null;
+  } else if (modelId.includes('kimi')) {
+    if (process.env.NVIDIA_KIMI_URL) url = process.env.NVIDIA_KIMI_URL;
+    if (process.env.NVIDIA_KIMI_MODEL) modelName = process.env.NVIDIA_KIMI_MODEL;
+  } else if (modelId.includes('mistral')) {
+    if (process.env.NVIDIA_MISTRAL_URL) url = process.env.NVIDIA_MISTRAL_URL;
+    if (process.env.NVIDIA_MISTRAL_MODEL) modelName = process.env.NVIDIA_MISTRAL_MODEL;
+    keysEnv = process.env.NVIDIA_MISTRAL_KEYS || null;
+  }
+
+  // Fall back to general NVIDIA key if model-specific keys are not set
+  if (!keysEnv) {
+    keysEnv = getProviderApiKey('nvidia');
+  }
+
+  // Parse comma-separated keys
+  const apiKeys = keysEnv
+    ? keysEnv.split(',').map(k => k.trim()).filter(Boolean)
+    : [];
+
+  // Ensure url ends with /chat/completions if it's just a base URL
+  if (url && !url.endsWith('/chat/completions') && !url.endsWith('/completions')) {
+    if (url.endsWith('/v1') || url.endsWith('/v1/')) {
+      url = url.replace(/\/+$/, '') + '/chat/completions';
+    } else {
+      url = url.replace(/\/+$/, '') + '/v1/chat/completions';
+    }
+  }
+
+  return { url, modelName, apiKeys };
+}
+
+async function callNvidia(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+  const { url, modelName, apiKeys } = resolveNvidiaParams(modelId);
+
+  if (apiKeys.length === 0) {
+    throw new AIProviderError({
+      provider: 'nvidia',
+      model: modelId,
+      kind: 'missing_key',
+      message: `Missing API key for ${modelId}. Configure NVIDIA_API_KEY or model-specific keys (e.g., NVIDIA_DEEPSEEK_KEYS).`,
+    });
+  }
+
+  let lastError: Error | null = null;
+  for (let i = 0; i < apiKeys.length; i++) {
+    const apiKey = apiKeys[i];
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model: modelName, messages, temperature }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        const snippet = errText.substring(0, 400);
+        
+        // If 401, 403, or 429, retry with the next key if available
+        if ((res.status === 401 || res.status === 403 || res.status === 429) && i < apiKeys.length - 1) {
+          console.warn(`[AI] NVIDIA key ${i + 1}/${apiKeys.length} failed with status ${res.status}. Trying next key...`);
+          lastError = new AIProviderError({
+            provider: 'nvidia',
+            model: modelId,
+            kind: 'http_error',
+            status: res.status,
+            message: snippet || `HTTP ${res.status}`,
+          });
+          continue;
+        }
+
+        throw new AIProviderError({
+          provider: 'nvidia',
+          model: modelId,
+          kind: 'http_error',
+          status: res.status,
+          message: snippet || `HTTP ${res.status}`,
+        });
+      }
+
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || null;
+    } catch (err) {
+      if (err instanceof AIProviderError) {
+        lastError = err;
+        if ((err.diagnostic.status === 401 || err.diagnostic.status === 403 || err.diagnostic.status === 429) && i < apiKeys.length - 1) {
+          continue;
+        }
+        throw err;
+      }
+      
+      const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+      lastError = new AIProviderError({
+        provider: 'nvidia',
+        model: modelId,
+        kind: isTimeout ? 'timeout' : 'network_error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+
+      if (i < apiKeys.length - 1) {
+        continue;
+      }
+      throw lastError;
+    }
+  }
+
+  throw lastError || new Error('All NVIDIA keys failed');
+}
+
 // ---- Public Gateway ----
 
 export async function callAI(
@@ -583,6 +710,7 @@ export async function callAI(
   try {
     const provider = getProvider(modelId);
     switch (provider) {
+      case 'nvidia': return callNvidia(messages, modelId, temperature);
       case 'glm': return callGLM(messages, modelId);
       case 'openai': return callOpenAI(messages, modelId, temperature);
       case 'anthropic': return callAnthropic(messages, modelId, temperature);
@@ -603,6 +731,10 @@ export async function callAIVision(
 ): Promise<string | null> {
   const provider = getProvider(modelId);
 
+  if (provider === 'nvidia') {
+    return callNvidia(messages as AIMessage[], modelId);
+  }
+
   if (provider === 'openai') {
     return callOpenAIVision(messages, modelId, timeoutMs);
   }
@@ -615,36 +747,32 @@ export async function callAIVision(
 }
 
 const FALLBACK_MODEL_MAP: Record<string, string> = {
-  'glm-4-flash': 'glm-4-plus',
-  'glm-4-plus': 'glm-4-flash',
-  'glm-4-long': 'glm-4-plus',
-  'gpt-4o': 'glm-4-plus',
-  'gpt-4o-mini': 'glm-4-flash',
-  'claude-sonnet-4-20250514': 'glm-4-plus',
-  'claude-haiku-4-20250414': 'glm-4-flash',
-  'gemini-2.5-flash': 'glm-4-flash',
-  'gemini-2.5-pro': 'glm-4-plus',
+  'nvidia/nemotron-ocr-v2': 'nvidia/nemotron-3-ultra-550b-a55b',
+  'z-ai/glm-5.2': 'deepseek/deepseek-v4-pro',
+  'nvidia/nemotron-3-ultra-550b-a55b': 'deepseek/deepseek-v4-pro',
+  'deepseek/deepseek-v4-pro': 'nvidia/nemotron-3-ultra-550b-a55b',
 };
 
-const OPENAI_MODELS = ['gpt-4o-mini', 'gpt-4o'] as const;
-const ANTHROPIC_MODELS = ['claude-haiku-4-20250414', 'claude-sonnet-4-20250514'] as const;
-const GOOGLE_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'] as const;
+const NVIDIA_MODELS = [
+  'nvidia/nemotron-ocr-v2',
+  'z-ai/glm-5.2',
+  'nvidia/nemotron-3-ultra-550b-a55b',
+  'deepseek/deepseek-v4-pro',
+] as const;
+
 const MODEL_ROTATION_ORDER = [
-  'glm-4-flash',
-  'glm-4-plus',
-  'glm-4-long',
-  'gpt-4o-mini',
-  'gpt-4o',
-  'claude-haiku-4-20250414',
-  'claude-sonnet-4-20250514',
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
+  'nvidia/nemotron-ocr-v2',
+  'z-ai/glm-5.2',
+  'nvidia/nemotron-3-ultra-550b-a55b',
+  'deepseek/deepseek-v4-pro',
 ] as const;
 
 let modelRotationIndex = 0;
 
 function hasProviderCredentials(provider: AIProvider): boolean {
   switch (provider) {
+    case 'nvidia':
+      return Boolean(getProviderApiKey('nvidia'));
     case 'glm':
       // GLM works with ZHIPU_API_KEY, or explicitly enabled SDK fallback.
       return Boolean(getProviderApiKey('glm') || process.env.ZAI_SDK_FALLBACK === '1');
@@ -661,14 +789,8 @@ function hasProviderCredentials(provider: AIProvider): boolean {
 
 function getProviderModelFallbacks(provider: AIProvider): string[] {
   switch (provider) {
-    case 'openai':
-      return [...OPENAI_MODELS];
-    case 'anthropic':
-      return [...ANTHROPIC_MODELS];
-    case 'google':
-      return [...GOOGLE_MODELS];
-    case 'glm':
-      return ['glm-4-flash', 'glm-4-plus'];
+    case 'nvidia':
+      return [...NVIDIA_MODELS];
     default:
       return [];
   }
@@ -685,18 +807,9 @@ function buildFallbackChain(primaryModel: string): string[] {
     chain.push(model);
   }
 
-  if (hasProviderCredentials('openai')) {
-    chain.push(...OPENAI_MODELS);
+  if (hasProviderCredentials('nvidia')) {
+    chain.push(...NVIDIA_MODELS);
   }
-  if (hasProviderCredentials('anthropic')) {
-    chain.push(...ANTHROPIC_MODELS);
-  }
-  if (hasProviderCredentials('google')) {
-    chain.push(...GOOGLE_MODELS);
-  }
-
-  // Always keep GLM as a last-resort path for Z.ai runtime / ZHIPU_API_KEY setups.
-  chain.push('glm-4-flash', 'glm-4-plus');
 
   return [...new Set(chain)].filter(Boolean);
 }
@@ -746,6 +859,9 @@ export async function callAIWithFallback(
       // Call provider functions without swallowing errors so we can surface diagnostics.
       let content: string | null = null;
       switch (provider) {
+        case 'nvidia':
+          content = await callNvidia(messages, candidate, temperature);
+          break;
         case 'glm':
           content = await callGLM(messages, candidate);
           break;
@@ -793,6 +909,7 @@ export async function callAIWithFallback(
 
 export function getRequiredEnvKey(provider: AIProvider): string | null {
   switch (provider) {
+    case 'nvidia': return 'NVIDIA_API_KEY';
     case 'glm': return null;
     case 'openai': return 'OPENAI_API_KEY';
     case 'anthropic': return 'ANTHROPIC_API_KEY';

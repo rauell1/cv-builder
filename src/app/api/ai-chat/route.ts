@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'No AI provider is configured. Set one of: ZHIPU_API_KEY (or GLM_API_KEY/BIGMODEL_API_KEY), OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY (or GOOGLE_API_KEY/GEMINI_API_KEY).',
+          error: 'No AI provider is configured. Set one of: NVIDIA_API_KEY, ZHIPU_API_KEY (or GLM_API_KEY/BIGMODEL_API_KEY), OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY (or GOOGLE_API_KEY/GEMINI_API_KEY).',
           providerStatus: getProviderCredentialStatus(),
           providerDetails: getProviderCredentialDetails(),
         },

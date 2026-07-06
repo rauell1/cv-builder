@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
   try {
     const body: GenerateCoverLetterRequest = await request.json();
     const { cvData, jobAnalysis, jobDescText, formatId, modelId } = body;
-    const requestedModel = modelId || getNextRotatingModel('glm-4-plus');
+    const requestedModel = modelId || getNextRotatingModel('deepseek/deepseek-v4-pro');
 
     // Validate required fields
     if (!cvData || typeof cvData !== 'object') {

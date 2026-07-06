@@ -453,9 +453,9 @@ interface ParseResult {
 
 async function parseCvCore(cvText: string): Promise<ParseResult> {
   const t0 = Date.now();
-  const startModel = getNextRotatingModel('glm-4-flash');
+  const startModel = getNextRotatingModel('nvidia/nemotron-ocr-v2');
 
-  // --- Attempt 1: Primary call with fast fallback (glm-4-flash → glm-4-plus) ---
+  // --- Attempt 1: Primary call with fast fallback ---
   const aiResult = await callAIWithFallback(
     [
       { role: 'system', content: CV_PARSE_SYSTEM_PROMPT },
@@ -480,15 +480,13 @@ async function parseCvCore(cvText: string): Promise<ParseResult> {
 
   // --- Self-healing: retries across multiple providers ---
   const retryModels = [
-    'gpt-4o-mini',
-    'claude-haiku-4-20250414',
-    'gemini-2.5-flash',
-    'glm-4-plus',
-    'glm-4-long',
+    'deepseek/deepseek-v4-pro',
+    'nvidia/nemotron-3-ultra-550b-a55b',
+    'z-ai/glm-5.2',
   ] as const;
 
   for (let retry = 0; retry < retryModels.length && !parsedCv; retry++) {
-    const retryModel = retryModels[retry] || 'glm-4-plus';
+    const retryModel = retryModels[retry] || 'deepseek/deepseek-v4-pro';
     console.warn(
       `[parse-cv] Retry ${retry + 1}/${MAX_RETRIES} with model ${retryModel}...`
     );

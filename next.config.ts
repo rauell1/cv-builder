@@ -21,6 +21,27 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['pdf-lib', 'mammoth', 'sharp', 'child_process', 'z-ai-web-dev-sdk'],
   // Empty turbopack config to silence warning (we don't need custom bundling)
   turbopack: {},
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googletagmanager.com https://va.vercel-scripts.com",
+              "connect-src 'self' ws: wss: https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://vitals.vercel-insights.com",
+              "img-src 'self' data: https: blob:",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "font-src 'self' data: https://fonts.gstatic.com",
+              "upgrade-insecure-requests"
+            ].join('; ')
+          }
+        ]
+      }
+    ];
+  }
 };
 
 export default nextConfig;

@@ -112,7 +112,7 @@ function isValidSectionInsight(obj: unknown): obj is SectionInsight {
 }
 
 /**
- * Generate insights for a single section using callAI (glm-4-flash).
+ * Generate insights for a single section using callAI (deepseek/deepseek-v4-pro).
  * Returns a valid SectionInsight or null on failure.
  */
 async function generateSingleSectionInsight(
@@ -136,7 +136,7 @@ async function generateSingleSectionInsight(
         { role: 'system', content: SECTION_INSIGHT_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      'glm-4-flash',
+      'deepseek/deepseek-v4-pro',
       0.4
     );
 

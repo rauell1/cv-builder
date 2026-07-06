@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
         { role: 'system', content: ACHIEVEMENT_ENHANCER_SYSTEM_PROMPT },
         { role: 'user', content: userMessage },
       ],
-      'glm-4-plus',
+      'deepseek/deepseek-v4-pro',
       'standard'
     );
 

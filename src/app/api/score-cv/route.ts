@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
         { role: 'system', content: CV_SCORE_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      'glm-4-plus',
+      'deepseek/deepseek-v4-pro',
       'complex'
     );
 

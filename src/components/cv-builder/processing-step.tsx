@@ -207,9 +207,9 @@ export function ProcessingStep() {
     return AVAILABLE_MODELS.filter((m) => m.provider === activeModelConfig.provider);
   }, [activeModelConfig.provider]);
 
-  // GLM fallback models (always available)
-  const glmFallbackModels = useMemo(() => {
-    return AVAILABLE_MODELS.filter((m) => m.provider === 'glm');
+  // NVIDIA fallback models (always available)
+  const nvidiaFallbackModels = useMemo(() => {
+    return AVAILABLE_MODELS.filter((m) => m.provider === 'nvidia');
   }, []);
 
   const handleSelectAndStart = () => {
@@ -688,11 +688,11 @@ export function ProcessingStep() {
                   <CardContent className="p-5">
                     <h4 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1.5">
                       <Zap className="w-4 h-4 text-[#15be53]" />
-                      GLM models are available when configured
+                      NVIDIA NIM models are available when configured
                     </h4>
-                    <p className="text-xs text-muted-foreground mb-4 font-light">Use ZHIPU_API_KEY (or GLM_API_KEY/BIGMODEL_API_KEY) on hosted deployments, then retry below</p>
+                    <p className="text-xs text-muted-foreground mb-4 font-light">Use NVIDIA_API_KEY on hosted deployments, then retry below</p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {glmFallbackModels.map((model, idx) => {
+                      {nvidiaFallbackModels.map((model, idx) => {
                         const speed = getSpeedLabel(model.speed);
                         const isSelected = localSelectedId === model.id;
                         return (
