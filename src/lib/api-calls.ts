@@ -26,7 +26,7 @@ export interface ParseCvResult {
 
 export async function parseCv(cvText: string, sessionId?: string): Promise<ParseCvResult> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 45_000); // 45s timeout for provider fallback chains
+  const timeoutId = setTimeout(() => controller.abort(), 60_000); // 60s timeout for provider fallback chains
 
   try {
     const response = await fetch('/api/parse-cv', {

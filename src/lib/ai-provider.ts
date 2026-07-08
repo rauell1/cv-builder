@@ -816,11 +816,16 @@ const NVIDIA_MODELS = [
   'deepseek/deepseek-v4-pro',
 ] as const;
 
+const NVIDIA_TEXT_MODELS = [
+  'deepseek/deepseek-v4-pro',
+  'z-ai/glm-5.2',
+  'nvidia/nemotron-3-ultra-550b-a55b',
+] as const;
+
 const MODEL_ROTATION_ORDER = [
   'deepseek/deepseek-v4-pro',
   'z-ai/glm-5.2',
   'nvidia/nemotron-3-ultra-550b-a55b',
-  'nvidia/nemotron-ocr-v2',
 ] as const;
 
 let modelRotationIndex = 0;
@@ -846,7 +851,7 @@ function hasProviderCredentials(provider: AIProvider): boolean {
 function getProviderModelFallbacks(provider: AIProvider): string[] {
   switch (provider) {
     case 'nvidia':
-      return [...NVIDIA_MODELS];
+      return [...NVIDIA_TEXT_MODELS];
     default:
       return [];
   }
@@ -864,7 +869,7 @@ function buildFallbackChain(primaryModel: string): string[] {
   }
 
   if (hasProviderCredentials('nvidia')) {
-    chain.push(...NVIDIA_MODELS);
+    chain.push(...NVIDIA_TEXT_MODELS);
   }
 
   return [...new Set(chain)].filter(Boolean);
