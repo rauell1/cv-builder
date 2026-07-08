@@ -203,7 +203,11 @@ export function getProviderCredentialDetails(): {
 // ---- Utility Functions ----
 
 export function getProvider(modelId: string): AIProvider {
-  if (modelId.startsWith('nvidia/') || modelId.startsWith('z-ai/') || modelId.startsWith('deepseek/')) return 'nvidia';
+  if (
+    modelId.startsWith('nvidia/') || modelId.startsWith('z-ai/') || modelId.startsWith('deepseek/') ||
+    modelId.startsWith('meta/') || modelId.startsWith('mistralai/') || modelId.startsWith('deepseek-ai/') ||
+    modelId.startsWith('moonshotai/') || modelId.startsWith('qwen/')
+  ) return 'nvidia';
   if (modelId.startsWith('glm-')) return 'glm';
   if (modelId.startsWith('gpt-')) return 'openai';
   if (modelId.startsWith('claude-')) return 'anthropic';
@@ -611,9 +615,21 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
   }
 }
 
+// Registry model ids → real NVIDIA NIM catalog ids.
+// integrate.api.nvidia.com returns a plain "404 page not found" for unknown
+// model ids, which is exactly what production logs showed for these names.
+// The alias keeps UI/registry names stable while sending valid ids upstream.
+// meta/llama-3.3-70b-instruct is first priority (fast, proven in production).
+const NVIDIA_MODEL_ALIASES: Record<string, string> = {
+  'deepseek/deepseek-v4-pro': 'meta/llama-3.3-70b-instruct',
+  'z-ai/glm-5.2': 'mistralai/mistral-medium-3.5-128b',
+  'nvidia/nemotron-3-ultra-550b-a55b': 'nvidia/llama-3.3-nemotron-super-49b-v1',
+  'nvidia/nemotron-ocr-v2': 'meta/llama-3.2-90b-vision-instruct',
+};
+
 function resolveNvidiaParams(modelId: string): { url: string; modelName: string; apiKeys: string[] } {
   let url = 'https://integrate.api.nvidia.com/v1/chat/completions';
-  let modelName = modelId;
+  let modelName = NVIDIA_MODEL_ALIASES[modelId] ?? modelId;
   let specificKeysStr: string | null = null;
 
   if (modelId.includes('glm-5.2') || modelId.includes('glm5')) {
