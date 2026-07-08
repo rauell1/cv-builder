@@ -101,8 +101,10 @@ export function ProcessingStep() {
 
   const progressIndexRef = useRef(0);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cancelledRef = useRef(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [progressIndex, setProgressIndex] = useState(0);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const [localSelectedId, setLocalSelectedId] = useState<string>(selectedModel.id);
 
   // Cleanup interval on unmount to prevent memory leak
@@ -114,6 +116,16 @@ export function ProcessingStep() {
       }
     };
   }, []);
+
+  // Track elapsed seconds while processing so we can reassure users on slow runs
+  useEffect(() => {
+    if (!isRestructuring) {
+      setElapsedSec(0);
+      return;
+    }
+    const t = setInterval(() => setElapsedSec((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [isRestructuring]);
 
   // Full progress steps with connecting step
   const progressSteps = useMemo(() => {
@@ -129,6 +141,7 @@ export function ProcessingStep() {
       setRestructureError(null);
       setModelUsed(modelId);
       progressIndexRef.current = 0;
+      cancelledRef.current = false;
       setHasStarted(true);
 
       const modelName = AVAILABLE_MODELS.find((m) => m.id === modelId)?.name || modelId;
@@ -147,6 +160,7 @@ export function ProcessingStep() {
 
       try {
         const result = await restructureCv(parsedCv, analyzedJob, jobDescText, modelId);
+        if (cancelledRef.current) return; // user cancelled — discard the late result
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
@@ -165,6 +179,7 @@ export function ProcessingStep() {
           setStep('output');
         }, 1200);
       } catch (err) {
+        if (cancelledRef.current) return; // user cancelled — swallow the error
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
@@ -230,6 +245,19 @@ export function ProcessingStep() {
 
   const handleRetryWithDifferent = () => {
     setRestructureError(null);
+    setHasStarted(false);
+  };
+
+  // Cancel processing without losing the parsed CV or job analysis (both stay in the store)
+  const handleCancel = () => {
+    cancelledRef.current = true;
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    setIsRestructuring(false);
+    setRestructureError(null);
+    setRestructureProgress('');
     setHasStarted(false);
   };
 
@@ -482,6 +510,27 @@ export function ProcessingStep() {
                         />
                       </div>
                     </div>
+
+                    {/* Slow-run reassurance — shown after 20s so users don't abandon */}
+                    {elapsedSec > 20 && (
+                      <motion.p
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-xs text-[#9b6829] mt-4 font-light"
+                      >
+                        This model is warming up. Usually ready in under 45 seconds.
+                      </motion.p>
+                    )}
+
+                    {/* Cancel — keeps parsed CV and job analysis intact */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancel}
+                      className="mt-4 text-muted-foreground hover:text-foreground font-normal"
+                    >
+                      Cancel
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
