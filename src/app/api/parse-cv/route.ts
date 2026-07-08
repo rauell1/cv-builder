@@ -693,7 +693,7 @@ export async function POST(request: NextRequest) {
         const aiParsed = await aiQueue.enqueue(
           () => parseCvCore(cvText),
           'high',
-          45_000 // 45s timeout covers primary + retries
+          50_000 // exceeds the 45s chain budget; on timeout we fall back to the built-in parser
         );
         parsedCv = aiParsed.parsedCv;
         usedModel = aiParsed.usedModel;

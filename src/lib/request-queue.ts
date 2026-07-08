@@ -219,7 +219,11 @@ export class RequestQueue {
         continue;
       }
 
-      clearTimeout(entry.timer);
+      // NOTE: the timer is intentionally NOT cleared here — the timeout covers
+      // the entire lifecycle (wait + execute) as documented on enqueue().
+      // Clearing it on start left running tasks unbounded, so a slow AI chain
+      // ran until Vercel killed the function at maxDuration instead of the
+      // route getting a catchable timeout error.
       entry.started = true;
       this._activeCount++;
 
@@ -265,6 +269,7 @@ export class RequestQueue {
   private settleSuccess(entry: InternalQueueEntry, value: unknown): void {
     if (entry.settled) return;
     entry.settled = true;
+    clearTimeout(entry.timer);
     this._completedCount++;
     entry.resolve(value);
   }
@@ -275,6 +280,7 @@ export class RequestQueue {
   private settleFailure(entry: InternalQueueEntry, reason: unknown): void {
     if (entry.settled) return;
     entry.settled = true;
+    clearTimeout(entry.timer);
     this._failedCount++;
     entry.reject(reason);
   }

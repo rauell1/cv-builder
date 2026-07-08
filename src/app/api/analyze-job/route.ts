@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
         'simple'
       ),
       'normal',
-      45_000
+      55_000 // must exceed the 45s chain budget in callAIWithFallback (timer spans wait + execute)
     );
 
     // Parse the JSON response from LLM using robust extractor

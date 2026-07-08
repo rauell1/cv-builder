@@ -708,7 +708,9 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ model: modelName, messages, temperature }),
+        // max_tokens bounds generation time — without it, long restructure
+        // outputs can generate past every timeout on the free NIM tier.
+        body: JSON.stringify({ model: modelName, messages, temperature, max_tokens: 4096 }),
         signal: controller.signal,
       });
 
@@ -717,7 +719,7 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
       if (!res.ok) {
         const errText = await res.text();
         const snippet = errText.substring(0, 400);
-        
+
         // If 401, 403, or 429, retry with the next key if available
         if ((res.status === 401 || res.status === 403 || res.status === 429) && i < apiKeys.length - 1) {
           console.warn(`[AI] NVIDIA key ${i + 1}/${apiKeys.length} failed with status ${res.status}. Trying next key...`);
@@ -916,11 +918,18 @@ export async function callAIWithFallback(
   const candidates = buildFallbackChain(modelId);
   const diagnostics: AIProviderFailureDiagnostic[] = [];
 
-  const effectiveTimeoutMs = timeoutMs ?? (
+  const perModelTimeoutMs = timeoutMs ?? (
     complexity === 'simple' ? 25_000 :
     complexity === 'complex' ? 45_000 :
     30_000
   );
+
+  // Total wall-clock budget for the whole chain. Keeps the chain inside the
+  // Vercel 60s maxDuration window (with headroom for JSON parsing + response)
+  // instead of letting 3-4 sequential model timeouts add up to 100s+.
+  const TOTAL_BUDGET_MS = 45_000;
+  const deadline = Date.now() + TOTAL_BUDGET_MS;
+  const chainStart = Date.now();
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
@@ -930,9 +939,22 @@ export async function callAIWithFallback(
       continue;
     }
 
-    if (i > 0) {
-      console.warn(`[AI] Model ${modelId} failed, trying fallback ${candidate}`);
+    const remainingMs = deadline - Date.now();
+    if (remainingMs < 3_000) {
+      diagnostics.push({
+        provider,
+        model: candidate,
+        kind: 'timeout',
+        message: `Chain budget exhausted (${Date.now() - chainStart}ms elapsed) before trying ${candidate}`,
+      });
+      break;
     }
+    const effectiveTimeoutMs = Math.min(perModelTimeoutMs, remainingMs);
+
+    if (i > 0) {
+      console.warn(`[AI] Model ${modelId} failed, trying fallback ${candidate} (${remainingMs}ms budget left)`);
+    }
+    console.warn(`[AI] Attempt ${i + 1}: ${candidate} (timeout ${effectiveTimeoutMs}ms, elapsed ${Date.now() - chainStart}ms)`);
 
     try {
       // Call provider functions without swallowing errors so we can surface diagnostics.
@@ -958,6 +980,7 @@ export async function callAIWithFallback(
       }
 
       if (content) {
+        console.warn(`[AI] ${candidate} succeeded in ${Date.now() - chainStart}ms total`);
         return { content, model: candidate, provider };
       }
 
