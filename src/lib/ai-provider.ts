@@ -714,10 +714,14 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
         signal: controller.signal,
       });
 
-      clearTimeout(timer);
+      // IMPORTANT: do NOT clear the abort timer here. fetch() resolves when
+      // response HEADERS arrive, but NIM streams the body as it generates —
+      // res.json() below can take far longer than the headers. Clearing the
+      // timer here made the body read unbounded, hanging routes for minutes.
 
       if (!res.ok) {
         const errText = await res.text();
+        clearTimeout(timer);
         const snippet = errText.substring(0, 400);
 
         // If 401, 403, or 429, retry with the next key if available
@@ -742,7 +746,8 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
         });
       }
 
-      const data = await res.json();
+      const data = await res.json(); // still covered by the abort signal
+      clearTimeout(timer);
       return data.choices?.[0]?.message?.content || null;
     } catch (err) {
       clearTimeout(timer);
