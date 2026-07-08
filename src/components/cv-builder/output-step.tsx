@@ -1162,6 +1162,20 @@ export function OutputStep() {
                     : (<><FileCode className="w-4 h-4" />Download Python Script</>)
                   }
                 </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    if (!cv.personalStatement) {
+                      toast({ title: 'Nothing to Copy', description: 'This CV has no personal statement yet.', variant: 'destructive' });
+                      return;
+                    }
+                    navigator.clipboard.writeText(cv.personalStatement);
+                    toast({ title: 'Summary Copied', description: 'Personal statement copied to clipboard.' });
+                  }}
+                  className="w-full justify-start border border-border rounded-[4px] font-normal text-foreground hover:bg-muted"
+                >
+                  <Copy className="w-4 h-4" />Copy Summary
+                </Button>
               </div>
 
               <Separator className="my-3 bg-border" />

@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { LazyMotion, domAnimation, m, useReducedMotion } from 'framer-motion';
 import {
   FileText,
   Download,
@@ -78,25 +78,19 @@ const steps = [
   {
     step: 1,
     title: 'Upload Your CV',
-    description: 'Drop a PDF, image, or paste your CV text. AI extracts all sections automatically.',
+    description: 'Drop a PDF, image, or paste text. AI extracts every section automatically, with OCR for scans.',
     icon: FileText,
   },
   {
     step: 2,
-    title: 'Add Job Description',
-    description: 'Paste the target job description for AI-powered keyword matching and tailoring.',
+    title: 'Paste the Job Description',
+    description: 'AI analyzes the role, matches keywords, and restructures your experience to fit it.',
     icon: Globe,
   },
   {
     step: 3,
-    title: 'Choose AI Model',
-    description: 'Select from GLM, GPT, Claude, or Gemini. GLM models are built-in in Z.ai and key-based on external hosting.',
-    icon: Cpu,
-  },
-  {
-    step: 4,
-    title: 'Download & Iterate',
-    description: 'Get your tailored CV with insights, cover letter, and export as PDF.',
+    title: 'Download Your Tailored CV',
+    description: 'Pick from 5 professional formats, grab the matching cover letter, and export as PDF.',
     icon: Download,
   },
 ];
@@ -192,6 +186,7 @@ export function LandingPage() {
       };
 
   return (
+    <LazyMotion features={domAnimation} strict>
     <div className="min-h-screen flex flex-col">
       {/* ═══════════════════════════════════════════
           Navigation Bar
@@ -266,7 +261,7 @@ export function LandingPage() {
         {/* ═══════════════════════════════════════════
             Hero Section
             ═══════════════════════════════════════════ */}
-        <motion.section
+        <m.section
           className="relative overflow-hidden"
           initial={prefersReducedMotion ? undefined : 'hidden'}
           animate={prefersReducedMotion ? undefined : 'visible'}
@@ -285,7 +280,7 @@ export function LandingPage() {
 
           <div className="relative flex flex-col items-center justify-center px-4 sm:px-6 pt-20 pb-24 md:pt-28 md:pb-32 lg:pt-36 lg:pb-40">
             {/* Badge */}
-            <motion.div variants={itemVariants} className="mb-8">
+            <m.div variants={itemVariants} className="mb-8">
               <Badge
                 variant="outline"
                 className="px-4 py-1.5 text-[11px] font-medium text-secondary-foreground bg-secondary/60 rounded-full badge-gradient-border"
@@ -293,36 +288,37 @@ export function LandingPage() {
                 <Zap className="w-3 h-3 mr-1" />
                 Powered by {getModelCount()}
               </Badge>
-            </motion.div>
+            </m.div>
 
             {/* Logo / Brand with decorative gradient orb */}
-            <motion.div variants={itemVariants} className="mb-8 relative">
+            <m.div variants={itemVariants} className="mb-8 relative">
               <div className="hero-orb" role="img" aria-hidden="true" />
               <div className="relative w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-glow">
                 <Cpu className="w-8 h-8 text-white" />
               </div>
-            </motion.div>
+            </m.div>
 
             {/* Title */}
-            <motion.h1
+            <m.h1
               id="hero-heading"
-              className="text-4xl sm:text-5xl md:text-6xl font-semibold text-center mb-6 tracking-tight"
+              className="text-4xl sm:text-5xl md:text-6xl font-semibold text-center mb-6 tracking-tight max-w-3xl"
               variants={itemVariants}
             >
-              <span className="text-gradient">AI CV Builder</span>
-            </motion.h1>
+              <span className="text-gradient">Upload your CV. Get it tailored to the job.</span>
+            </m.h1>
 
             {/* Subtitle with reveal feel */}
-            <motion.p
+            <m.p
               className="text-base sm:text-lg text-muted-foreground text-center max-w-lg mb-12 font-normal leading-relaxed"
               variants={itemVariants}
             >
-              Multi-model AI intelligence meets professional CV formats.
-              Upload, analyze, and generate a perfectly tailored resume.
-            </motion.p>
+              Drop your CV and a job description. AI restructures your experience,
+              matches the keywords, and hands you a polished PDF in under a minute.
+              No account required.
+            </m.p>
 
             {/* CTA Buttons */}
-            <motion.div variants={itemVariants} className="flex items-center gap-3 flex-wrap justify-center">
+            <m.div variants={itemVariants} className="flex items-center gap-3 flex-wrap justify-center">
               <Button
                 asChild
                 size="lg"
@@ -342,10 +338,10 @@ export function LandingPage() {
                 See How It Works
                 <ChevronRight className="ml-1.5 w-3.5 h-3.5 text-muted-foreground" />
               </Button>
-            </motion.div>
+            </m.div>
 
             {/* Stats */}
-            <motion.div
+            <m.div
               variants={itemVariants}
               className="flex items-center gap-6 sm:gap-10 mt-16"
             >
@@ -359,14 +355,90 @@ export function LandingPage() {
                   </p>
                 </div>
               ))}
-            </motion.div>
+            </m.div>
           </div>
-        </motion.section>
+        </m.section>
+
+        {/* ═══════════════════════════════════════════
+            Before / After Demo
+            ═══════════════════════════════════════════ */}
+        <m.section
+          className="px-4 sm:px-6 py-16 md:py-24"
+          {...sectionAnimationProps}
+          aria-labelledby="before-after-heading"
+        >
+          <m.div variants={fadeUp} className="text-center mb-12">
+            <Badge
+              variant="outline"
+              className="px-3 py-1 text-[11px] font-medium border-border text-muted-foreground rounded-full mb-4"
+            >
+              See The Difference
+            </Badge>
+            <h2
+              id="before-after-heading"
+              className="text-2xl sm:text-3xl font-semibold text-foreground mb-3 tracking-tight"
+            >
+              Your CV, Rewritten for the Role
+            </h2>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              The same experience, restructured around what the job actually asks for
+            </p>
+          </m.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 max-w-5xl mx-auto">
+            {/* BEFORE */}
+            <m.div variants={itemVariants}>
+              <Card className="h-full border-border rounded-2xl bg-muted/60 overflow-hidden">
+                <CardContent className="p-6">
+                  <Badge className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border mb-4">
+                    Before
+                  </Badge>
+                  <p className="text-xs font-semibold text-muted-foreground mb-3">Original bullet points</p>
+                  <ul className="space-y-3 text-sm text-muted-foreground leading-relaxed">
+                    <li className="pl-3 border-l-2 border-border">
+                      Worked on the company website and fixed bugs
+                    </li>
+                    <li className="pl-3 border-l-2 border-border">
+                      Was part of the team that moved things to the cloud
+                    </li>
+                    <li className="pl-3 border-l-2 border-border">
+                      Helped with testing and deployments sometimes
+                    </li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </m.div>
+
+            {/* AFTER */}
+            <m.div variants={itemVariants}>
+              <Card className="h-full rounded-2xl bg-white overflow-hidden border-primary/30 shadow-glow-sm">
+                <CardContent className="p-6">
+                  <Badge className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 mb-4">
+                    After AI Tailoring
+                  </Badge>
+                  <p className="text-xs font-semibold text-foreground mb-3">Matched to a Frontend Engineer role</p>
+                  <ul className="space-y-3 text-sm text-foreground/90 leading-relaxed">
+                    <li className="pl-3 border-l-2 border-primary/50">
+                      Rebuilt the marketing site with <mark className="bg-secondary text-primary font-medium px-1 rounded">React</mark> and{' '}
+                      <mark className="bg-secondary text-primary font-medium px-1 rounded">TypeScript</mark>, cutting page load time by 40%
+                    </li>
+                    <li className="pl-3 border-l-2 border-primary/50">
+                      Led migration of 12 services to <mark className="bg-secondary text-primary font-medium px-1 rounded">AWS</mark>, reducing hosting costs by 30%
+                    </li>
+                    <li className="pl-3 border-l-2 border-primary/50">
+                      Set up <mark className="bg-secondary text-primary font-medium px-1 rounded">CI/CD</mark> pipelines that shipped 3x more releases per sprint
+                    </li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </m.div>
+          </div>
+        </m.section>
 
         {/* ═══════════════════════════════════════════
             Features Grid
             ═══════════════════════════════════════════ */}
-        <motion.section
+        <m.section
           id="features"
           className="relative px-4 sm:px-6 py-16 md:py-24"
           {...sectionAnimationProps}
@@ -375,7 +447,7 @@ export function LandingPage() {
           <div className="absolute inset-0 bg-section-gradient pointer-events-none" role="img" aria-hidden="true" />
 
           <div className="relative max-w-5xl mx-auto">
-            <motion.div variants={fadeUp} className="text-center mb-12">
+            <m.div variants={fadeUp} className="text-center mb-12">
               <Badge
                 variant="outline"
                 className="px-3 py-1 text-[11px] font-medium border-border text-muted-foreground rounded-full mb-4"
@@ -391,13 +463,13 @@ export function LandingPage() {
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
                 A complete toolkit to craft a standout CV, from parsing to PDF generation
               </p>
-            </motion.div>
+            </m.div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
               {features.map((feature) => {
                 const Icon = feature.icon;
                 return (
-                  <motion.div key={feature.title} variants={itemVariants}>
+                  <m.div key={feature.title} variants={itemVariants}>
                     <Card className="h-full border-border rounded-2xl bg-white group overflow-hidden feature-card-hover hover:scale-[1.01] hover:shadow-stripe-sm transition-all duration-300">
                       {/* Top accent border line */}
                       <div
@@ -422,23 +494,23 @@ export function LandingPage() {
                         </p>
                       </CardContent>
                     </Card>
-                  </motion.div>
+                  </m.div>
                 );
               })}
             </div>
           </div>
-        </motion.section>
+        </m.section>
 
         {/* ═══════════════════════════════════════════
             How It Works
             ═══════════════════════════════════════════ */}
-        <motion.section
+        <m.section
           id="how-it-works"
           className="px-4 sm:px-6 py-16 md:py-24"
           {...sectionAnimationProps}
           aria-labelledby="how-it-works-heading"
         >
-          <motion.div variants={fadeUp} className="text-center mb-12">
+          <m.div variants={fadeUp} className="text-center mb-12">
             <Badge
               variant="outline"
               className="px-3 py-1 text-[11px] font-medium border-border text-muted-foreground rounded-full mb-4"
@@ -452,16 +524,16 @@ export function LandingPage() {
               How It Works
             </h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Four simple steps to a perfectly tailored CV
+              Three simple steps to a perfectly tailored CV
             </p>
-          </motion.div>
+          </m.div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 max-w-4xl mx-auto">
             {steps.map((item, index) => {
               const Icon = item.icon;
               const isLast = index === steps.length - 1;
               return (
-                <motion.div key={item.step} variants={itemVariants}>
+                <m.div key={item.step} variants={itemVariants}>
                   <Card
                     className={`h-full border-border rounded-2xl bg-white hover-lift relative overflow-hidden group ${!isLast ? 'lg:step-connector' : ''}`}
                   >
@@ -488,13 +560,13 @@ export function LandingPage() {
                       </p>
                     </CardContent>
                   </Card>
-                </motion.div>
+                </m.div>
               );
             })}
           </div>
 
           {/* CTA under How It Works */}
-          <motion.div variants={fadeUp} className="text-center mt-12">
+          <m.div variants={fadeUp} className="text-center mt-12">
             <Button
               asChild
               size="lg"
@@ -505,13 +577,13 @@ export function LandingPage() {
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Link>
             </Button>
-          </motion.div>
-        </motion.section>
+          </m.div>
+        </m.section>
 
         {/* ═══════════════════════════════════════════
             AI Models Section (Streamlined)
             ═══════════════════════════════════════════ */}
-        <motion.section
+        <m.section
           id="models"
           className="relative px-4 sm:px-6 py-16 md:py-24"
           {...sectionAnimationProps}
@@ -519,7 +591,7 @@ export function LandingPage() {
         >
           <div className="absolute inset-0 bg-mesh-pattern pointer-events-none" role="img" aria-hidden="true" />
 
-          <motion.div variants={fadeUp} className="text-center mb-12">
+          <m.div variants={fadeUp} className="text-center mb-12">
             <Badge
               variant="outline"
               className="px-3 py-1 text-[11px] font-medium border-border text-muted-foreground rounded-full mb-4"
@@ -535,7 +607,7 @@ export function LandingPage() {
             <p className="text-sm text-muted-foreground max-w-lg mx-auto">
               {getModelCount()}. GLM models are built-in and free — others work with your own API key.
             </p>
-          </motion.div>
+          </m.div>
 
           <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
             {AI_PROVIDERS.filter((p) => p.id !== 'custom').map((provider) => {
@@ -543,7 +615,7 @@ export function LandingPage() {
               const isBuiltIn = !models.some((m) => m.requiresApiKey);
 
               return (
-                <motion.div key={provider.id} variants={itemVariants}>
+                <m.div key={provider.id} variants={itemVariants}>
                   <Card className="h-full border-border rounded-2xl bg-white hover-lift overflow-hidden group">
                     <CardContent className="p-6">
                       {/* Provider icon */}
@@ -589,16 +661,16 @@ export function LandingPage() {
                       </div>
                     </CardContent>
                   </Card>
-                </motion.div>
+                </m.div>
               );
             })}
           </div>
-        </motion.section>
+        </m.section>
 
         {/* ═══════════════════════════════════════════
             Testimonials
             ═══════════════════════════════════════════ */}
-        <motion.section
+        <m.section
           className="relative px-4 sm:px-6 py-16 md:py-24 bg-muted"
           {...sectionAnimationProps}
           aria-labelledby="testimonials-heading"
@@ -606,7 +678,7 @@ export function LandingPage() {
           {/* Subtle background pattern */}
           <div className="absolute inset-0 bg-pattern-subtle pointer-events-none" role="img" aria-hidden="true" />
 
-          <motion.div variants={fadeUp} className="text-center mb-12 relative">
+          <m.div variants={fadeUp} className="text-center mb-12 relative">
             <Badge
               variant="outline"
               className="px-3 py-1 text-[11px] font-medium border-border text-muted-foreground bg-white rounded-full mb-4"
@@ -622,11 +694,11 @@ export function LandingPage() {
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
               See what our users say about their experience
             </p>
-          </motion.div>
+          </m.div>
 
           <div className="relative max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
             {testimonials.map((t) => (
-              <motion.div key={t.author} variants={itemVariants}>
+              <m.div key={t.author} variants={itemVariants}>
                 <Card className="h-full border-border rounded-2xl bg-white hover-lift hover:shadow-stripe-sm transition-all duration-300">
                   <CardContent className="p-6 relative">
                     {/* Decorative quote mark */}
@@ -656,21 +728,21 @@ export function LandingPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </m.div>
             ))}
           </div>
-        </motion.section>
+        </m.section>
 
         {/* ═══════════════════════════════════════════
             Trust & Security
             ═══════════════════════════════════════════ */}
-        <motion.section
+        <m.section
           className="px-4 sm:px-6 py-16 md:py-20"
           {...sectionAnimationProps}
           aria-labelledby="trust-heading"
         >
           <div className="max-w-5xl mx-auto">
-            <motion.div variants={fadeUp}>
+            <m.div variants={fadeUp}>
               <Card className="trust-gradient-border rounded-2xl bg-gradient-to-br from-secondary to-white overflow-hidden">
                 <CardContent className="p-8 md:p-10">
                   <div className="flex flex-col md:flex-row items-center gap-6">
@@ -682,10 +754,11 @@ export function LandingPage() {
                         id="trust-heading"
                         className="font-semibold text-foreground text-base mb-1.5"
                       >
-                        Privacy-First Processing
+                        No Account Required. No CV Stored.
                       </h3>
                       <p className="text-sm text-muted-foreground leading-relaxed max-w-lg">
-                        Your CV data is processed by AI models and never stored permanently. No accounts required, no data retention. Your information stays yours.
+                        Your CV is processed in memory and discarded when your session ends.
+                        No sign-up, no data retention, no mailing list. Your information stays yours.
                       </p>
                     </div>
                     <Button
@@ -701,9 +774,9 @@ export function LandingPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </m.div>
           </div>
-        </motion.section>
+        </m.section>
       </div>
 
       {/* ═══════════════════════════════════════════
@@ -784,6 +857,14 @@ export function LandingPage() {
                     </button>
                   </li>
                 ))}
+                <li>
+                  <Link
+                    href="/projects"
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors duration-200 link-underline"
+                  >
+                    Projects
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>
@@ -801,5 +882,6 @@ export function LandingPage() {
         </div>
       </footer>
     </div>
+    </LazyMotion>
   );
 }

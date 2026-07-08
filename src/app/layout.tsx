@@ -82,6 +82,30 @@ export default function RootLayout({
     ]
   };
 
+  const appJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "@id": "https://cv-builder.rauell.systems/#app",
+    "name": "AI CV Builder",
+    "url": "https://cv-builder.rauell.systems/builder",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "description": "Upload a CV and a job description; AI restructures your experience, matches keywords, and generates a tailored PDF CV plus cover letter. No account required.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "AI CV parsing with OCR",
+      "Job description keyword matching",
+      "5 professional CV formats",
+      "Cover letter generation",
+      "ATS score insights"
+    ],
+    "publisher": { "@id": "https://cv-builder.rauell.systems/#organization" }
+  };
+
   const personJsonLd = {
     "@context": "https://schema.org",
     "@type": "Person",
@@ -114,6 +138,10 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(appJsonLd) }}
         />
       </head>
       <body
