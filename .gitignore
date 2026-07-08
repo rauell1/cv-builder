@@ -38,3 +38,4 @@ Thumbs.db
 
 # codebase map incremental cache
 .codebase-map-cache.json
+.vercel
