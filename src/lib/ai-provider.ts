@@ -768,7 +768,16 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
         message: err instanceof Error ? err.message : String(err),
       });
 
+      // A timeout is a model/endpoint problem, not a key problem — rotating
+      // keys would silently burn N x timeoutMs inside a single model attempt
+      // and starve the fallback chain. Fail fast so the chain moves on.
+      if (isTimeout) {
+        console.warn(`[AI] NVIDIA ${modelId} timed out after ${timeoutMs}ms on key ${i + 1}/${apiKeys.length} — not rotating keys`);
+        throw lastError;
+      }
+
       if (i < apiKeys.length - 1) {
+        console.warn(`[AI] NVIDIA key ${i + 1}/${apiKeys.length} network error for ${modelId}. Trying next key...`);
         continue;
       }
       throw lastError;
