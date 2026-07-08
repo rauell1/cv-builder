@@ -16,6 +16,9 @@ import {
 } from '@/lib/cv-types';
 import { sanitizeCoverLetterData } from '@/lib/text-cleaning';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 interface GenerateCoverLetterRequest {
   cvData: ParsedCV;
   jobAnalysis: JobAnalysis;

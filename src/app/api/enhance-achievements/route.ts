@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { callAIWithFallback } from '@/lib/ai-provider';
 import type { AchievementEnhancement } from '@/lib/cv-types';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 const ACHIEVEMENT_ENHANCER_SYSTEM_PROMPT = `You are a CV achievement optimization expert. Rewrite the following experience bullet points to be significantly more impactful.
 
 RULES:

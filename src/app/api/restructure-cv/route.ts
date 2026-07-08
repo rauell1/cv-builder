@@ -11,6 +11,9 @@ import {
 } from '@/lib/cv-types';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 // ---------------------------------------------------------------------------
 // Robust JSON extraction from LLM responses
 // ---------------------------------------------------------------------------

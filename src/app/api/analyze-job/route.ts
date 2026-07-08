@@ -12,6 +12,7 @@ import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 // ---------------------------------------------------------------------------
 // Robust JSON extraction from LLM responses
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
         'simple'
       ),
       'normal',
-      30_000
+      45_000
     );
 
     // Parse the JSON response from LLM using robust extractor

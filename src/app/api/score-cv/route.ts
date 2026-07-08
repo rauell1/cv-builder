@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { callAIWithFallback } from '@/lib/ai-provider';
 import type { CVScore, ParsedCV, JobAnalysis } from '@/lib/cv-types';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 const CV_SCORE_SYSTEM_PROMPT = `You are an ATS (Applicant Tracking System) simulation engine and CV scoring expert. Evaluate this CV against the job description and provide a comprehensive scoring breakdown.
 
 SCORING CRITERIA (weighted):

@@ -7,6 +7,9 @@ import {
   type SectionInsight,
 } from '@/lib/cv-types';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 // All supported section IDs with their display names
 const ALL_SECTIONS = [
   { id: 'personal', name: 'Personal Information' },

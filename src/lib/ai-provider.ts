@@ -87,7 +87,15 @@ const PROVIDER_KEY_ALIASES: Record<AIProvider, string[]> = {
   openai: ['OPENAI_API_KEY', 'OPENAI_KEY'],
   anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
   google: ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
-  nvidia: ['NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY'],
+  nvidia: [
+    'NVIDIA_API_KEY',
+    'NVIDIA_NIM_API_KEY',
+    'NVIDIA_DEEPSEEK_KEYS',
+    'NVIDIA_GLM5_KEYS',
+    'NVIDIA_NEMO_KEYS',
+    'NVIDIA_MISTRAL_KEYS',
+    'NVIDIA_KIMI_KEYS'
+  ],
 };
 
 type ResolvedEnv = { value: string; source: string } | null;
@@ -131,9 +139,20 @@ export function getProviderKeyNames(provider: AIProvider): string[] {
   return PROVIDER_KEY_ALIASES[provider] || [];
 }
 
+function hasNvidiaCredentials(): boolean {
+  return Boolean(
+    getProviderApiKey('nvidia') ||
+    readEnvValue('NVIDIA_DEEPSEEK_KEYS') ||
+    readEnvValue('NVIDIA_GLM5_KEYS') ||
+    readEnvValue('NVIDIA_NEMO_KEYS') ||
+    readEnvValue('NVIDIA_MISTRAL_KEYS') ||
+    readEnvValue('NVIDIA_KIMI_KEYS')
+  );
+}
+
 export function hasAnyProviderCredentials(): boolean {
   return (
-    Boolean(getProviderApiKey('nvidia')) ||
+    hasNvidiaCredentials() ||
     Boolean(getProviderApiKey('glm')) ||
     Boolean(getProviderApiKey('openai')) ||
     Boolean(getProviderApiKey('anthropic')) ||
@@ -144,7 +163,7 @@ export function hasAnyProviderCredentials(): boolean {
 
 export function getProviderCredentialStatus(): Record<AIProvider, boolean> {
   return {
-    nvidia: Boolean(getProviderApiKey('nvidia')),
+    nvidia: hasNvidiaCredentials(),
     glm: Boolean(getProviderApiKey('glm') || process.env.ZAI_SDK_FALLBACK === '1'),
     openai: Boolean(getProviderApiKey('openai')),
     anthropic: Boolean(getProviderApiKey('anthropic')),
@@ -294,7 +313,7 @@ async function callGLMviaAPI(messages: AIMessage[], modelId: string, timeoutMs =
   }
 }
 
-async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 15_000): Promise<string | null> {
+async function callGLM(messages: AIMessage[], modelId: string, timeoutMs = 30_000): Promise<string | null> {
   // Prefer direct REST API when ZHIPU_API_KEY is set (works in all environments).
   const zhipuKey = getProviderApiKey('glm');
   if (zhipuKey) {
@@ -399,7 +418,7 @@ async function callOpenAIVision(messages: any[], modelId: string, timeoutMs = 30
   }
 }
 
-async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 0.5, timeoutMs = 30_000): Promise<string | null> {
   const apiKey = getProviderApiKey('openai');
   if (!apiKey) {
     throw new AIProviderError({
@@ -410,6 +429,9 @@ async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 
     });
   }
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -418,7 +440,9 @@ async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ model: modelId, messages, temperature }),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!res.ok) {
       const errText = await res.text();
       throw new AIProviderError({
@@ -432,6 +456,7 @@ async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 
     const data = await res.json();
     return data.choices?.[0]?.message?.content || null;
   } catch (err) {
+    clearTimeout(timer);
     if (err instanceof AIProviderError) throw err;
     const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
     throw new AIProviderError({
@@ -443,7 +468,7 @@ async function callOpenAI(messages: AIMessage[], modelId: string, temperature = 
   }
 }
 
-async function callAnthropic(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+async function callAnthropic(messages: AIMessage[], modelId: string, temperature = 0.5, timeoutMs = 30_000): Promise<string | null> {
   const apiKey = getProviderApiKey('anthropic');
   if (!apiKey) {
     throw new AIProviderError({
@@ -453,6 +478,9 @@ async function callAnthropic(messages: AIMessage[], modelId: string, temperature
       message: 'Missing Anthropic API key',
     });
   }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     let systemContent = '';
@@ -484,7 +512,9 @@ async function callAnthropic(messages: AIMessage[], modelId: string, temperature
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!res.ok) {
       const errText = await res.text();
       throw new AIProviderError({
@@ -498,6 +528,7 @@ async function callAnthropic(messages: AIMessage[], modelId: string, temperature
     const data = await res.json();
     return data.content?.[0]?.text || null;
   } catch (err) {
+    clearTimeout(timer);
     if (err instanceof AIProviderError) throw err;
     const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
     throw new AIProviderError({
@@ -509,7 +540,7 @@ async function callAnthropic(messages: AIMessage[], modelId: string, temperature
   }
 }
 
-async function callGemini(messages: AIMessage[], modelId: string, temperature = 0.5): Promise<string | null> {
+async function callGemini(messages: AIMessage[], modelId: string, temperature = 0.5, timeoutMs = 30_000): Promise<string | null> {
   const apiKey = getProviderApiKey('google');
   if (!apiKey) {
     throw new AIProviderError({
@@ -519,6 +550,9 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
       message: 'Missing Google AI API key',
     });
   }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     let systemInstruction: string | undefined;
@@ -548,8 +582,10 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: controller.signal,
       }
     );
+    clearTimeout(timer);
     if (!res.ok) {
       const errText = await res.text();
       throw new AIProviderError({
@@ -563,6 +599,7 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
     const data = await res.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (err) {
+    clearTimeout(timer);
     if (err instanceof AIProviderError) throw err;
     const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
     throw new AIProviderError({
@@ -581,21 +618,23 @@ function resolveNvidiaParams(modelId: string): { url: string; modelName: string;
 
   if (modelId.includes('glm-5.2') || modelId.includes('glm5')) {
     if (process.env.NVIDIA_GLM5_URL) url = process.env.NVIDIA_GLM5_URL;
-    specificKeysStr = process.env.NVIDIA_GLM5_KEYS || null;
+    specificKeysStr = readEnvValue('NVIDIA_GLM5_KEYS');
   } else if (modelId.includes('nemotron') || modelId.includes('nemo')) {
     if (process.env.NVIDIA_NEMO_URL) url = process.env.NVIDIA_NEMO_URL;
     if (process.env.NVIDIA_NEMO_MODEL) modelName = process.env.NVIDIA_NEMO_MODEL;
+    specificKeysStr = readEnvValue('NVIDIA_NEMO_KEYS');
   } else if (modelId.includes('deepseek')) {
     if (process.env.NVIDIA_DEEPSEEK_URL) url = process.env.NVIDIA_DEEPSEEK_URL;
     if (process.env.NVIDIA_DEEPSEEK_MODEL) modelName = process.env.NVIDIA_DEEPSEEK_MODEL;
-    specificKeysStr = process.env.NVIDIA_DEEPSEEK_KEYS || null;
+    specificKeysStr = readEnvValue('NVIDIA_DEEPSEEK_KEYS');
   } else if (modelId.includes('kimi')) {
     if (process.env.NVIDIA_KIMI_URL) url = process.env.NVIDIA_KIMI_URL;
     if (process.env.NVIDIA_KIMI_MODEL) modelName = process.env.NVIDIA_KIMI_MODEL;
+    specificKeysStr = readEnvValue('NVIDIA_KIMI_KEYS');
   } else if (modelId.includes('mistral')) {
     if (process.env.NVIDIA_MISTRAL_URL) url = process.env.NVIDIA_MISTRAL_URL;
     if (process.env.NVIDIA_MISTRAL_MODEL) modelName = process.env.NVIDIA_MISTRAL_MODEL;
-    specificKeysStr = process.env.NVIDIA_MISTRAL_KEYS || null;
+    specificKeysStr = readEnvValue('NVIDIA_MISTRAL_KEYS');
   }
 
   const apiKeys: string[] = [];
@@ -628,7 +667,7 @@ function resolveNvidiaParams(modelId: string): { url: string; modelName: string;
   return { url, modelName, apiKeys: uniqueApiKeys };
 }
 
-async function callNvidia(messages: AIMessage[], modelId: string, temperature = 0.5, timeoutMs = 15_000): Promise<string | null> {
+async function callNvidia(messages: AIMessage[], modelId: string, temperature = 0.5, timeoutMs = 30_000): Promise<string | null> {
   const { url, modelName, apiKeys } = resolveNvidiaParams(modelId);
 
   if (apiKeys.length === 0) {
@@ -721,17 +760,18 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
 export async function callAI(
   messages: AIMessage[],
   modelId: string,
-  temperature?: number
+  temperature?: number,
+  timeoutMs?: number
 ): Promise<string | null> {
   try {
     const provider = getProvider(modelId);
     switch (provider) {
-      case 'nvidia': return callNvidia(messages, modelId, temperature);
-      case 'glm': return callGLM(messages, modelId);
-      case 'openai': return callOpenAI(messages, modelId, temperature);
-      case 'anthropic': return callAnthropic(messages, modelId, temperature);
-      case 'google': return callGemini(messages, modelId, temperature);
-      default: return callGLM(messages, modelId);
+      case 'nvidia': return callNvidia(messages, modelId, temperature, timeoutMs);
+      case 'glm': return callGLM(messages, modelId, timeoutMs);
+      case 'openai': return callOpenAI(messages, modelId, temperature, timeoutMs);
+      case 'anthropic': return callAnthropic(messages, modelId, temperature, timeoutMs);
+      case 'google': return callGemini(messages, modelId, temperature, timeoutMs);
+      default: return callGLM(messages, modelId, timeoutMs);
     }
   } catch (err) {
     // Keep existing behavior for direct callers: failures collapse to null.
@@ -777,10 +817,10 @@ const NVIDIA_MODELS = [
 ] as const;
 
 const MODEL_ROTATION_ORDER = [
-  'nvidia/nemotron-ocr-v2',
+  'deepseek/deepseek-v4-pro',
   'z-ai/glm-5.2',
   'nvidia/nemotron-3-ultra-550b-a55b',
-  'deepseek/deepseek-v4-pro',
+  'nvidia/nemotron-ocr-v2',
 ] as const;
 
 let modelRotationIndex = 0;
@@ -788,7 +828,7 @@ let modelRotationIndex = 0;
 function hasProviderCredentials(provider: AIProvider): boolean {
   switch (provider) {
     case 'nvidia':
-      return Boolean(getProviderApiKey('nvidia'));
+      return hasNvidiaCredentials();
     case 'glm':
       // GLM works with ZHIPU_API_KEY, or explicitly enabled SDK fallback.
       return Boolean(getProviderApiKey('glm') || process.env.ZAI_SDK_FALLBACK === '1');
@@ -848,22 +888,24 @@ export function getNextRotatingModel(preferredModel?: string): string {
 export async function callAIWithFallback(
   messages: AIMessage[],
   modelId: string,
-  _complexity?: 'simple' | 'standard' | 'complex',
-  temperature?: number
+  complexity?: 'simple' | 'standard' | 'complex',
+  temperature?: number,
+  timeoutMs?: number
 ): Promise<AIResponse> {
   const candidates = buildFallbackChain(modelId);
-  const failedProviders = new Set<AIProvider>();
   const diagnostics: AIProviderFailureDiagnostic[] = [];
+
+  const effectiveTimeoutMs = timeoutMs ?? (
+    complexity === 'simple' ? 25_000 :
+    complexity === 'complex' ? 45_000 :
+    30_000
+  );
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
     const provider = getProvider(candidate);
 
     if (!hasProviderCredentials(provider)) {
-      continue;
-    }
-
-    if (failedProviders.has(provider)) {
       continue;
     }
 
@@ -876,22 +918,22 @@ export async function callAIWithFallback(
       let content: string | null = null;
       switch (provider) {
         case 'nvidia':
-          content = await callNvidia(messages, candidate, temperature);
+          content = await callNvidia(messages, candidate, temperature, effectiveTimeoutMs);
           break;
         case 'glm':
-          content = await callGLM(messages, candidate);
+          content = await callGLM(messages, candidate, effectiveTimeoutMs);
           break;
         case 'openai':
-          content = await callOpenAI(messages, candidate, temperature);
+          content = await callOpenAI(messages, candidate, temperature, effectiveTimeoutMs);
           break;
         case 'anthropic':
-          content = await callAnthropic(messages, candidate, temperature);
+          content = await callAnthropic(messages, candidate, temperature, effectiveTimeoutMs);
           break;
         case 'google':
-          content = await callGemini(messages, candidate, temperature);
+          content = await callGemini(messages, candidate, temperature, effectiveTimeoutMs);
           break;
         default:
-          content = await callGLM(messages, candidate);
+          content = await callGLM(messages, candidate, effectiveTimeoutMs);
       }
 
       if (content) {
@@ -904,7 +946,6 @@ export async function callAIWithFallback(
         kind: 'provider_error',
         message: 'Empty response',
       });
-      failedProviders.add(provider);
     } catch (err) {
       if (err instanceof AIProviderError) {
         diagnostics.push(err.diagnostic);
@@ -916,7 +957,6 @@ export async function callAIWithFallback(
           message: err instanceof Error ? err.message : String(err),
         });
       }
-      failedProviders.add(provider);
     }
   }
 

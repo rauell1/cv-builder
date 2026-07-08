@@ -9,6 +9,7 @@ import {
 } from '@/lib/ai-provider';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 interface AiChatRequest {
   messages: { role: string; content: string }[];

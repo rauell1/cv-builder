@@ -9,6 +9,7 @@ import { sanitizeParsedCV } from '@/lib/text-cleaning';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
 
 const MAX_CV_LENGTH = 50_000; // 50 KB max raw CV text
 const MAX_RETRIES = 2;
-const REQUEST_TIMEOUT_MS = 30_000;
+const REQUEST_TIMEOUT_MS = 50_000;
 
 // ---------------------------------------------------------------------------
 // Robust JSON extraction from LLM responses
@@ -692,7 +693,7 @@ export async function POST(request: NextRequest) {
         const aiParsed = await aiQueue.enqueue(
           () => parseCvCore(cvText),
           'high',
-          25_000 // 25s timeout covers primary (~1-3s) + retries
+          45_000 // 45s timeout covers primary + retries
         );
         parsedCv = aiParsed.parsedCv;
         usedModel = aiParsed.usedModel;

@@ -74,7 +74,7 @@ export async function parseCv(cvText: string, sessionId?: string): Promise<Parse
 
 export async function analyzeJob(jobDescText: string): Promise<JobAnalysis> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20_000); // 20s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 45_000); // 45s timeout
 
   try {
     const response = await fetch('/api/analyze-job', {
@@ -525,7 +525,7 @@ export async function enhanceAchievements(
   jobContext?: string
 ): Promise<{ enhancement: AchievementEnhancement; model: string }> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30_000); // 30s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 45_000); // 45s timeout
 
   try {
     const response = await fetch('/api/enhance-achievements', {

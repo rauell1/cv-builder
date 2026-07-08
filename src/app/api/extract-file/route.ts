@@ -791,8 +791,8 @@ CRITICAL INSTRUCTIONS:
 If you cannot read any text, return: [unable to read]`
             }
           ]
-        }], 'nvidia/nemotron-ocr-v2', 10_000),
-        'normal', 12_000
+        }], 'nvidia/nemotron-ocr-v2', 25_000),
+        'normal', 30_000
       );
       if (text && text.trim() && !text.includes('[unable to read]')) return text;
       lastErr = new Error('Vision model returned no usable text.');
@@ -967,7 +967,7 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
           model
         ),
         'high',
-        20_000
+        35_000
       );
 
       const responseText = aiResult.content;
@@ -1006,7 +1006,7 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
               'deepseek/deepseek-v4-pro'
             ),
             'high',
-            20_000
+            35_000
           );
           if (strictResponse?.content) {
             const rawJson2 = extractJSON(strictResponse.content);
