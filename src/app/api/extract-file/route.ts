@@ -947,9 +947,9 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
   const truncText = cvText.length > MAX_TEXT_FOR_LLM ? cvText.substring(0, MAX_TEXT_FOR_LLM) : cvText;
 
   const retryModels = [
-    'nvidia/nemotron-ocr-v2',
     'deepseek/deepseek-v4-pro',
     'nvidia/nemotron-3-ultra-550b-a55b',
+    'z-ai/glm-5.2',
   ] as const;
 
   // --- Attempt parsing with provider-aware fallbacks ---
