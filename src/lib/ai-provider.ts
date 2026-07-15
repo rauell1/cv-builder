@@ -619,11 +619,16 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
 // integrate.api.nvidia.com returns a plain "404 page not found" for unknown
 // model ids, which is exactly what production logs showed for these names.
 // The alias keeps UI/registry names stable while sending valid ids upstream.
-// meta/llama-3.3-70b-instruct is first priority (fast, proven in production).
+//
+// Verified from inside Vercel via /api/nvidia-diag (2026-07-08):
+//   mistralai/mistral-medium-3.5-128b        -> 200 in ~405ms
+//   nvidia/llama-3.3-nemotron-super-49b-v1   -> 200 in ~599ms
+//   meta/llama-3.1-8b-instruct               -> 200 in ~283ms
+//   meta/llama-3.3-70b-instruct              -> HANGS (free-tier queue) — do not use
 const NVIDIA_MODEL_ALIASES: Record<string, string> = {
-  'deepseek/deepseek-v4-pro': 'meta/llama-3.3-70b-instruct',
-  'z-ai/glm-5.2': 'mistralai/mistral-medium-3.5-128b',
-  'nvidia/nemotron-3-ultra-550b-a55b': 'nvidia/llama-3.3-nemotron-super-49b-v1',
+  'deepseek/deepseek-v4-pro': 'mistralai/mistral-medium-3.5-128b',
+  'z-ai/glm-5.2': 'nvidia/llama-3.3-nemotron-super-49b-v1',
+  'nvidia/nemotron-3-ultra-550b-a55b': 'meta/llama-3.1-8b-instruct',
   'nvidia/nemotron-ocr-v2': 'meta/llama-3.2-90b-vision-instruct',
 };
 
