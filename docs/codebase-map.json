@@ -1,41 +1,21 @@
 {
   "version": {
-    "commit": "f2f2f41b84664473da5b6cb1c868b67ae1490487",
-    "short": "f2f2f41",
-    "generatedAt": "2026-07-22T18:02:10.325Z",
-    "baseCommit": "57c7306023494bf85c09c220226e1ec08994fd27",
+    "commit": "4c79884dfa196ea6a10796d79d600f8d0eb7bea7",
+    "short": "4c79884",
+    "generatedAt": "2026-07-22T18:10:20.887Z",
+    "baseCommit": "f2f2f41b84664473da5b6cb1c868b67ae1490487",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tsrc/app/api/analyze-job/route.ts",
-      "M\tsrc/app/api/enhance-achievements/route.ts",
-      "M\tsrc/app/api/extract-file/route.ts",
-      "M\tsrc/app/api/generate-cover-letter/route.ts",
-      "M\tsrc/app/api/generate-insights/route.ts",
-      "M\tsrc/app/api/parse-cv/route.ts",
-      "M\tsrc/app/api/restructure-cv/route.ts",
-      "M\tsrc/app/api/score-cv/route.ts",
-      "M\tsrc/lib/ai-provider.ts",
-      "M\tsrc/lib/cv-store.ts",
-      "M\tsrc/lib/cv-types.ts"
+      "M\tsrc/lib/ai-provider.ts"
     ],
-    "diffStat": " docs/codebase-map.json                     |  42 ++++---\n docs/codebase-map.md                       |  17 ++-\n src/app/api/analyze-job/route.ts           |   3 +-\n src/app/api/enhance-achievements/route.ts  |   4 +-\n src/app/api/extract-file/route.ts          |  16 ++-\n src/app/api/generate-cover-letter/route.ts |   3 +-\n src/app/api/generate-insights/route.ts     |   6 +-\n src/app/api/parse-cv/route.ts              |  13 +-\n src/app/api/restructure-cv/route.ts        |   3 +-\n src/app/api/score-cv/route.ts              |   4 +-\n src/lib/ai-provider.ts                     | 192 +++++++----------------------\n src/lib/cv-store.ts                        |   2 +-\n src/lib/cv-types.ts                        |  74 ++++++-----\n 13 files changed, 142 insertions(+), 237 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json | 79 +++++++++++++++++++++++++++++++++-----------------\n docs/codebase-map.md   | 18 ++++++++----\n src/lib/ai-provider.ts | 14 ++++++++-\n 3 files changed, 78 insertions(+), 33 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
     "incremental": true,
     "hashChangedFiles": [
-      "src/app/api/analyze-job/route.ts",
-      "src/app/api/enhance-achievements/route.ts",
-      "src/app/api/extract-file/route.ts",
-      "src/app/api/generate-cover-letter/route.ts",
-      "src/app/api/generate-insights/route.ts",
-      "src/app/api/parse-cv/route.ts",
-      "src/app/api/restructure-cv/route.ts",
-      "src/app/api/score-cv/route.ts",
-      "src/lib/ai-provider.ts",
-      "src/lib/cv-store.ts",
-      "src/lib/cv-types.ts"
+      "src/lib/ai-provider.ts"
     ],
     "newFiles": [],
     "removedFiles": [],
@@ -767,7 +747,7 @@
   "hotspots": [
     {
       "file": "src/lib/ai-provider.ts",
-      "commitTouches": 41
+      "commitTouches": 42
     },
     {
       "file": "src/app/api/extract-file/route.ts",
@@ -847,19 +827,7 @@
     }
   ],
   "affectedModules": [
-    "src/app/api/analyze-job/route.ts",
-    "src/app/api/enhance-achievements/route.ts",
-    "src/app/api/extract-file/route.ts",
-    "src/app/api/generate-cover-letter/route.ts",
-    "src/app/api/generate-insights/route.ts",
-    "src/app/api/parse-cv/route.ts",
-    "src/app/api/restructure-cv/route.ts",
-    "src/app/api/score-cv/route.ts",
-    "src/lib/ai-provider.ts",
-    "src/lib/api-calls.ts",
-    "src/lib/cv-store.ts",
-    "src/lib/cv-types.ts",
-    "src/lib/text-cleaning.ts"
+    "src/lib/ai-provider.ts"
   ],
   "metrics": {
     "fileCount": 102,
