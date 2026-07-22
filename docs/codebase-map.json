@@ -1,15 +1,15 @@
 {
   "version": {
-    "commit": "4c79884dfa196ea6a10796d79d600f8d0eb7bea7",
-    "short": "4c79884",
-    "generatedAt": "2026-07-22T18:10:20.887Z",
-    "baseCommit": "f2f2f41b84664473da5b6cb1c868b67ae1490487",
+    "commit": "e1347d2331953091518db1bef609789fe8d52a72",
+    "short": "e1347d2",
+    "generatedAt": "2026-07-22T18:44:48.303Z",
+    "baseCommit": "4c79884dfa196ea6a10796d79d600f8d0eb7bea7",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
       "M\tsrc/lib/ai-provider.ts"
     ],
-    "diffStat": " docs/codebase-map.json | 79 +++++++++++++++++++++++++++++++++-----------------\n docs/codebase-map.md   | 18 ++++++++----\n src/lib/ai-provider.ts | 14 ++++++++-\n 3 files changed, 78 insertions(+), 33 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json |  50 +++--------------\n docs/codebase-map.md   |  18 ++----\n src/lib/ai-provider.ts | 150 +++++++++++++++++++++++++++++++------------------\n 3 files changed, 107 insertions(+), 111 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
@@ -747,7 +747,7 @@
   "hotspots": [
     {
       "file": "src/lib/ai-provider.ts",
-      "commitTouches": 42
+      "commitTouches": 43
     },
     {
       "file": "src/app/api/extract-file/route.ts",
