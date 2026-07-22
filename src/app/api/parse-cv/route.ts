@@ -4,7 +4,6 @@ import { callAIWithFallback, getNextRotatingModel, hasAnyProviderCredentials } f
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
-import { checkRateLimit, resolveClientIp } from '@/lib/rate-limit';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';
 
 export const runtime = 'nodejs';
@@ -564,19 +563,7 @@ export async function POST(request: NextRequest) {
   const timeoutTimer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    // --- Rate limiting ---
-    const ip = resolveClientIp(request);
-    const { allowed, retryAfter } = checkRateLimit(ip, 'ai');
-    if (!allowed) {
-      clearTimeout(timeoutTimer);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Too many requests. Please try again in ${retryAfter} seconds.`,
-        },
-        { status: 429 }
-      );
-    }
+    // Rate limiting is enforced globally in src/proxy.ts (category 'ai').
 
     // --- Parse request body ---
     let body: Record<string, unknown>;

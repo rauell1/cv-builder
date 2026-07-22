@@ -3,13 +3,12 @@
  *
  * Supports: PDF (native text + OCR fallback), DOCX (mammoth), PNG/JPG (VLM OCR)
  *
- * Pipeline:
- *   1. Rate limit check (per-IP, 5 req/min)
- *   2. Validate uploaded file (type, size, extension)
- *   3. Extract raw text (format-specific)
- *   4. Validate extracted text (garbled detection, min length)
- *   5. Parse text via LLM → structured CV JSON (with retry)
- *   6. Return both raw text + parsed CV data
+ * Pipeline (rate limiting is enforced globally in src/proxy.ts, category 'file-upload'):
+ *   1. Validate uploaded file (type, size, extension)
+ *   2. Extract raw text (format-specific)
+ *   3. Validate extracted text (garbled detection, min length)
+ *   4. Parse text via LLM → structured CV JSON (with retry)
+ *   5. Return both raw text + parsed CV data
  */
 
 /* eslint-disable no-console */
@@ -40,7 +39,6 @@ const inflateRawAsync = promisify(zlib.inflateRaw);
 import { aiQueue } from '@/lib/request-queue';
 import { extractionCache, hashContent } from '@/lib/response-cache';
 import { callAIWithFallback, callAIVision } from '@/lib/ai-provider';
-import { checkRateLimit, resolveClientIp } from '@/lib/rate-limit';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { sanitizeGeneratedText, sanitizeParsedCV } from '@/lib/text-cleaning';
 
@@ -1045,15 +1043,7 @@ export async function POST(request: NextRequest) {
   const timeoutTimer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    // --- 1. Rate limit check ---
-    const ip = resolveClientIp(request);
-    const { allowed, retryAfter } = checkRateLimit(ip, 'file-upload');
-    if (!allowed) {
-      return NextResponse.json(
-        { success: false, error: `Too many upload requests. Please wait ${retryAfter} seconds before trying again.` },
-        { status: 429 }
-      );
-    }
+    // Rate limiting is enforced globally in src/proxy.ts (category 'file-upload').
 
     // --- 2. Parse FormData ---
     let formData: FormData;
