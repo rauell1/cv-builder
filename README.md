@@ -142,6 +142,9 @@ All supported providers and the direct links to obtain API keys:
 - **Environment variable**:
   ```env
   GOOGLE_AI_API_KEY=your-google-ai-api-key-here
+  # Optional — add a second (or third) key for more combined free-tier quota.
+  # Each var may also be comma-separated to hold multiple keys itself.
+  GOOGLE_AI_API_KEYS=your-second-google-ai-api-key-here
   ```
 - **Role in this app**: `gemini-2.5-flash` is wired in as a cross-provider redundancy
   fallback (`GEMINI_FALLBACK_MODEL` in `src/lib/ai-provider.ts`). It is appended as
@@ -150,6 +153,9 @@ All supported providers and the direct links to obtain API keys:
   starting/primary model, which keeps it off the low free-tier quota during
   normal traffic. Setting `GOOGLE_AI_API_KEY` is optional; without it the app
   behaves exactly as before (NVIDIA-only), just without this safety net.
+  `getGoogleApiKeys()` merges `GOOGLE_AI_API_KEY` + `GOOGLE_AI_API_KEYS` (+ the
+  legacy `GOOGLE_API_KEY`/`GEMINI_API_KEY` aliases) into one pool and rotates
+  across them on auth/quota failures, same as the NVIDIA multi-key pool.
 
 ### Environment Variables Summary
 
@@ -165,8 +171,9 @@ OPENAI_API_KEY=sk-your-openai-key
 # Anthropic
 ANTHROPIC_API_KEY=sk-ant-your-key
 
-# Google AI
+# Google AI (optional second key for more free-tier quota)
 GOOGLE_AI_API_KEY=your-google-key
+GOOGLE_AI_API_KEYS=your-second-google-key
 
 # Database (SQLite — set the path for your environment)
 DATABASE_URL=file:./dev.db
@@ -305,6 +312,7 @@ Set all required API keys in your deployment environment (Vercel dashboard → S
 | `OPENAI_API_KEY` | GPT-4o, GPT-4o Mini |
 | `ANTHROPIC_API_KEY` | Claude 4 Sonnet, Claude 4 Haiku |
 | `GOOGLE_AI_API_KEY` | Gemini 2.5 Flash, Gemini 2.5 Pro |
+| `GOOGLE_AI_API_KEYS` | Optional — a second Gemini key for more combined free-tier quota |
 | `DATABASE_URL` | Prisma SQLite database (e.g. `file:./dev.db`) |
 
 ---
