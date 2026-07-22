@@ -1,23 +1,40 @@
 {
   "version": {
-    "commit": "57c7306023494bf85c09c220226e1ec08994fd27",
-    "short": "57c7306",
-    "generatedAt": "2026-07-22T17:38:42.563Z",
-    "baseCommit": "643a18bcad39dbb953f911c9f497a5d90a701d3a",
+    "commit": "f2f2f41b84664473da5b6cb1c868b67ae1490487",
+    "short": "f2f2f41",
+    "generatedAt": "2026-07-22T18:02:10.325Z",
+    "baseCommit": "57c7306023494bf85c09c220226e1ec08994fd27",
     "changeSummary": [
-      "M\tREADME.md",
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
+      "M\tsrc/app/api/analyze-job/route.ts",
+      "M\tsrc/app/api/enhance-achievements/route.ts",
+      "M\tsrc/app/api/extract-file/route.ts",
+      "M\tsrc/app/api/generate-cover-letter/route.ts",
+      "M\tsrc/app/api/generate-insights/route.ts",
+      "M\tsrc/app/api/parse-cv/route.ts",
+      "M\tsrc/app/api/restructure-cv/route.ts",
+      "M\tsrc/app/api/score-cv/route.ts",
       "M\tsrc/lib/ai-provider.ts",
+      "M\tsrc/lib/cv-store.ts",
       "M\tsrc/lib/cv-types.ts"
     ],
-    "diffStat": " README.md              |   9 +-\n docs/codebase-map.json | 350 +++----------------------------------------------\n docs/codebase-map.md   |  23 +---\n src/lib/ai-provider.ts |  28 +++-\n src/lib/cv-types.ts    |  15 +++\n 5 files changed, 72 insertions(+), 353 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json                     |  42 ++++---\n docs/codebase-map.md                       |  17 ++-\n src/app/api/analyze-job/route.ts           |   3 +-\n src/app/api/enhance-achievements/route.ts  |   4 +-\n src/app/api/extract-file/route.ts          |  16 ++-\n src/app/api/generate-cover-letter/route.ts |   3 +-\n src/app/api/generate-insights/route.ts     |   6 +-\n src/app/api/parse-cv/route.ts              |  13 +-\n src/app/api/restructure-cv/route.ts        |   3 +-\n src/app/api/score-cv/route.ts              |   4 +-\n src/lib/ai-provider.ts                     | 192 +++++++----------------------\n src/lib/cv-store.ts                        |   2 +-\n src/lib/cv-types.ts                        |  74 ++++++-----\n 13 files changed, 142 insertions(+), 237 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
     "incremental": true,
     "hashChangedFiles": [
+      "src/app/api/analyze-job/route.ts",
+      "src/app/api/enhance-achievements/route.ts",
+      "src/app/api/extract-file/route.ts",
+      "src/app/api/generate-cover-letter/route.ts",
+      "src/app/api/generate-insights/route.ts",
+      "src/app/api/parse-cv/route.ts",
+      "src/app/api/restructure-cv/route.ts",
+      "src/app/api/score-cv/route.ts",
       "src/lib/ai-provider.ts",
+      "src/lib/cv-store.ts",
       "src/lib/cv-types.ts"
     ],
     "newFiles": [],
@@ -750,27 +767,35 @@
   "hotspots": [
     {
       "file": "src/lib/ai-provider.ts",
-      "commitTouches": 40
+      "commitTouches": 41
     },
     {
       "file": "src/app/api/extract-file/route.ts",
-      "commitTouches": 23
+      "commitTouches": 24
     },
     {
       "file": "src/app/api/parse-cv/route.ts",
-      "commitTouches": 23
+      "commitTouches": 24
     },
     {
       "file": "src/app/api/analyze-job/route.ts",
-      "commitTouches": 19
+      "commitTouches": 20
     },
     {
       "file": "src/components/cv-builder/cv-input-step.tsx",
       "commitTouches": 12
     },
     {
+      "file": "src/app/api/generate-cover-letter/route.ts",
+      "commitTouches": 11
+    },
+    {
+      "file": "src/app/api/restructure-cv/route.ts",
+      "commitTouches": 11
+    },
+    {
       "file": "src/lib/cv-types.ts",
-      "commitTouches": 10
+      "commitTouches": 11
     },
     {
       "file": "src/lib/api-calls.ts",
@@ -781,12 +806,16 @@
       "commitTouches": 10
     },
     {
-      "file": "src/app/api/generate-cover-letter/route.ts",
-      "commitTouches": 10
+      "file": "src/app/api/enhance-achievements/route.ts",
+      "commitTouches": 9
     },
     {
-      "file": "src/app/api/restructure-cv/route.ts",
-      "commitTouches": 10
+      "file": "src/app/api/generate-insights/route.ts",
+      "commitTouches": 9
+    },
+    {
+      "file": "src/app/api/score-cv/route.ts",
+      "commitTouches": 9
     },
     {
       "file": "src/app/api/health/route.ts",
@@ -809,18 +838,6 @@
       "commitTouches": 8
     },
     {
-      "file": "src/app/api/enhance-achievements/route.ts",
-      "commitTouches": 8
-    },
-    {
-      "file": "src/app/api/generate-insights/route.ts",
-      "commitTouches": 8
-    },
-    {
-      "file": "src/app/api/score-cv/route.ts",
-      "commitTouches": 8
-    },
-    {
       "file": "src/app/api/generate-cover-letter-pdf/route.ts",
       "commitTouches": 6
     },
@@ -830,6 +847,14 @@
     }
   ],
   "affectedModules": [
+    "src/app/api/analyze-job/route.ts",
+    "src/app/api/enhance-achievements/route.ts",
+    "src/app/api/extract-file/route.ts",
+    "src/app/api/generate-cover-letter/route.ts",
+    "src/app/api/generate-insights/route.ts",
+    "src/app/api/parse-cv/route.ts",
+    "src/app/api/restructure-cv/route.ts",
+    "src/app/api/score-cv/route.ts",
     "src/lib/ai-provider.ts",
     "src/lib/api-calls.ts",
     "src/lib/cv-store.ts",
