@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { callAIWithFallback, getNextRotatingModel, hasAnyProviderCredentials } from '@/lib/ai-provider';
+import { callAIWithFallback, getNextRotatingModel, hasAnyProviderCredentials, NVIDIA_TEXT_MODELS, DEFAULT_TEXT_MODEL } from '@/lib/ai-provider';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
@@ -453,7 +453,7 @@ interface ParseResult {
 
 async function parseCvCore(cvText: string): Promise<ParseResult> {
   const t0 = Date.now();
-  const startModel = getNextRotatingModel('deepseek/deepseek-v4-pro');
+  const startModel = getNextRotatingModel(DEFAULT_TEXT_MODEL);
 
   // --- Attempt 1: Primary call with fast fallback ---
   const aiResult = await callAIWithFallback(
@@ -479,14 +479,11 @@ async function parseCvCore(cvText: string): Promise<ParseResult> {
   }
 
   // --- Self-healing: retries across multiple providers ---
-  const retryModels = [
-    'deepseek/deepseek-v4-pro',
-    'nvidia/nemotron-3-ultra-550b-a55b',
-    'z-ai/glm-5.2',
-  ] as const;
+  // Reuses the single source-of-truth NVIDIA model list.
+  const retryModels = NVIDIA_TEXT_MODELS;
 
   for (let retry = 0; retry < retryModels.length && !parsedCv; retry++) {
-    const retryModel = retryModels[retry] || 'deepseek/deepseek-v4-pro';
+    const retryModel = retryModels[retry] || DEFAULT_TEXT_MODEL;
     console.warn(
       `[parse-cv] Retry ${retry + 1}/${MAX_RETRIES} with model ${retryModel}...`
     );

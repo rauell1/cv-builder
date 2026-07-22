@@ -87,15 +87,7 @@ const PROVIDER_KEY_ALIASES: Record<AIProvider, string[]> = {
   openai: ['OPENAI_API_KEY', 'OPENAI_KEY'],
   anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
   google: ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
-  nvidia: [
-    'NVIDIA_API_KEY',
-    'NVIDIA_NIM_API_KEY',
-    'NVIDIA_DEEPSEEK_KEYS',
-    'NVIDIA_GLM5_KEYS',
-    'NVIDIA_NEMO_KEYS',
-    'NVIDIA_MISTRAL_KEYS',
-    'NVIDIA_KIMI_KEYS'
-  ],
+  nvidia: ['NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY'],
 };
 
 type ResolvedEnv = { value: string; source: string } | null;
@@ -140,14 +132,7 @@ export function getProviderKeyNames(provider: AIProvider): string[] {
 }
 
 function hasNvidiaCredentials(): boolean {
-  return Boolean(
-    getProviderApiKey('nvidia') ||
-    readEnvValue('NVIDIA_DEEPSEEK_KEYS') ||
-    readEnvValue('NVIDIA_GLM5_KEYS') ||
-    readEnvValue('NVIDIA_NEMO_KEYS') ||
-    readEnvValue('NVIDIA_MISTRAL_KEYS') ||
-    readEnvValue('NVIDIA_KIMI_KEYS')
-  );
+  return Boolean(getProviderApiKey('nvidia'));
 }
 
 export function hasAnyProviderCredentials(): boolean {
@@ -203,10 +188,11 @@ export function getProviderCredentialDetails(): {
 // ---- Utility Functions ----
 
 export function getProvider(modelId: string): AIProvider {
+  // Prefixes match the NVIDIA NIM catalog ids actually in use (see
+  // NVIDIA_TEXT_MODELS / OCR_MODEL below) — trimmed to only what's used so
+  // this stays a reliable map, not a list of hypothetical future models.
   if (
-    modelId.startsWith('nvidia/') || modelId.startsWith('z-ai/') || modelId.startsWith('deepseek/') ||
-    modelId.startsWith('meta/') || modelId.startsWith('mistralai/') || modelId.startsWith('deepseek-ai/') ||
-    modelId.startsWith('moonshotai/') || modelId.startsWith('qwen/')
+    modelId.startsWith('nvidia/') || modelId.startsWith('meta/') || modelId.startsWith('mistralai/')
   ) return 'nvidia';
   if (modelId.startsWith('glm-')) return 'glm';
   if (modelId.startsWith('gpt-')) return 'openai';
@@ -230,9 +216,9 @@ export function estimateComplexity(
   return 'standard';
 }
 
-export function autoSelectModel(complexity: 'simple' | 'standard' | 'complex'): string {
-  // Consolidating on deepseek/deepseek-v4-pro for all writing and restructuring tasks.
-  return 'deepseek/deepseek-v4-pro';
+export function autoSelectModel(_complexity: 'simple' | 'standard' | 'complex'): string {
+  // Consolidated on one default model for all writing and restructuring tasks.
+  return DEFAULT_TEXT_MODEL;
 }
 
 // ---- Provider Implementations ----
@@ -621,88 +607,28 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
   }
 }
 
-// Registry model ids → real NVIDIA NIM catalog ids.
-// integrate.api.nvidia.com returns a plain "404 page not found" for unknown
-// model ids, which is exactly what production logs showed for these names.
-// The alias keeps UI/registry names stable while sending valid ids upstream.
-//
-// Verified from inside Vercel via /api/nvidia-diag (2026-07-08):
-//   mistralai/mistral-medium-3.5-128b        -> 200 in ~405ms
-//   nvidia/llama-3.3-nemotron-super-49b-v1   -> 200 in ~599ms
-//   meta/llama-3.1-8b-instruct               -> 200 in ~283ms
-//   meta/llama-3.3-70b-instruct              -> HANGS (free-tier queue) — do not use
-const NVIDIA_MODEL_ALIASES: Record<string, string> = {
-  'deepseek/deepseek-v4-pro': 'mistralai/mistral-medium-3.5-128b',
-  'z-ai/glm-5.2': 'nvidia/llama-3.3-nemotron-super-49b-v1',
-  'nvidia/nemotron-3-ultra-550b-a55b': 'meta/llama-3.1-8b-instruct',
-  'nvidia/nemotron-ocr-v2': 'meta/llama-3.2-90b-vision-instruct',
-};
+const NVIDIA_CHAT_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
-function resolveNvidiaParams(modelId: string): { url: string; modelName: string; apiKeys: string[] } {
-  let url = 'https://integrate.api.nvidia.com/v1/chat/completions';
-  let modelName = NVIDIA_MODEL_ALIASES[modelId] ?? modelId;
-  let specificKeysStr: string | null = null;
-
-  if (modelId.includes('glm-5.2') || modelId.includes('glm5')) {
-    if (process.env.NVIDIA_GLM5_URL) url = process.env.NVIDIA_GLM5_URL;
-    specificKeysStr = readEnvValue('NVIDIA_GLM5_KEYS');
-  } else if (modelId.includes('nemotron') || modelId.includes('nemo')) {
-    if (process.env.NVIDIA_NEMO_URL) url = process.env.NVIDIA_NEMO_URL;
-    if (process.env.NVIDIA_NEMO_MODEL) modelName = process.env.NVIDIA_NEMO_MODEL;
-    specificKeysStr = readEnvValue('NVIDIA_NEMO_KEYS');
-  } else if (modelId.includes('deepseek')) {
-    if (process.env.NVIDIA_DEEPSEEK_URL) url = process.env.NVIDIA_DEEPSEEK_URL;
-    if (process.env.NVIDIA_DEEPSEEK_MODEL) modelName = process.env.NVIDIA_DEEPSEEK_MODEL;
-    specificKeysStr = readEnvValue('NVIDIA_DEEPSEEK_KEYS');
-  } else if (modelId.includes('kimi')) {
-    if (process.env.NVIDIA_KIMI_URL) url = process.env.NVIDIA_KIMI_URL;
-    if (process.env.NVIDIA_KIMI_MODEL) modelName = process.env.NVIDIA_KIMI_MODEL;
-    specificKeysStr = readEnvValue('NVIDIA_KIMI_KEYS');
-  } else if (modelId.includes('mistral')) {
-    if (process.env.NVIDIA_MISTRAL_URL) url = process.env.NVIDIA_MISTRAL_URL;
-    if (process.env.NVIDIA_MISTRAL_MODEL) modelName = process.env.NVIDIA_MISTRAL_MODEL;
-    specificKeysStr = readEnvValue('NVIDIA_MISTRAL_KEYS');
-  }
-
-  const apiKeys: string[] = [];
-
-  // 1. Add model-specific keys first if configured
-  if (specificKeysStr) {
-    const parsed = specificKeysStr.split(',').map(k => k.trim()).filter(Boolean);
-    apiKeys.push(...parsed);
-  }
-
-  // 2. Add general NVIDIA keys as fallback
-  const generalKeysStr = getProviderApiKey('nvidia');
-  if (generalKeysStr) {
-    const parsed = generalKeysStr.split(',').map(k => k.trim()).filter(Boolean);
-    apiKeys.push(...parsed);
-  }
-
-  // Remove duplicates while preserving order
-  const uniqueApiKeys = [...new Set(apiKeys)];
-
-  // Ensure url ends with /chat/completions if it's just a base URL
-  if (url && !url.endsWith('/chat/completions') && !url.endsWith('/completions')) {
-    if (url.endsWith('/v1') || url.endsWith('/v1/')) {
-      url = url.replace(/\/+$/, '') + '/chat/completions';
-    } else {
-      url = url.replace(/\/+$/, '') + '/v1/chat/completions';
-    }
-  }
-
-  return { url, modelName, apiKeys: uniqueApiKeys };
+// All model ids used in this app are real NVIDIA NIM catalog ids sent as-is —
+// no alias/translation layer. (A previous version routed through fictional
+// "marketing" ids like 'deepseek/deepseek-v4-pro' translated to a real id at
+// call time; that indirection let the UI/logs claim one model while a
+// different one actually ran, and caused a production 404 outage. Verified
+// directly against the NVIDIA API from inside Vercel on 2026-07-08.)
+function getNvidiaApiKeys(): string[] {
+  const keysStr = getProviderApiKey('nvidia');
+  return keysStr ? [...new Set(keysStr.split(',').map((k) => k.trim()).filter(Boolean))] : [];
 }
 
 async function callNvidia(messages: AIMessage[], modelId: string, temperature = 0.5, timeoutMs = 30_000): Promise<string | null> {
-  const { url, modelName, apiKeys } = resolveNvidiaParams(modelId);
+  const apiKeys = getNvidiaApiKeys();
 
   if (apiKeys.length === 0) {
     throw new AIProviderError({
       provider: 'nvidia',
       model: modelId,
       kind: 'missing_key',
-      message: `Missing API key for ${modelId}. Configure NVIDIA_API_KEY or model-specific keys (e.g., NVIDIA_DEEPSEEK_KEYS).`,
+      message: `Missing API key for ${modelId}. Configure NVIDIA_API_KEY.`,
     });
   }
 
@@ -713,7 +639,7 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const res = await fetch(url, {
+      const res = await fetch(NVIDIA_CHAT_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -721,7 +647,7 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
         },
         // max_tokens bounds generation time — without it, long restructure
         // outputs can generate past every timeout on the free NIM tier.
-        body: JSON.stringify({ model: modelName, messages, temperature, max_tokens: 4096 }),
+        body: JSON.stringify({ model: modelId, messages, temperature, max_tokens: 4096 }),
         signal: controller.signal,
       });
 
@@ -845,40 +771,30 @@ export async function callAIVision(
   return callOpenAIVision(messages, 'gpt-4o-mini', timeoutMs);
 }
 
-const FALLBACK_MODEL_MAP: Record<string, string> = {
-  'nvidia/nemotron-ocr-v2': 'nvidia/nemotron-3-ultra-550b-a55b',
-  'z-ai/glm-5.2': 'deepseek/deepseek-v4-pro',
-  'nvidia/nemotron-3-ultra-550b-a55b': 'deepseek/deepseek-v4-pro',
-  'deepseek/deepseek-v4-pro': 'nvidia/nemotron-3-ultra-550b-a55b',
-};
-
-const NVIDIA_MODELS = [
-  'nvidia/nemotron-ocr-v2',
-  'z-ai/glm-5.2',
-  'nvidia/nemotron-3-ultra-550b-a55b',
-  'deepseek/deepseek-v4-pro',
+// Single source of truth for NVIDIA text models — one flat, priority-ordered
+// list instead of three near-duplicate constants that had to be hand-kept in
+// sync. Order = try Mistral first (best quality), then Nemotron, then the
+// small/fast Llama as last resort. All verified reachable from inside Vercel
+// on 2026-07-08 (see git history for the /api/nvidia-diag probe results).
+export const NVIDIA_TEXT_MODELS = [
+  'mistralai/mistral-medium-3.5-128b',
+  'nvidia/llama-3.3-nemotron-super-49b-v1',
+  'meta/llama-3.1-8b-instruct',
 ] as const;
 
-const NVIDIA_TEXT_MODELS = [
-  'deepseek/deepseek-v4-pro',
-  'z-ai/glm-5.2',
-  'nvidia/nemotron-3-ultra-550b-a55b',
-] as const;
+export const DEFAULT_TEXT_MODEL: string = NVIDIA_TEXT_MODELS[0];
 
-const MODEL_ROTATION_ORDER = [
-  'deepseek/deepseek-v4-pro',
-  'z-ai/glm-5.2',
-  'nvidia/nemotron-3-ultra-550b-a55b',
-] as const;
+// Dedicated OCR/vision model for extract-file's callAIVision() path.
+export const OCR_MODEL = 'meta/llama-3.2-90b-vision-instruct';
 
 // Cross-provider redundancy safety net. Gemini 2.5 Flash has a genuine free
 // tier via Google AI Studio (aistudio.google.com/apikey — NOT a billed Vertex
-// AI project). Deliberately kept OUT of MODEL_ROTATION_ORDER/NVIDIA_TEXT_MODELS
-// and appended only inside callAIWithFallback() (not buildFallbackChain()), so
-// it never becomes a *starting* model via getNextRotatingModel(). That keeps
-// it purely as a last-resort fallback for a full NVIDIA outage — like the one
-// this app already hit once — instead of spending its low free-tier quota
-// (RPM/RPD limits) on ordinary traffic.
+// AI project). Deliberately kept OUT of NVIDIA_TEXT_MODELS and appended only
+// inside callAIWithFallback() (not buildFallbackChain()), so it never becomes
+// a *starting* model via getNextRotatingModel(). That keeps it purely as a
+// last-resort fallback for a full NVIDIA outage — like the one this app
+// already hit once — instead of spending its low free-tier quota (RPM/RPD
+// limits) on ordinary traffic.
 const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash';
 
 let modelRotationIndex = 0;
@@ -901,39 +817,17 @@ function hasProviderCredentials(provider: AIProvider): boolean {
   }
 }
 
-function getProviderModelFallbacks(provider: AIProvider): string[] {
-  switch (provider) {
-    case 'nvidia':
-      return [...NVIDIA_TEXT_MODELS];
-    default:
-      return [];
-  }
-}
-
 function buildFallbackChain(primaryModel: string): string[] {
-  const primaryProvider = getProvider(primaryModel);
   const chain: string[] = [primaryModel];
-
-  const directFallback = FALLBACK_MODEL_MAP[primaryModel];
-  if (directFallback) chain.push(directFallback);
-
-  for (const model of getProviderModelFallbacks(primaryProvider)) {
-    chain.push(model);
-  }
-
   if (hasProviderCredentials('nvidia')) {
     chain.push(...NVIDIA_TEXT_MODELS);
   }
-
   return [...new Set(chain)].filter(Boolean);
 }
 
 export function getNextRotatingModel(preferredModel?: string): string {
-  const seed = preferredModel || 'glm-4-flash';
-  const pool = [
-    ...MODEL_ROTATION_ORDER,
-    ...buildFallbackChain(seed),
-  ];
+  const seed = preferredModel || DEFAULT_TEXT_MODEL;
+  const pool = buildFallbackChain(seed);
 
   const enabled = [...new Set(pool)].filter((model) => hasProviderCredentials(getProvider(model)));
   if (enabled.length === 0) return seed;

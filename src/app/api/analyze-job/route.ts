@@ -6,6 +6,7 @@ import {
   getProviderCredentialDetails,
   getProviderCredentialStatus,
   hasAnyProviderCredentials,
+  DEFAULT_TEXT_MODEL,
 } from '@/lib/ai-provider';
 import { JOB_ANALYSIS_SYSTEM_PROMPT, type JobAnalysis } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
           { role: 'system', content: JOB_ANALYSIS_SYSTEM_PROMPT },
           { role: 'user', content: jobDescText },
         ],
-        getNextRotatingModel('deepseek/deepseek-v4-pro'),
+        getNextRotatingModel(DEFAULT_TEXT_MODEL),
         'simple'
       ),
       'normal',

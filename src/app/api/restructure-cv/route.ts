@@ -4,6 +4,7 @@ import {
   callAIWithFallback,
   getNextRotatingModel,
   estimateComplexity,
+  DEFAULT_TEXT_MODEL,
 } from '@/lib/ai-provider';
 import {
   CV_RESTRUCTURE_SYSTEM_PROMPT,
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
     const projectCount = (parsedCv.projects || []).length;
     const complexity = estimateComplexity(cvLength, jobLength, totalBullets, projectCount);
 
-    const requestedModel = modelId || getNextRotatingModel('deepseek/deepseek-v4-pro');
+    const requestedModel = modelId || getNextRotatingModel(DEFAULT_TEXT_MODEL);
 
     const messages = [
       { role: 'system' as const, content: CV_RESTRUCTURE_SYSTEM_PROMPT },

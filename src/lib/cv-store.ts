@@ -112,7 +112,7 @@ interface CVBuilderState {
   reset: () => void;
 }
 
-const defaultModel = AVAILABLE_MODELS.find(m => m.id === 'deepseek/deepseek-v4-pro') || AVAILABLE_MODELS[0];
+const defaultModel = AVAILABLE_MODELS.find(m => m.id === 'mistralai/mistral-medium-3.5-128b') || AVAILABLE_MODELS[0];
 
 const initialState = {
   step: 'landing' as BuilderStep,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callAIWithFallback } from '@/lib/ai-provider';
+import { callAIWithFallback, DEFAULT_TEXT_MODEL } from '@/lib/ai-provider';
 import type { CVScore, ParsedCV, JobAnalysis } from '@/lib/cv-types';
 
 export const runtime = 'nodejs';
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
         { role: 'system', content: CV_SCORE_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      'deepseek/deepseek-v4-pro',
+      DEFAULT_TEXT_MODEL,
       'complex'
     );
 

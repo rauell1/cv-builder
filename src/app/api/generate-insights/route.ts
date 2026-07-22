@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callAI } from '@/lib/ai-provider';
+import { callAI, DEFAULT_TEXT_MODEL } from '@/lib/ai-provider';
 import {
   SECTION_INSIGHT_SYSTEM_PROMPT,
   type ParsedCV,
@@ -115,7 +115,7 @@ function isValidSectionInsight(obj: unknown): obj is SectionInsight {
 }
 
 /**
- * Generate insights for a single section using callAI (deepseek/deepseek-v4-pro).
+ * Generate insights for a single section using callAI (DEFAULT_TEXT_MODEL).
  * Returns a valid SectionInsight or null on failure.
  */
 async function generateSingleSectionInsight(
@@ -139,7 +139,7 @@ async function generateSingleSectionInsight(
         { role: 'system', content: SECTION_INSIGHT_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      'deepseek/deepseek-v4-pro',
+      DEFAULT_TEXT_MODEL,
       0.4
     );
 

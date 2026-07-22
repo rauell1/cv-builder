@@ -4,6 +4,7 @@ import {
   getNextRotatingModel,
   getProvider,
   getRequiredEnvKey,
+  DEFAULT_TEXT_MODEL,
   type AIMessage,
 } from '@/lib/ai-provider';
 import {
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
   try {
     const body: GenerateCoverLetterRequest = await request.json();
     const { cvData, jobAnalysis, jobDescText, formatId, modelId } = body;
-    const requestedModel = modelId || getNextRotatingModel('deepseek/deepseek-v4-pro');
+    const requestedModel = modelId || getNextRotatingModel(DEFAULT_TEXT_MODEL);
 
     // Validate required fields
     if (!cvData || typeof cvData !== 'object') {

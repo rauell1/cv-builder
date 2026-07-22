@@ -38,7 +38,7 @@ const inflateRawAsync = promisify(zlib.inflateRaw);
 // ---- Project infrastructure ----
 import { aiQueue } from '@/lib/request-queue';
 import { extractionCache, hashContent } from '@/lib/response-cache';
-import { callAIWithFallback, callAIVision } from '@/lib/ai-provider';
+import { callAIWithFallback, callAIVision, NVIDIA_TEXT_MODELS, DEFAULT_TEXT_MODEL, OCR_MODEL } from '@/lib/ai-provider';
 import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { sanitizeGeneratedText, sanitizeParsedCV } from '@/lib/text-cleaning';
 
@@ -609,7 +609,7 @@ CRITICAL INSTRUCTIONS:
 If the page is empty or contains only images, return: [empty page]`
                 }
               ]
-            }], 'nvidia/nemotron-ocr-v2', 30_000),
+            }], OCR_MODEL, 30_000),
             'normal', 35_000
           );
           pageText = text?.trim() || '';
@@ -789,7 +789,7 @@ CRITICAL INSTRUCTIONS:
 If you cannot read any text, return: [unable to read]`
             }
           ]
-        }], 'nvidia/nemotron-ocr-v2', 25_000),
+        }], OCR_MODEL, 25_000),
         'normal', 30_000
       );
       if (text && text.trim() && !text.includes('[unable to read]')) return text;
@@ -944,11 +944,9 @@ interface ParseResult { parsedCv: ParsedCV; usedModel: string; responseText: str
 async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
   const truncText = cvText.length > MAX_TEXT_FOR_LLM ? cvText.substring(0, MAX_TEXT_FOR_LLM) : cvText;
 
-  const retryModels = [
-    'deepseek/deepseek-v4-pro',
-    'nvidia/nemotron-3-ultra-550b-a55b',
-    'z-ai/glm-5.2',
-  ] as const;
+  // Reuses the single source-of-truth NVIDIA model list instead of a
+  // separately hand-maintained duplicate.
+  const retryModels = NVIDIA_TEXT_MODELS;
 
   // --- Attempt parsing with provider-aware fallbacks ---
   for (let attempt = 0; attempt < retryModels.length; attempt++) {
@@ -1001,7 +999,7 @@ async function parseCvWithRetry(cvText: string): Promise<ParseResult> {
                 { role: 'system', content: 'You are a CV parser. Return ONLY valid JSON. Never leave fullName, email, or phone empty if they exist.' },
                 { role: 'user', content: `You MUST extract information from this CV into EXACTLY this JSON structure. Do NOT leave fullName, email, or phone empty if they exist. Return ONLY the JSON.\n\n${CV_PARSE_SYSTEM_PROMPT}\n\nCV TEXT:\n${truncText}` },
               ],
-              'deepseek/deepseek-v4-pro'
+              DEFAULT_TEXT_MODEL
             ),
             'high',
             35_000
