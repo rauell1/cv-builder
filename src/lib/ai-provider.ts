@@ -886,7 +886,19 @@ export async function callAIWithFallback(
       });
       break;
     }
-    const effectiveTimeoutMs = Math.min(perModelTimeoutMs, remainingMs);
+
+    // Divide the remaining budget fairly across the attempts still ahead
+    // (including this one) instead of letting each candidate greedily take
+    // up to its full per-model timeout. Without this, 1-2 slow/timed-out
+    // models could exhaust the entire budget, silently starving out the
+    // Gemini last-resort fallback appended at the end of the chain — which
+    // defeats the whole point of having it. Every remaining candidate
+    // (Gemini included) is now guaranteed a fair, non-zero shot.
+    const remainingCandidateCount = candidates
+      .slice(i)
+      .filter((m) => hasProviderCredentials(getProvider(m))).length;
+    const fairShareMs = remainingMs / Math.max(remainingCandidateCount, 1);
+    const effectiveTimeoutMs = Math.min(perModelTimeoutMs, fairShareMs);
 
     if (i > 0) {
       console.warn(`[AI] Model ${modelId} failed, trying fallback ${candidate} (${remainingMs}ms budget left)`);
