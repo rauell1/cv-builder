@@ -163,6 +163,11 @@ GOOGLE_AI_API_KEY=your-google-key
 
 # Database (SQLite — set the path for your environment)
 DATABASE_URL=file:./dev.db
+
+# Cron secret — required for the daily session-cleanup cron (see vercel.json).
+# Vercel automatically sends this as a Bearer token when triggering the cron;
+# set it to any random string in Vercel → Settings → Environment Variables.
+CRON_SECRET=your-random-secret-here
 ```
 
 ---

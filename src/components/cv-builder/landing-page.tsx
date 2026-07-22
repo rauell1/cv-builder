@@ -754,11 +754,11 @@ export function LandingPage() {
                         id="trust-heading"
                         className="font-semibold text-foreground text-base mb-1.5"
                       >
-                        No Account Required. No CV Stored.
+                        No Account Required. Auto-Deleted After 30 Days.
                       </h3>
                       <p className="text-sm text-muted-foreground leading-relaxed max-w-lg">
-                        Your CV is processed in memory and discarded when your session ends.
-                        No sign-up, no data retention, no mailing list. Your information stays yours.
+                        No sign-up needed to build your CV. Session data is automatically deleted
+                        after 30 days and is never shared or sold. Your information stays yours.
                       </p>
                     </div>
                     <Button
