@@ -86,7 +86,7 @@ const PROVIDER_KEY_ALIASES: Record<AIProvider, string[]> = {
   glm: ['ZHIPU_API_KEY', 'GLM_API_KEY', 'BIGMODEL_API_KEY'],
   openai: ['OPENAI_API_KEY', 'OPENAI_KEY'],
   anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
-  google: ['GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
+  google: ['GOOGLE_AI_API_KEY', 'GOOGLE_AI_API_KEYS', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
   nvidia: ['NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY'],
 };
 
@@ -530,9 +530,19 @@ async function callAnthropic(messages: AIMessage[], modelId: string, temperature
   }
 }
 
+// Merges all Google key env vars into one pool (each may itself be
+// comma-separated), mirroring getNvidiaApiKeys() below. GOOGLE_AI_API_KEYS
+// (plural) lets a second/third key be added without editing the first.
+function getGoogleApiKeys(): string[] {
+  const raw = ['GOOGLE_AI_API_KEY', 'GOOGLE_AI_API_KEYS', 'GOOGLE_API_KEY', 'GEMINI_API_KEY']
+    .map((name) => readEnvValue(name));
+  const keys = raw.flatMap((v) => (v ? v.split(',').map((k) => k.trim()).filter(Boolean) : []));
+  return [...new Set(keys)];
+}
+
 async function callGemini(messages: AIMessage[], modelId: string, temperature = 0.5, timeoutMs = 30_000): Promise<string | null> {
-  const apiKey = getProviderApiKey('google');
-  if (!apiKey) {
+  const apiKeys = getGoogleApiKeys();
+  if (apiKeys.length === 0) {
     throw new AIProviderError({
       provider: 'google',
       model: modelId,
@@ -541,70 +551,98 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
     });
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    let systemInstruction: string | undefined;
-    const contents: { role: string; parts: { text: string }[] }[] = [];
-    for (const msg of messages) {
-      if (msg.role === 'system') {
-        systemInstruction = msg.content;
-      } else {
-        contents.push({
-          role: msg.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: msg.content }],
-        });
-      }
-    }
-
-    const body: Record<string, unknown> = {
-      contents,
-      // maxOutputTokens bounds generation time, mirroring the max_tokens cap
-      // applied to NVIDIA calls — keeps this last-resort path fast and cheap.
-      generationConfig: { temperature, maxOutputTokens: 4096 },
-    };
-    if (systemInstruction) {
-      body.systemInstruction = { parts: [{ text: systemInstruction }] };
-    }
-
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      }
-    );
-
-    // Do NOT clear the abort timer until the body is fully read — the same
-    // fetch()-resolves-on-headers pitfall that hung NVIDIA calls applies here.
-    if (!res.ok) {
-      const errText = await res.text();
-      clearTimeout(timer);
-      throw new AIProviderError({
-        provider: 'google',
-        model: modelId,
-        kind: 'http_error',
-        status: res.status,
-        message: errText.substring(0, 400) || `HTTP ${res.status}`,
+  let systemInstruction: string | undefined;
+  const contents: { role: string; parts: { text: string }[] }[] = [];
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      systemInstruction = msg.content;
+    } else {
+      contents.push({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }],
       });
     }
-    const data = await res.json();
-    clearTimeout(timer);
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
-  } catch (err) {
-    clearTimeout(timer);
-    if (err instanceof AIProviderError) throw err;
-    const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
-    throw new AIProviderError({
-      provider: 'google',
-      model: modelId,
-      kind: isTimeout ? 'timeout' : 'network_error',
-      message: err instanceof Error ? err.message : String(err),
-    });
   }
+
+  const body: Record<string, unknown> = {
+    contents,
+    // maxOutputTokens bounds generation time, mirroring the max_tokens cap
+    // applied to NVIDIA calls — keeps this last-resort path fast and cheap.
+    generationConfig: { temperature, maxOutputTokens: 4096 },
+  };
+  if (systemInstruction) {
+    body.systemInstruction = { parts: [{ text: systemInstruction }] };
+  }
+
+  let lastError: Error | null = null;
+  for (let i = 0; i < apiKeys.length; i++) {
+    const apiKey = apiKeys[i];
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        }
+      );
+
+      // Do NOT clear the abort timer until the body is fully read — the same
+      // fetch()-resolves-on-headers pitfall that hung NVIDIA calls applies here.
+      if (!res.ok) {
+        const errText = await res.text();
+        clearTimeout(timer);
+        const snippet = errText.substring(0, 400);
+
+        // Rotate to the next key on auth/quota errors. Unlike NVIDIA (401/403),
+        // Google's Generative Language API returns HTTP 400 with an
+        // API_KEY_INVALID reason for a bad key — confirmed directly against
+        // the live API (a real 401/403/429 is also treated as key-level).
+        // A *different* 400 (e.g. malformed request) is a real bug, not a key
+        // problem, so it's deliberately NOT treated as rotatable — retrying
+        // that with another key would just waste time and mask the bug.
+        const isKeyError =
+          res.status === 401 || res.status === 403 || res.status === 429 ||
+          (res.status === 400 && /API_KEY_INVALID|API key not valid/i.test(errText));
+
+        if (isKeyError && i < apiKeys.length - 1) {
+          console.warn(`[AI] Google key ${i + 1}/${apiKeys.length} failed with status ${res.status}. Trying next key...`);
+          lastError = new AIProviderError({ provider: 'google', model: modelId, kind: 'http_error', status: res.status, message: snippet || `HTTP ${res.status}` });
+          continue;
+        }
+
+        throw new AIProviderError({ provider: 'google', model: modelId, kind: 'http_error', status: res.status, message: snippet || `HTTP ${res.status}` });
+      }
+
+      const data = await res.json();
+      clearTimeout(timer);
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+    } catch (err) {
+      clearTimeout(timer);
+      if (err instanceof AIProviderError) throw err;
+
+      const isTimeout = err instanceof Error && /aborted|abort|timeout/i.test(err.message);
+      lastError = new AIProviderError({
+        provider: 'google',
+        model: modelId,
+        kind: isTimeout ? 'timeout' : 'network_error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+
+      if (isTimeout) throw lastError; // fail fast — see NVIDIA's identical rule
+      if (i < apiKeys.length - 1) {
+        console.warn(`[AI] Google key ${i + 1}/${apiKeys.length} network error. Trying next key...`);
+        continue;
+      }
+      throw lastError;
+    }
+  }
+
+  throw lastError || new Error('All Google API keys failed');
 }
 
 const NVIDIA_CHAT_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
