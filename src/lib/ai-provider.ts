@@ -574,7 +574,9 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
 
     const body: Record<string, unknown> = {
       contents,
-      generationConfig: { temperature },
+      // maxOutputTokens bounds generation time, mirroring the max_tokens cap
+      // applied to NVIDIA calls — keeps this last-resort path fast and cheap.
+      generationConfig: { temperature, maxOutputTokens: 4096 },
     };
     if (systemInstruction) {
       body.systemInstruction = { parts: [{ text: systemInstruction }] };
@@ -589,9 +591,12 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
         signal: controller.signal,
       }
     );
-    clearTimeout(timer);
+
+    // Do NOT clear the abort timer until the body is fully read — the same
+    // fetch()-resolves-on-headers pitfall that hung NVIDIA calls applies here.
     if (!res.ok) {
       const errText = await res.text();
+      clearTimeout(timer);
       throw new AIProviderError({
         provider: 'google',
         model: modelId,
@@ -601,6 +606,7 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
       });
     }
     const data = await res.json();
+    clearTimeout(timer);
     return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (err) {
     clearTimeout(timer);
@@ -865,6 +871,16 @@ const MODEL_ROTATION_ORDER = [
   'nvidia/nemotron-3-ultra-550b-a55b',
 ] as const;
 
+// Cross-provider redundancy safety net. Gemini 2.5 Flash has a genuine free
+// tier via Google AI Studio (aistudio.google.com/apikey — NOT a billed Vertex
+// AI project). Deliberately kept OUT of MODEL_ROTATION_ORDER/NVIDIA_TEXT_MODELS
+// and appended only inside callAIWithFallback() (not buildFallbackChain()), so
+// it never becomes a *starting* model via getNextRotatingModel(). That keeps
+// it purely as a last-resort fallback for a full NVIDIA outage — like the one
+// this app already hit once — instead of spending its low free-tier quota
+// (RPM/RPD limits) on ordinary traffic.
+const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash';
+
 let modelRotationIndex = 0;
 
 function hasProviderCredentials(provider: AIProvider): boolean {
@@ -935,6 +951,14 @@ export async function callAIWithFallback(
   timeoutMs?: number
 ): Promise<AIResponse> {
   const candidates = buildFallbackChain(modelId);
+
+  // Last-resort cross-provider redundancy — see GEMINI_FALLBACK_MODEL comment.
+  // Appended here (not in buildFallbackChain) so getNextRotatingModel() never
+  // picks it as a starting model.
+  if (!candidates.includes(GEMINI_FALLBACK_MODEL)) {
+    candidates.push(GEMINI_FALLBACK_MODEL);
+  }
+
   const diagnostics: AIProviderFailureDiagnostic[] = [];
 
   const perModelTimeoutMs = timeoutMs ?? (

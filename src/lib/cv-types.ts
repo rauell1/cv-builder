@@ -170,6 +170,21 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
     requiresApiKey: true,
     apiEnvKey: 'NVIDIA_API_KEY',
   },
+  {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    provider: 'google',
+    description: 'Google\'s fast model, free via Google AI Studio. Used automatically only as a last-resort fallback if every NVIDIA model fails.',
+    bestFor: 'Emergency backup during an NVIDIA outage',
+    badge: 'Free Fallback',
+    badgeColor: 'bg-sky-100 text-sky-700 border-sky-200',
+    iconColor: 'text-sky-600',
+    supportsStructuredOutput: true,
+    maxContextTokens: 1000000,
+    speed: 'fast',
+    requiresApiKey: true,
+    apiEnvKey: 'GOOGLE_AI_API_KEY',
+  },
 ];
 
 // CV Format Options

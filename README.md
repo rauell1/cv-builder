@@ -136,13 +136,20 @@ All supported providers and the direct links to obtain API keys:
   ```
 
 ### Google AI — Gemini 2.5 Flash, Gemini 2.5 Pro
-- **Get your API key**: [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+- **Get your API key**: [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey) — use **Google AI Studio**, not a billed Vertex AI project. Gemini 2.5 Flash has a genuine free tier (rate-limited by requests per minute/day) through this key.
 - **Documentation**: [https://ai.google.dev/docs](https://ai.google.dev/docs)
 - **Pricing**: [https://ai.google.dev/pricing](https://ai.google.dev/pricing)
 - **Environment variable**:
   ```env
   GOOGLE_AI_API_KEY=your-google-ai-api-key-here
   ```
+- **Role in this app**: `gemini-2.5-flash` is wired in as a cross-provider redundancy
+  fallback (`GEMINI_FALLBACK_MODEL` in `src/lib/ai-provider.ts`). It is appended as
+  the *last* candidate in every `callAIWithFallback()` chain, so it's only ever
+  called if every NVIDIA model has already failed — it is never used as a
+  starting/primary model, which keeps it off the low free-tier quota during
+  normal traffic. Setting `GOOGLE_AI_API_KEY` is optional; without it the app
+  behaves exactly as before (NVIDIA-only), just without this safety net.
 
 ### Environment Variables Summary
 
