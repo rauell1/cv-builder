@@ -1,23 +1,25 @@
 {
   "version": {
-    "commit": "643a18bcad39dbb953f911c9f497a5d90a701d3a",
-    "short": "643a18b",
-    "generatedAt": "2026-07-22T17:28:18.434Z",
-    "baseCommit": "4c0eb3d51cdfeb5e973273da97497563f41d64ca",
+    "commit": "57c7306023494bf85c09c220226e1ec08994fd27",
+    "short": "57c7306",
+    "generatedAt": "2026-07-22T17:38:42.563Z",
+    "baseCommit": "643a18bcad39dbb953f911c9f497a5d90a701d3a",
     "changeSummary": [
+      "M\tREADME.md",
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tsrc/app/api/extract-file/route.ts",
-      "M\tsrc/app/api/parse-cv/route.ts",
-      "D\tsrc/middleware.ts.disabled",
-      "A\tsrc/proxy.ts"
+      "M\tsrc/lib/ai-provider.ts",
+      "M\tsrc/lib/cv-types.ts"
     ],
-    "diffStat": " docs/codebase-map.json            | 399 +++++++++++++++++++++++++++++++++++---\n docs/codebase-map.md              |  31 ++-\n src/app/api/extract-file/route.ts |  24 +--\n src/app/api/parse-cv/route.ts     |  15 +-\n src/middleware.ts.disabled        | 230 ----------------------\n src/proxy.ts                      |  73 +++++++\n 6 files changed, 472 insertions(+), 300 deletions(-)\n"
+    "diffStat": " README.md              |   9 +-\n docs/codebase-map.json | 350 +++----------------------------------------------\n docs/codebase-map.md   |  23 +---\n src/lib/ai-provider.ts |  28 +++-\n src/lib/cv-types.ts    |  15 +++\n 5 files changed, 72 insertions(+), 353 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": false,
-    "hashChangedFiles": [],
+    "incremental": true,
+    "hashChangedFiles": [
+      "src/lib/ai-provider.ts",
+      "src/lib/cv-types.ts"
+    ],
     "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
@@ -748,7 +750,7 @@
   "hotspots": [
     {
       "file": "src/lib/ai-provider.ts",
-      "commitTouches": 39
+      "commitTouches": 40
     },
     {
       "file": "src/app/api/extract-file/route.ts",
@@ -767,6 +769,10 @@
       "commitTouches": 12
     },
     {
+      "file": "src/lib/cv-types.ts",
+      "commitTouches": 10
+    },
+    {
       "file": "src/lib/api-calls.ts",
       "commitTouches": 10
     },
@@ -781,10 +787,6 @@
     {
       "file": "src/app/api/restructure-cv/route.ts",
       "commitTouches": 10
-    },
-    {
-      "file": "src/lib/cv-types.ts",
-      "commitTouches": 9
     },
     {
       "file": "src/app/api/health/route.ts",
@@ -827,7 +829,13 @@
       "commitTouches": 6
     }
   ],
-  "affectedModules": [],
+  "affectedModules": [
+    "src/lib/ai-provider.ts",
+    "src/lib/api-calls.ts",
+    "src/lib/cv-store.ts",
+    "src/lib/cv-types.ts",
+    "src/lib/text-cleaning.ts"
+  ],
   "metrics": {
     "fileCount": 102,
     "edgeCount": 3
