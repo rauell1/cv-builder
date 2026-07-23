@@ -16,6 +16,8 @@ import {
   type CoverLetterFormatId,
 } from '@/lib/cv-types';
 import { sanitizeCoverLetterData } from '@/lib/text-cleaning';
+import { resolveClientIp } from '@/lib/rate-limit';
+import { logGenerationEvent } from '@/lib/generation-log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -70,6 +72,8 @@ function isValidCoverLetterData(obj: unknown): obj is CoverLetterData {
 // ===== POST Handler =====
 
 export async function POST(request: NextRequest) {
+  const requestStart = Date.now();
+  const ip = resolveClientIp(request);
   try {
     const body: GenerateCoverLetterRequest = await request.json();
     const { cvData, jobAnalysis, jobDescText, formatId, modelId } = body;
@@ -152,6 +156,13 @@ export async function POST(request: NextRequest) {
     } catch (providerError: unknown) {
       const message = providerError instanceof Error ? providerError.message : 'An error occurred with the AI provider';
       console.error(`[generate-cover-letter] provider error for model ${requestedModel}:`, message);
+      void logGenerationEvent({
+        type: 'generate-cover-letter',
+        success: false,
+        errorMessage: message,
+        durationMs: Date.now() - requestStart,
+        ip,
+      });
       return NextResponse.json(
         { success: false, error: message },
         { status: 500 }
@@ -166,6 +177,14 @@ export async function POST(request: NextRequest) {
       const message = parseError instanceof Error ? parseError.message : 'JSON parse error';
       console.error('[generate-cover-letter] Failed to parse AI response as JSON:', message);
       console.error('[generate-cover-letter] Raw response (first 500 chars):', rawContent.substring(0, 500));
+      void logGenerationEvent({
+        type: 'generate-cover-letter',
+        success: false,
+        model: usedModel,
+        errorMessage: message,
+        durationMs: Date.now() - requestStart,
+        ip,
+      });
       return NextResponse.json(
         { success: false, error: `Failed to parse AI response as JSON: ${message}` },
         { status: 500 }
@@ -175,6 +194,14 @@ export async function POST(request: NextRequest) {
     // Validate the parsed response structure
     if (!isValidCoverLetterData(parsed)) {
       console.error('[generate-cover-letter] AI response missing required CoverLetterData fields:', JSON.stringify(parsed).substring(0, 300));
+      void logGenerationEvent({
+        type: 'generate-cover-letter',
+        success: false,
+        model: usedModel,
+        errorMessage: 'AI response missing required CoverLetterData fields',
+        durationMs: Date.now() - requestStart,
+        ip,
+      });
       return NextResponse.json(
         { success: false, error: 'AI response does not contain all required cover letter fields' },
         { status: 500 }
@@ -188,6 +215,13 @@ export async function POST(request: NextRequest) {
     const finalData = sanitizeCoverLetterData(parsed as CoverLetterData);
     finalData.date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
+    void logGenerationEvent({
+      type: 'generate-cover-letter',
+      success: true,
+      model: usedModel,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json({
       success: true,
       data: finalData,
@@ -196,6 +230,13 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('[generate-cover-letter] Unexpected error:', error);
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+    void logGenerationEvent({
+      type: 'generate-cover-letter',
+      success: false,
+      errorMessage: message,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 }

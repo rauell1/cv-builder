@@ -11,6 +11,8 @@ import {
 import { JOB_ANALYSIS_SYSTEM_PROMPT, type JobAnalysis } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
+import { resolveClientIp } from '@/lib/rate-limit';
+import { logGenerationEvent } from '@/lib/generation-log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -49,6 +51,8 @@ function fixCommonJSONIssues(json: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const requestStart = Date.now();
+  const ip = resolveClientIp(request);
   try {
     const body = await request.json();
     const { jobDescText, sessionId } = body;
@@ -147,6 +151,14 @@ export async function POST(request: NextRequest) {
     } catch (parseError) {
       console.error('Failed to parse LLM JSON response for job analysis:', parseError);
       console.error('Raw response:', responseText);
+      void logGenerationEvent({
+        type: 'analyze-job',
+        success: false,
+        model: usedModel,
+        errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
+        durationMs: Date.now() - requestStart,
+        ip,
+      });
       return NextResponse.json(
         { success: false, error: 'AI returned an invalid response format for job analysis. Please try again.' },
         { status: 500 }
@@ -178,6 +190,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    void logGenerationEvent({
+      type: 'analyze-job',
+      success: true,
+      model: usedModel,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json({
       success: true,
       data: jobAnalysis,
@@ -186,6 +205,14 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Analyze job error:', error);
+    const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+    void logGenerationEvent({
+      type: 'analyze-job',
+      success: false,
+      errorMessage: message,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
 
     if (error instanceof Error && error.message.includes('AI model failed')) {
       return NextResponse.json(
@@ -208,7 +235,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const message = error instanceof Error ? error.message : 'An unexpected error occurred';
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 }

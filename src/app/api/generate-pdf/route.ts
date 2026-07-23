@@ -6,6 +6,8 @@ import {
   measureWrappedLineCount, measureWrappedBlockHeight, embedNotoSansFont,
 } from '@/lib/pdf-utils';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';
+import { resolveClientIp } from '@/lib/rate-limit';
+import { logGenerationEvent } from '@/lib/generation-log';
 
 // ===== FONT LOADING =====
 
@@ -1061,6 +1063,8 @@ async function generateClassicPDF(cv: ParsedCV): Promise<Uint8Array> {
 
 // ===== POST HANDLER =====
 export async function POST(request: NextRequest) {
+  const requestStart = Date.now();
+  const ip = resolveClientIp(request);
   try {
     const body = await request.json();
     const { cvData, format } = body;
@@ -1096,6 +1100,13 @@ export async function POST(request: NextRequest) {
         break;
     }
 
+    void logGenerationEvent({
+      type: 'generate-pdf',
+      success: true,
+      model: fmt,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return new NextResponse(pdfBytes as unknown as BodyInit, {
       status: 200,
       headers: {
@@ -1107,6 +1118,13 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Generate PDF error:', error);
     const message = error instanceof Error ? error.message : 'An unexpected error occurred while generating PDF';
+    void logGenerationEvent({
+      type: 'generate-pdf',
+      success: false,
+      errorMessage: message,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 }

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, PDFFont, StandardFonts } from 'pdf-lib';
 import type { CoverLetterData, CoverLetterFormatId } from '@/lib/cv-types';
 import { sanitizeCoverLetterData } from '@/lib/text-cleaning';
+import { resolveClientIp } from '@/lib/rate-limit';
+import { logGenerationEvent } from '@/lib/generation-log';
 import {
   splitTextIntoLines,
   PAGE_WIDTH, PAGE_HEIGHT, embedNotoSansFont,
@@ -514,6 +516,8 @@ async function generateFormalPDF(cl: CoverLetterData): Promise<Uint8Array> {
 // ===== POST HANDLER =====
 
 export async function POST(request: NextRequest) {
+  const requestStart = Date.now();
+  const ip = resolveClientIp(request);
   try {
     const body = await request.json();
     const { coverLetter, formatId } = body as {
@@ -579,10 +583,24 @@ export async function POST(request: NextRequest) {
     headers.set('Content-Type', 'application/pdf');
     headers.set('Content-Disposition', `attachment; filename="${filename}"`);
 
+    void logGenerationEvent({
+      type: 'generate-cover-letter-pdf',
+      success: true,
+      model: formatId,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return new NextResponse(pdfBytes as unknown as BodyInit, { headers });
   } catch (error: unknown) {
     console.error('[generate-cover-letter-pdf] Unexpected error:', error);
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+    void logGenerationEvent({
+      type: 'generate-cover-letter-pdf',
+      success: false,
+      errorMessage: message,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 }

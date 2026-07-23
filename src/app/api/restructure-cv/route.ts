@@ -11,6 +11,8 @@ import {
   type ParsedCV,
 } from '@/lib/cv-types';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';
+import { resolveClientIp } from '@/lib/rate-limit';
+import { logGenerationEvent } from '@/lib/generation-log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -57,6 +59,8 @@ function fixCommonJSONIssues(json: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const requestStart = Date.now();
+  const ip = resolveClientIp(request);
   try {
     const body = await request.json();
     const { parsedCv, jobAnalysis, jobDescText, sessionId, modelId } = body;
@@ -125,6 +129,14 @@ export async function POST(request: NextRequest) {
     } catch (parseError) {
       console.error('Failed to parse LLM JSON response for restructuring:', parseError);
       console.error('Raw response:', responseText);
+      void logGenerationEvent({
+        type: 'restructure-cv',
+        success: false,
+        model: usedModel,
+        errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
+        durationMs: Date.now() - requestStart,
+        ip,
+      });
       return NextResponse.json(
         { success: false, error: 'AI returned an invalid response format for CV restructuring. Please try again.' },
         { status: 500 }
@@ -153,6 +165,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    void logGenerationEvent({
+      type: 'restructure-cv',
+      success: true,
+      model: usedModel,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json({
       success: true,
       data: restructuredCv,
@@ -162,6 +181,13 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Restructure CV error:', error);
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+    void logGenerationEvent({
+      type: 'restructure-cv',
+      success: false,
+      errorMessage: message,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callAIWithFallback, DEFAULT_TEXT_MODEL } from '@/lib/ai-provider';
 import type { CVScore, ParsedCV, JobAnalysis } from '@/lib/cv-types';
+import { resolveClientIp } from '@/lib/rate-limit';
+import { logGenerationEvent } from '@/lib/generation-log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -59,6 +61,8 @@ Evaluate this CV against the job description using the scoring criteria. Be thor
 }
 
 export async function POST(request: NextRequest) {
+  const requestStart = Date.now();
+  const ip = resolveClientIp(request);
   try {
     const body = await request.json();
     const { cvData, jobAnalysis, jobDescText } = body;
@@ -134,12 +138,27 @@ export async function POST(request: NextRequest) {
     } catch (parseError) {
       console.error('Failed to parse CV score response:', parseError);
       console.error('Raw response:', responseText);
+      void logGenerationEvent({
+        type: 'score-cv',
+        success: false,
+        model: usedModel,
+        errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
+        durationMs: Date.now() - requestStart,
+        ip,
+      });
       return NextResponse.json(
         { success: false, error: 'AI returned an invalid format for CV scoring. Please try again.' },
         { status: 500 }
       );
     }
 
+    void logGenerationEvent({
+      type: 'score-cv',
+      success: true,
+      model: usedModel,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json({
       success: true,
       data: cvScore,
@@ -148,6 +167,13 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Score CV error:', error);
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+    void logGenerationEvent({
+      type: 'score-cv',
+      success: false,
+      errorMessage: message,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 }

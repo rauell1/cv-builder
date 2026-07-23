@@ -5,6 +5,8 @@ import { CV_PARSE_SYSTEM_PROMPT, type ParsedCV } from '@/lib/cv-types';
 import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';
+import { resolveClientIp } from '@/lib/rate-limit';
+import { logGenerationEvent } from '@/lib/generation-log';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -556,6 +558,7 @@ ${cvText.substring(0, 10000)}`;
 
 export async function POST(request: NextRequest) {
   const requestStart = Date.now();
+  const ip = resolveClientIp(request);
   const controller = new AbortController();
   const timeoutTimer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -683,6 +686,13 @@ export async function POST(request: NextRequest) {
         usedModel = aiParsed.usedModel;
       } catch (aiErr) {
         console.warn('[parse-cv] AI parse failed, falling back to built-in parser:', aiErr instanceof Error ? aiErr.message : aiErr);
+        void logGenerationEvent({
+          type: 'parse-cv',
+          success: false,
+          errorMessage: aiErr instanceof Error ? aiErr.message : String(aiErr),
+          durationMs: Date.now() - requestStart,
+          ip,
+        });
         parsedCv = parseBuiltIn(cvText);
         usedModel = 'builtin-parser';
       }
@@ -735,6 +745,13 @@ export async function POST(request: NextRequest) {
       `[parse-cv] Total request time: ${Date.now() - requestStart}ms`
     );
     clearTimeout(timeoutTimer);
+    void logGenerationEvent({
+      type: 'parse-cv',
+      success: true,
+      model: usedModel,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json({
       success: true,
       data: parsedCv,
@@ -746,6 +763,16 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     clearTimeout(timeoutTimer);
     console.error('[parse-cv] Error:', error);
+
+    const message =
+      error instanceof Error ? error.message : 'An unexpected error occurred';
+    void logGenerationEvent({
+      type: 'parse-cv',
+      success: false,
+      errorMessage: message,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
 
     // Handle abort / timeout
     if (
@@ -762,8 +789,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const message =
-      error instanceof Error ? error.message : 'An unexpected error occurred';
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 }

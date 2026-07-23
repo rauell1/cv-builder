@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callAIWithFallback, DEFAULT_TEXT_MODEL } from '@/lib/ai-provider';
 import type { AchievementEnhancement } from '@/lib/cv-types';
+import { resolveClientIp } from '@/lib/rate-limit';
+import { logGenerationEvent } from '@/lib/generation-log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -23,6 +25,8 @@ The "enhanced" array must have the same length as the input bullets array.
 The "improvements" array must have the same length, describing what was changed in each bullet.`;
 
 export async function POST(request: NextRequest) {
+  const requestStart = Date.now();
+  const ip = resolveClientIp(request);
   try {
     const body = await request.json();
     const { bullets, jobContext } = body;
@@ -82,12 +86,27 @@ export async function POST(request: NextRequest) {
     } catch (parseError) {
       console.error('Failed to parse achievement enhancement response:', parseError);
       console.error('Raw response:', responseText);
+      void logGenerationEvent({
+        type: 'enhance-achievements',
+        success: false,
+        model: usedModel,
+        errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
+        durationMs: Date.now() - requestStart,
+        ip,
+      });
       return NextResponse.json(
         { success: false, error: 'AI returned an invalid format for achievement enhancement. Please try again.' },
         { status: 500 }
       );
     }
 
+    void logGenerationEvent({
+      type: 'enhance-achievements',
+      success: true,
+      model: usedModel,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json({
       success: true,
       data: result,
@@ -96,6 +115,13 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Enhance achievements error:', error);
     const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+    void logGenerationEvent({
+      type: 'enhance-achievements',
+      success: false,
+      errorMessage: message,
+      durationMs: Date.now() - requestStart,
+      ip,
+    });
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 }

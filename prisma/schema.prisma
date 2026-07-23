@@ -38,3 +38,21 @@ model DailyRateLimit {
   @@unique([ip, category, day])
   @@index([day])
 }
+
+// One row per generation attempt (parse, restructure, analyze, score, enhance,
+// cover letter, PDF export) across every AI/PDF route. Used to power the
+// admin dashboard and to trigger a real-time failure-alert email - see
+// src/lib/generation-log.ts.
+model GenerationEvent {
+  id           String   @id @default(cuid())
+  type         String   // e.g. 'parse-cv', 'restructure-cv', 'generate-pdf'
+  success      Boolean
+  model        String? // AI model used, if this event involved one
+  errorMessage String? // truncated failure reason, if success is false
+  durationMs   Int?
+  ip           String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([type, success])
+}
