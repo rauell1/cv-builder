@@ -1,20 +1,28 @@
 {
   "version": {
-    "commit": "43d6898281f77002ea1538fe1a766901ad1b1b2b",
-    "short": "43d6898",
-    "generatedAt": "2026-07-23T08:15:46.124Z",
-    "baseCommit": "b0d7635bcece51d0cd03033c36bf09858ed5f7dd",
+    "commit": "145eabcc9627621c67d894d4d0efa9f9189fd591",
+    "short": "145eabc",
+    "generatedAt": "2026-07-23T09:20:28.861Z",
+    "baseCommit": "43d6898281f77002ea1538fe1a766901ad1b1b2b",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tpackage.json"
+      "M\tsrc/app/api/generate-cover-letter-pdf/route.ts",
+      "M\tsrc/app/api/generate-pdf/route.ts",
+      "M\tsrc/lib/cv-types.ts",
+      "M\tsrc/lib/pdf-utils.ts"
     ],
-    "diffStat": " docs/codebase-map.json | 27 +++++++++++----------------\n docs/codebase-map.md   | 14 +++++++-------\n package.json           |  3 ++-\n 3 files changed, 20 insertions(+), 24 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json                         |  23 +-\n docs/codebase-map.md                           |  11 +-\n src/app/api/generate-cover-letter-pdf/route.ts | 156 ++--------\n src/app/api/generate-pdf/route.ts              | 396 ++++++++++---------------\n src/lib/cv-types.ts                            |   4 +-\n src/lib/pdf-utils.ts                           | 117 ++------\n 6 files changed, 210 insertions(+), 497 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": false,
-    "hashChangedFiles": [],
+    "incremental": true,
+    "hashChangedFiles": [
+      "src/app/api/generate-cover-letter-pdf/route.ts",
+      "src/app/api/generate-pdf/route.ts",
+      "src/lib/cv-types.ts",
+      "src/lib/pdf-utils.ts"
+    ],
     "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
@@ -830,7 +838,7 @@
     },
     {
       "file": "src/lib/cv-types.ts",
-      "commitTouches": 13
+      "commitTouches": 14
     },
     {
       "file": "src/components/cv-builder/cv-input-step.tsx",
@@ -886,14 +894,22 @@
     },
     {
       "file": "src/app/api/generate-cover-letter-pdf/route.ts",
-      "commitTouches": 6
+      "commitTouches": 7
     },
     {
       "file": "src/app/api/generate-pdf/route.ts",
-      "commitTouches": 6
+      "commitTouches": 7
     }
   ],
-  "affectedModules": [],
+  "affectedModules": [
+    "src/app/api/generate-cover-letter-pdf/route.ts",
+    "src/app/api/generate-pdf/route.ts",
+    "src/lib/api-calls.ts",
+    "src/lib/cv-store.ts",
+    "src/lib/cv-types.ts",
+    "src/lib/pdf-utils.ts",
+    "src/lib/text-cleaning.ts"
+  ],
   "metrics": {
     "fileCount": 111,
     "edgeCount": 4
