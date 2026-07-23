@@ -1,50 +1,31 @@
 {
   "version": {
-    "commit": "728e7241a7f4f77eed6c4cdf436a67acf2d04e00",
-    "short": "728e724",
-    "generatedAt": "2026-07-23T00:59:06.497Z",
-    "baseCommit": "c3004b3e83b6fd6574713b09a4d5e98eb7459d14",
+    "commit": "190e8192a9598e91f004c7966015639d325b97c3",
+    "short": "190e819",
+    "generatedAt": "2026-07-23T05:44:43.715Z",
+    "baseCommit": "728e7241a7f4f77eed6c4cdf436a67acf2d04e00",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tsrc/app/api/consent/log/route.ts",
-      "M\tsrc/app/cookies/page.tsx",
-      "M\tsrc/app/privacy/page.tsx",
-      "M\tsrc/app/terms/page.tsx",
-      "M\tsrc/components/privacy/policy-generator-modal.tsx",
-      "M\ttsconfig.tsbuildinfo"
+      "M\tsrc/app/layout.tsx",
+      "M\tsrc/components/privacy/cookie-banner.tsx",
+      "D\tsrc/components/privacy/policy-generator-modal.tsx",
+      "M\tsrc/lib/cookie-consent-context.tsx"
     ],
-    "diffStat": " docs/codebase-map.json                            |  10 +-\n docs/codebase-map.md                              |   8 +-\n src/app/api/consent/log/route.ts                  |  17 +-\n src/app/cookies/page.tsx                          |  62 ++-\n src/app/privacy/page.tsx                          | 100 +++-\n src/app/terms/page.tsx                            |  81 +++-\n src/components/privacy/policy-generator-modal.tsx | 539 ++++++++++++++++------\n tsconfig.tsbuildinfo                              |   2 +-\n 8 files changed, 618 insertions(+), 201 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json                            |  56 ++-\n docs/codebase-map.md                              |  15 +-\n src/app/layout.tsx                                |   2 -\n src/components/privacy/cookie-banner.tsx          |  33 +-\n src/components/privacy/policy-generator-modal.tsx | 561 ----------------------\n src/lib/cookie-consent-context.tsx                |  15 -\n 6 files changed, 79 insertions(+), 603 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
     "incremental": true,
     "hashChangedFiles": [
-      "src/app/api/consent/log/route.ts",
-      "src/app/cookies/page.tsx",
       "src/app/layout.tsx",
-      "src/app/privacy/page.tsx",
-      "src/app/terms/page.tsx",
       "src/components/privacy/cookie-banner.tsx",
-      "src/components/privacy/cookie-preferences-modal.tsx",
-      "src/components/privacy/policy-generator-modal.tsx",
-      "src/components/privacy/privacy-footer-trigger.tsx",
-      "src/lib/cookie-consent-context.tsx",
-      "src/lib/script-auto-blocker.ts"
+      "src/lib/cookie-consent-context.tsx"
     ],
-    "newFiles": [
-      "src/app/api/consent/log/route.ts",
-      "src/app/cookies/page.tsx",
-      "src/app/privacy/page.tsx",
-      "src/app/terms/page.tsx",
-      "src/components/privacy/cookie-banner.tsx",
-      "src/components/privacy/cookie-preferences-modal.tsx",
-      "src/components/privacy/policy-generator-modal.tsx",
-      "src/components/privacy/privacy-footer-trigger.tsx",
-      "src/lib/cookie-consent-context.tsx",
-      "src/lib/script-auto-blocker.ts"
+    "newFiles": [],
+    "removedFiles": [
+      "src/components/privacy/policy-generator-modal.tsx"
     ],
-    "removedFiles": [],
     "packageJsonChanged": false,
     "prismaChanged": false
   },
@@ -119,7 +100,6 @@
     "    privacy/",
     "      cookie-banner.tsx",
     "      cookie-preferences-modal.tsx",
-    "      policy-generator-modal.tsx",
     "      privacy-footer-trigger.tsx",
     "    ui/",
     "      accordion.tsx",
@@ -394,11 +374,6 @@
     {
       "id": "src/components/privacy/cookie-preferences-modal.tsx",
       "path": "src/components/privacy/cookie-preferences-modal.tsx",
-      "risk": "low"
-    },
-    {
-      "id": "src/components/privacy/policy-generator-modal.tsx",
-      "path": "src/components/privacy/policy-generator-modal.tsx",
       "risk": "low"
     },
     {
@@ -879,16 +854,16 @@
       "commitTouches": 11
     },
     {
+      "file": "src/app/layout.tsx",
+      "commitTouches": 10
+    },
+    {
       "file": "src/lib/api-calls.ts",
       "commitTouches": 10
     },
     {
       "file": "src/app/api/ai-chat/route.ts",
       "commitTouches": 10
-    },
-    {
-      "file": "src/app/layout.tsx",
-      "commitTouches": 9
     },
     {
       "file": "src/app/api/enhance-achievements/route.ts",
@@ -928,20 +903,13 @@
     }
   ],
   "affectedModules": [
-    "src/app/api/consent/log/route.ts",
-    "src/app/cookies/page.tsx",
     "src/app/layout.tsx",
-    "src/app/privacy/page.tsx",
-    "src/app/terms/page.tsx",
     "src/components/privacy/cookie-banner.tsx",
-    "src/components/privacy/cookie-preferences-modal.tsx",
-    "src/components/privacy/policy-generator-modal.tsx",
-    "src/components/privacy/privacy-footer-trigger.tsx",
     "src/lib/cookie-consent-context.tsx",
     "src/lib/script-auto-blocker.ts"
   ],
   "metrics": {
-    "fileCount": 112,
+    "fileCount": 111,
     "edgeCount": 4
   }
 }
