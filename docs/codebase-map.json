@@ -1,28 +1,27 @@
 {
   "version": {
-    "commit": "04f2abcf25ee851ffe78366399c0b542d1300ac4",
-    "short": "04f2abc",
-    "generatedAt": "2026-07-23T07:15:38.903Z",
-    "baseCommit": "006270487d19e8c8c2f05d91177be86fee1138ff",
+    "commit": "b0d7635bcece51d0cd03033c36bf09858ed5f7dd",
+    "short": "b0d7635",
+    "generatedAt": "2026-07-23T08:08:33.142Z",
+    "baseCommit": "04f2abcf25ee851ffe78366399c0b542d1300ac4",
     "changeSummary": [
+      "M\tREADME.md",
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tsrc/lib/ai-provider.ts",
-      "M\tsrc/lib/cv-types.ts"
+      "M\tprisma/schema.prisma"
     ],
-    "diffStat": " docs/codebase-map.json | 27 +++++++++++++++------------\n docs/codebase-map.md   | 11 ++++++-----\n src/lib/ai-provider.ts | 26 +++++++++++++++++++++-----\n src/lib/cv-types.ts    |  6 +++---\n 4 files changed, 45 insertions(+), 25 deletions(-)\n"
+    "diffStat": " README.md              |  6 +++---\n docs/codebase-map.json | 33 ++++++++++++++++++---------------\n docs/codebase-map.md   | 12 ++++++------\n prisma/schema.prisma   |  2 +-\n 4 files changed, 28 insertions(+), 25 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": true,
+    "incremental": false,
     "hashChangedFiles": [
-      "src/lib/ai-provider.ts",
-      "src/lib/cv-types.ts"
+      "prisma/schema.prisma"
     ],
     "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
-    "prismaChanged": false
+    "prismaChanged": true
   },
   "tree": [
     "middleware.ts",
@@ -898,11 +897,7 @@
     }
   ],
   "affectedModules": [
-    "src/lib/ai-provider.ts",
-    "src/lib/api-calls.ts",
-    "src/lib/cv-store.ts",
-    "src/lib/cv-types.ts",
-    "src/lib/text-cleaning.ts"
+    "prisma/schema.prisma"
   ],
   "metrics": {
     "fileCount": 111,
