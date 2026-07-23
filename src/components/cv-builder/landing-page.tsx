@@ -10,7 +10,6 @@ import {
   Shield,
   Zap,
   Globe,
-  Star,
   ChevronRight,
   Heart,
   Github,
@@ -24,7 +23,15 @@ import Link from 'next/link';
 import {
   AVAILABLE_MODELS,
   AI_PROVIDERS,
+  CV_FORMATS,
+  COVER_LETTER_FORMATS,
 } from '@/lib/cv-types';
+
+/* ── Providers actually backing a model right now ──────────── */
+
+const activeProviders = AI_PROVIDERS.filter(
+  (p) => p.id !== 'custom' && AVAILABLE_MODELS.some((m) => m.provider === p.id)
+);
 
 /* ── Features ──────────────────────────────────────────────── */
 
@@ -40,8 +47,7 @@ const features = [
   {
     icon: Cpu,
     title: 'Multi-Model AI',
-    description:
-      'Choose from 9+ models across GLM, GPT, Claude, and Gemini. Auto-switches for best results.',
+    description: `${AVAILABLE_MODELS.length} models across ${activeProviders.map((p) => p.name).join(' and ')}, with automatic fallback if one is unavailable.`,
     accent: 'from-emerald-500 to-teal-600',
     accentBorder: '#0d9488',
   },
@@ -55,7 +61,7 @@ const features = [
   },
   {
     icon: Download,
-    title: '5 CV Formats',
+    title: `${CV_FORMATS.length} CV Formats`,
     description:
       'Europass, ATS-Friendly, Modern, Creative, and Classic. Plus cover letter generation.',
     accent: 'from-rose-500 to-pink-600',
@@ -66,9 +72,9 @@ const features = [
 /* ── Stats / Social Proof ─────────────────────────────────── */
 
 const stats = [
-  { value: '9+', label: 'AI Models' },
-  { value: '5', label: 'CV Formats' },
-  { value: '5', label: 'Cover Letters' },
+  { value: `${AVAILABLE_MODELS.length}`, label: 'AI Models' },
+  { value: `${CV_FORMATS.length}`, label: 'CV Formats' },
+  { value: `${COVER_LETTER_FORMATS.length}`, label: 'Cover Letters' },
   { value: 'OCR', label: 'Scan Support' },
 ];
 
@@ -95,26 +101,6 @@ const steps = [
   },
 ];
 
-/* ── Testimonials ──────────────────────────────────────────── */
-
-const testimonials = [
-  {
-    quote: 'The AI matched my CV keywords to the job description perfectly. Got 3 interviews in a week.',
-    author: 'Sarah M.',
-    role: 'Software Engineer',
-  },
-  {
-    quote: 'Europass format saved me hours. The AI restructured my bullet points to highlight achievements.',
-    author: 'James L.',
-    role: 'Product Manager',
-  },
-  {
-    quote: 'Cover letter generation is incredible. It pulled specific achievements from my CV that matched the role.',
-    author: 'Ana K.',
-    role: 'Data Scientist',
-  },
-];
-
 const footerProductLinks: { label: string; sectionId: string }[] = [
   { label: 'Features', sectionId: 'features' },
   { label: 'AI Models', sectionId: 'models' },
@@ -130,7 +116,7 @@ const footerResourceLinks: { label: string; sectionId: string }[] = [
 /* ── Models ────────────────────────────────────────────────── */
 
 function getModelCount() {
-  return `${AVAILABLE_MODELS.length} models across ${AI_PROVIDERS.filter((p) => p.id !== 'custom').length} providers`;
+  return `${AVAILABLE_MODELS.length} models across ${activeProviders.length} providers`;
 }
 
 /* ── Animation variants ────────────────────────────────────── */
@@ -605,14 +591,13 @@ export function LandingPage() {
               Multi-Model AI Power
             </h2>
             <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-              {getModelCount()}. GLM models are built-in and free - others work with your own API key.
+              {getModelCount()}. All models run on our servers - completely free, no API key required from you.
             </p>
           </m.div>
 
           <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-            {AI_PROVIDERS.filter((p) => p.id !== 'custom').map((provider) => {
+            {activeProviders.map((provider) => {
               const models = AVAILABLE_MODELS.filter((m) => m.provider === provider.id);
-              const isBuiltIn = !models.some((m) => m.requiresApiKey);
 
               return (
                 <m.div key={provider.id} variants={itemVariants}>
@@ -625,14 +610,8 @@ export function LandingPage() {
                           <h3 className="font-semibold text-sm text-foreground">
                             {provider.name}
                           </h3>
-                          <Badge
-                            className={`text-[10px] px-1.5 py-0 rounded-full ${
-                              isBuiltIn
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-muted text-muted-foreground border border-border'
-                            }`}
-                          >
-                            {isBuiltIn ? 'Built-in' : 'API Key'}
+                          <Badge className="text-[10px] px-1.5 py-0 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Free to Use
                           </Badge>
                         </div>
                       </div>
@@ -664,72 +643,6 @@ export function LandingPage() {
                 </m.div>
               );
             })}
-          </div>
-        </m.section>
-
-        {/* ═══════════════════════════════════════════
-            Testimonials
-            ═══════════════════════════════════════════ */}
-        <m.section
-          className="relative px-4 sm:px-6 py-16 md:py-24 bg-muted"
-          {...sectionAnimationProps}
-          aria-labelledby="testimonials-heading"
-        >
-          {/* Subtle background pattern */}
-          <div className="absolute inset-0 bg-pattern-subtle pointer-events-none" role="img" aria-hidden="true" />
-
-          <m.div variants={fadeUp} className="text-center mb-12 relative">
-            <Badge
-              variant="outline"
-              className="px-3 py-1 text-[11px] font-medium border-border text-muted-foreground bg-white rounded-full mb-4"
-            >
-              Testimonials
-            </Badge>
-            <h2
-              id="testimonials-heading"
-              className="text-2xl sm:text-3xl font-semibold text-foreground mb-3 tracking-tight"
-            >
-              Loved by Professionals
-            </h2>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              See what our users say about their experience
-            </p>
-          </m.div>
-
-          <div className="relative max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
-            {testimonials.map((t) => (
-              <m.div key={t.author} variants={itemVariants}>
-                <Card className="h-full border-border rounded-2xl bg-white hover-lift hover:shadow-stripe-sm transition-all duration-300">
-                  <CardContent className="p-6 relative">
-                    {/* Decorative quote mark */}
-                    <div className="quote-mark absolute top-4 right-4" aria-hidden="true">
-                      &ldquo;
-                    </div>
-                    {/* Stars */}
-                    <div className="flex items-center gap-0.5 mb-4">
-                      {[...Array(5)].map((_, j) => (
-                        <Star
-                          key={j}
-                          className="w-3.5 h-3.5 fill-amber-400 text-amber-400"
-                        />
-                      ))}
-                    </div>
-                    <p className="text-sm text-foreground/80 leading-relaxed mb-5 italic relative z-10">
-                      &ldquo;{t.quote}&rdquo;
-                    </p>
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
-                        {t.author[0]}
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-foreground">{t.author}</p>
-                        <p className="text-[11px] text-muted-foreground">{t.role}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </m.div>
-            ))}
           </div>
         </m.section>
 
@@ -800,7 +713,7 @@ export function LandingPage() {
               </p>
               <div className="flex items-center gap-3">
                 <a
-                  href="https://github.com"
+                  href="https://github.com/rauell1"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-8 h-8 rounded-lg bg-white border border-border flex items-center justify-center hover:border-[#b9b9f9] hover:text-primary transition-all duration-200 text-muted-foreground hover:-translate-y-0.5"
@@ -876,7 +789,7 @@ export function LandingPage() {
               Built with AI-powered intelligence
             </p>
             <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-              Made with <Heart className="w-3 h-3 text-[#ea2261] fill-[#ea2261]" aria-label="love" /> by Z.ai
+              Made with <Heart className="w-3 h-3 text-[#ea2261] fill-[#ea2261]" aria-label="love" /> by Roy Okola Otieno
             </p>
           </div>
         </div>
