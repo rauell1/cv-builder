@@ -3,6 +3,11 @@ import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Analytics } from '@vercel/analytics/next';
+import { CookieConsentProvider } from "@/lib/cookie-consent-context";
+import { CookieBanner } from "@/components/privacy/cookie-banner";
+import { CookiePreferencesModal } from "@/components/privacy/cookie-preferences-modal";
+import { PolicyGeneratorModal } from "@/components/privacy/policy-generator-modal";
+import { PrivacyFooterTrigger } from "@/components/privacy/privacy-footer-trigger";
 
 const appSans = Space_Grotesk({
   subsets: ["latin"],
@@ -147,11 +152,18 @@ export default function RootLayout({
       <body
         className={`${appSans.variable} ${appMono.variable} antialiased bg-background text-foreground`}
       >
-        {children}
-        <Toaster />
-        <Analytics />
+        <CookieConsentProvider>
+          {children}
+          <CookieBanner />
+          <CookiePreferencesModal />
+          <PolicyGeneratorModal />
+          <PrivacyFooterTrigger />
+          <Toaster />
+          <Analytics />
+        </CookieConsentProvider>
       </body>
     </html>
   );
 }
+
 

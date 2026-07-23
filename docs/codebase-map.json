@@ -1,23 +1,63 @@
 {
   "version": {
-    "commit": "e1347d2331953091518db1bef609789fe8d52a72",
-    "short": "e1347d2",
-    "generatedAt": "2026-07-22T18:44:48.303Z",
-    "baseCommit": "4c79884dfa196ea6a10796d79d600f8d0eb7bea7",
+    "commit": "f1018a86c93d23e71ce8ee44c5c9f5f6dec0714c",
+    "short": "f1018a8",
+    "generatedAt": "2026-07-23T00:22:36.899Z",
+    "baseCommit": "e1347d2331953091518db1bef609789fe8d52a72",
     "changeSummary": [
+      "M\tREADME.md",
       "M\tdocs/codebase-map.json",
-      "M\tdocs/codebase-map.md",
-      "M\tsrc/lib/ai-provider.ts"
+      "M\tdocs/codebase-map.md"
     ],
-    "diffStat": " docs/codebase-map.json |  50 +++--------------\n docs/codebase-map.md   |  18 ++----\n src/lib/ai-provider.ts | 150 +++++++++++++++++++++++++++++++------------------\n 3 files changed, 107 insertions(+), 111 deletions(-)\n"
+    "diffStat": " README.md              | 10 +++++++++-\n docs/codebase-map.json | 12 ++++++------\n docs/codebase-map.md   |  8 ++++----\n 3 files changed, 19 insertions(+), 11 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
     "incremental": true,
     "hashChangedFiles": [
-      "src/lib/ai-provider.ts"
+      "src/app/api/analyze-job/route.ts",
+      "src/app/api/consent/log/route.ts",
+      "src/app/api/cron/cleanup-sessions/route.ts",
+      "src/app/api/enhance-achievements/route.ts",
+      "src/app/api/extract-file/route.ts",
+      "src/app/api/generate-cover-letter/route.ts",
+      "src/app/api/generate-insights/route.ts",
+      "src/app/api/parse-cv/route.ts",
+      "src/app/api/restructure-cv/route.ts",
+      "src/app/api/score-cv/route.ts",
+      "src/app/cookies/page.tsx",
+      "src/app/layout.tsx",
+      "src/app/privacy/page.tsx",
+      "src/app/terms/page.tsx",
+      "src/components/cv-builder/landing-page.tsx",
+      "src/components/cv-builder/output-step.tsx",
+      "src/components/cv-builder/processing-step.tsx",
+      "src/components/privacy/cookie-banner.tsx",
+      "src/components/privacy/cookie-preferences-modal.tsx",
+      "src/components/privacy/policy-generator-modal.tsx",
+      "src/components/privacy/privacy-footer-trigger.tsx",
+      "src/lib/ai-provider.ts",
+      "src/lib/cookie-consent-context.tsx",
+      "src/lib/cv-store.ts",
+      "src/lib/cv-types.ts",
+      "src/lib/request-queue.ts",
+      "src/lib/script-auto-blocker.ts",
+      "src/proxy.ts"
     ],
-    "newFiles": [],
+    "newFiles": [
+      "src/app/api/consent/log/route.ts",
+      "src/app/api/cron/cleanup-sessions/route.ts",
+      "src/app/cookies/page.tsx",
+      "src/app/privacy/page.tsx",
+      "src/app/terms/page.tsx",
+      "src/components/privacy/cookie-banner.tsx",
+      "src/components/privacy/cookie-preferences-modal.tsx",
+      "src/components/privacy/policy-generator-modal.tsx",
+      "src/components/privacy/privacy-footer-trigger.tsx",
+      "src/lib/cookie-consent-context.tsx",
+      "src/lib/script-auto-blocker.ts",
+      "src/proxy.ts"
+    ],
     "removedFiles": [],
     "packageJsonChanged": false,
     "prismaChanged": false
@@ -34,6 +74,9 @@
     "        route.ts",
     "      analyze-job/",
     "        route.ts",
+    "      consent/",
+    "        log/",
+    "          route.ts",
     "      cron/",
     "        cleanup-sessions/",
     "          route.ts",
@@ -62,16 +105,22 @@
     "        route.ts",
     "    builder/",
     "      page.tsx",
+    "    cookies/",
+    "      page.tsx",
     "    error.tsx",
     "    layout.tsx",
     "    not-found.tsx",
     "    page.tsx",
+    "    privacy/",
+    "      page.tsx",
     "    projects/",
     "      [slug]/",
     "        page.tsx",
     "      page.tsx",
     "    robots.ts",
     "    sitemap.ts",
+    "    terms/",
+    "      page.tsx",
     "  components/",
     "    cv-builder/",
     "      cv-input-step.tsx",
@@ -81,6 +130,11 @@
     "      processing-step.tsx",
     "      step-indicator.tsx",
     "    error-boundary.tsx",
+    "    privacy/",
+    "      cookie-banner.tsx",
+    "      cookie-preferences-modal.tsx",
+    "      policy-generator-modal.tsx",
+    "      privacy-footer-trigger.tsx",
     "    ui/",
     "      accordion.tsx",
     "      alert-dialog.tsx",
@@ -139,6 +193,7 @@
     "    ai-rate-limit-paths.ts",
     "    api-calls.ts",
     "    config.ts",
+    "    cookie-consent-context.tsx",
     "    cv-store.ts",
     "    cv-types.ts",
     "    db.ts",
@@ -147,6 +202,7 @@
     "    rate-limiter.ts",
     "    request-queue.ts",
     "    response-cache.ts",
+    "    script-auto-blocker.ts",
     "    sdk-retry.ts",
     "    text-cleaning.ts",
     "    utils.ts",
@@ -177,6 +233,11 @@
     {
       "id": "src/app/api/analyze-job/route.ts",
       "path": "src/app/api/analyze-job/route.ts",
+      "risk": "medium"
+    },
+    {
+      "id": "src/app/api/consent/log/route.ts",
+      "path": "src/app/api/consent/log/route.ts",
       "risk": "medium"
     },
     {
@@ -250,6 +311,11 @@
       "risk": "low"
     },
     {
+      "id": "src/app/cookies/page.tsx",
+      "path": "src/app/cookies/page.tsx",
+      "risk": "low"
+    },
+    {
       "id": "src/app/error.tsx",
       "path": "src/app/error.tsx",
       "risk": "low"
@@ -270,6 +336,11 @@
       "risk": "low"
     },
     {
+      "id": "src/app/privacy/page.tsx",
+      "path": "src/app/privacy/page.tsx",
+      "risk": "low"
+    },
+    {
       "id": "src/app/projects/[slug]/page.tsx",
       "path": "src/app/projects/[slug]/page.tsx",
       "risk": "low"
@@ -287,6 +358,11 @@
     {
       "id": "src/app/sitemap.ts",
       "path": "src/app/sitemap.ts",
+      "risk": "low"
+    },
+    {
+      "id": "src/app/terms/page.tsx",
+      "path": "src/app/terms/page.tsx",
       "risk": "low"
     },
     {
@@ -322,6 +398,26 @@
     {
       "id": "src/components/error-boundary.tsx",
       "path": "src/components/error-boundary.tsx",
+      "risk": "low"
+    },
+    {
+      "id": "src/components/privacy/cookie-banner.tsx",
+      "path": "src/components/privacy/cookie-banner.tsx",
+      "risk": "low"
+    },
+    {
+      "id": "src/components/privacy/cookie-preferences-modal.tsx",
+      "path": "src/components/privacy/cookie-preferences-modal.tsx",
+      "risk": "low"
+    },
+    {
+      "id": "src/components/privacy/policy-generator-modal.tsx",
+      "path": "src/components/privacy/policy-generator-modal.tsx",
+      "risk": "low"
+    },
+    {
+      "id": "src/components/privacy/privacy-footer-trigger.tsx",
+      "path": "src/components/privacy/privacy-footer-trigger.tsx",
       "risk": "low"
     },
     {
@@ -600,6 +696,11 @@
       "risk": "low"
     },
     {
+      "id": "src/lib/cookie-consent-context.tsx",
+      "path": "src/lib/cookie-consent-context.tsx",
+      "risk": "low"
+    },
+    {
       "id": "src/lib/cv-store.ts",
       "path": "src/lib/cv-store.ts",
       "risk": "low"
@@ -640,6 +741,11 @@
       "risk": "low"
     },
     {
+      "id": "src/lib/script-auto-blocker.ts",
+      "path": "src/lib/script-auto-blocker.ts",
+      "risk": "low"
+    },
+    {
       "id": "src/lib/sdk-retry.ts",
       "path": "src/lib/sdk-retry.ts",
       "risk": "low"
@@ -677,6 +783,11 @@
       "kind": "import"
     },
     {
+      "from": "src/lib/script-auto-blocker.ts",
+      "to": "src/lib/cookie-consent-context.tsx",
+      "kind": "import"
+    },
+    {
       "from": "src/lib/text-cleaning.ts",
       "to": "src/lib/cv-types.ts",
       "kind": "import"
@@ -694,6 +805,10 @@
     {
       "path": "/api/analyze-job",
       "file": "src/app/api/analyze-job/route.ts"
+    },
+    {
+      "path": "/api/consent/log",
+      "file": "src/app/api/consent/log/route.ts"
     },
     {
       "path": "/api/cron/cleanup-sessions",
@@ -827,10 +942,39 @@
     }
   ],
   "affectedModules": [
-    "src/lib/ai-provider.ts"
+    "src/app/api/analyze-job/route.ts",
+    "src/app/api/consent/log/route.ts",
+    "src/app/api/cron/cleanup-sessions/route.ts",
+    "src/app/api/enhance-achievements/route.ts",
+    "src/app/api/extract-file/route.ts",
+    "src/app/api/generate-cover-letter/route.ts",
+    "src/app/api/generate-insights/route.ts",
+    "src/app/api/parse-cv/route.ts",
+    "src/app/api/restructure-cv/route.ts",
+    "src/app/api/score-cv/route.ts",
+    "src/app/cookies/page.tsx",
+    "src/app/layout.tsx",
+    "src/app/privacy/page.tsx",
+    "src/app/terms/page.tsx",
+    "src/components/cv-builder/landing-page.tsx",
+    "src/components/cv-builder/output-step.tsx",
+    "src/components/cv-builder/processing-step.tsx",
+    "src/components/privacy/cookie-banner.tsx",
+    "src/components/privacy/cookie-preferences-modal.tsx",
+    "src/components/privacy/policy-generator-modal.tsx",
+    "src/components/privacy/privacy-footer-trigger.tsx",
+    "src/lib/ai-provider.ts",
+    "src/lib/api-calls.ts",
+    "src/lib/cookie-consent-context.tsx",
+    "src/lib/cv-store.ts",
+    "src/lib/cv-types.ts",
+    "src/lib/request-queue.ts",
+    "src/lib/script-auto-blocker.ts",
+    "src/lib/text-cleaning.ts",
+    "src/proxy.ts"
   ],
   "metrics": {
-    "fileCount": 102,
-    "edgeCount": 3
+    "fileCount": 112,
+    "edgeCount": 4
   }
 }
