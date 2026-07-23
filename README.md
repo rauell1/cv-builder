@@ -175,8 +175,8 @@ ANTHROPIC_API_KEY=sk-ant-your-key
 GOOGLE_AI_API_KEY=your-google-key
 GOOGLE_AI_API_KEYS=your-second-google-key
 
-# Database (SQLite — set the path for your environment)
-DATABASE_URL=file:./dev.db
+# Database (Neon Postgres — get a connection string from console.neon.tech)
+DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 
 # Cron secret — required for the daily session-cleanup cron (see vercel.json).
 # Vercel automatically sends this as a Bearer token when triggering the cron;
@@ -313,7 +313,7 @@ Set all required API keys in your deployment environment (Vercel dashboard → S
 | `ANTHROPIC_API_KEY` | Claude 4 Sonnet, Claude 4 Haiku |
 | `GOOGLE_AI_API_KEY` | Gemini 2.5 Flash, Gemini 2.5 Pro |
 | `GOOGLE_AI_API_KEYS` | Optional — a second Gemini key for more combined free-tier quota |
-| `DATABASE_URL` | Prisma SQLite database (e.g. `file:./dev.db`) |
+| `DATABASE_URL` | Neon Postgres connection string (console.neon.tech) |
 
 ---
 
