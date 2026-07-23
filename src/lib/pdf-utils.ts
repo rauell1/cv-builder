@@ -4,7 +4,7 @@
  * Common functions used across all PDF generation routes (CV + Cover Letter).
  */
 
-import { PDFFont, rgb, PDFPage } from 'pdf-lib';
+import { PDFFont, rgb } from 'pdf-lib';
 
 // A4 page dimensions in points
 export const PAGE_WIDTH = 595.28;
@@ -64,116 +64,35 @@ export function splitTextIntoLines(
 }
 
 /**
- * Split text into lines for justification (returns array of word arrays).
- * Each inner array is one line worth of words.
+ * Measure how many wrapped lines a block of text will take at a given
+ * width, without drawing anything. Used to reserve the correct amount of
+ * vertical space for a block (e.g. a two-column row) before drawing it, so
+ * a page break can never split the block awkwardly partway through.
  */
-export function splitTextIntoWordLines(
+export function measureWrappedLineCount(
   text: string,
   font: PDFFont,
   fontSize: number,
   maxWidth: number
-): string[][] {
-  if (!text) return [[]];
-  const words = text.split(' ').filter(Boolean);
-  if (words.length === 0) return [[]];
-
-  const lines: string[][] = [];
-  let currentLine: string[] = [];
-  let currentWidth = 0;
-  const spaceWidth = font.widthOfTextAtSize(' ', fontSize);
-
-  for (const word of words) {
-    const wordWidth = font.widthOfTextAtSize(word, fontSize);
-    const neededWidth = currentLine.length > 0 ? currentWidth + spaceWidth + wordWidth : wordWidth;
-
-    if (neededWidth > maxWidth && currentLine.length > 0) {
-      lines.push(currentLine);
-      currentLine = [word];
-      currentWidth = wordWidth;
-    } else {
-      currentLine.push(word);
-      currentWidth = neededWidth;
-    }
-  }
-
-  if (currentLine.length > 0) {
-    lines.push(currentLine);
-  }
-
-  return lines.length > 0 ? lines : [[]];
-}
-
-/**
- * Draw a single justified line of text on a page.
- * Distributes extra space evenly between words.
- */
-export function drawJustifiedLine(
-  page: PDFPage,
-  words: string[],
-  x: number,
-  y: number,
-  fontSize: number,
-  font: PDFFont,
-  color: ReturnType<typeof rgb>,
-  maxWidth: number
-): void {
-  if (words.length === 0) return;
-
-  if (words.length === 1) {
-    page.drawText(words[0], { x, y, size: fontSize, font, color });
-    return;
-  }
-
-  // Calculate total word width and distribute space
-  const wordWidths = words.map(w => font.widthOfTextAtSize(w, fontSize));
-  const totalWordWidth = wordWidths.reduce((a, b) => a + b, 0);
-  const totalSpace = maxWidth - totalWordWidth;
-  const spaceWidth = totalSpace / (words.length - 1);
-
-  let currentX = x;
-  for (let i = 0; i < words.length; i++) {
-    page.drawText(words[i], { x: currentX, y, size: fontSize, font, color });
-    currentX += wordWidths[i];
-    if (i < words.length - 1) {
-      currentX += spaceWidth;
-    }
-  }
-}
-
-/**
- * Draw a justified paragraph on a page.
- * All lines except the last are justified; the last line is left-aligned.
- * Returns the new Y position after the paragraph.
- */
-export function drawJustifiedParagraph(
-  page: PDFPage,
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  fontSize: number,
-  font: PDFFont,
-  color: ReturnType<typeof rgb>,
-  lineSpacing: number = 3
 ): number {
-  const wordLines = splitTextIntoWordLines(text, font, fontSize, maxWidth);
+  return splitTextIntoLines(text, font, fontSize, maxWidth).length;
+}
 
-  for (let i = 0; i < wordLines.length; i++) {
-    const words = wordLines[i];
-    const isLastLine = i === wordLines.length - 1;
-
-    if (isLastLine || words.length <= 1) {
-      // Last line: left-aligned
-      page.drawText(words.join(' '), { x, y, size: fontSize, font, color });
-    } else {
-      // Justified line
-      drawJustifiedLine(page, words, x, y, fontSize, font, color, maxWidth);
-    }
-
-    y -= (fontSize + lineSpacing);
-  }
-
-  return y;
+/**
+ * Height in points that a wrapped block of text will occupy, including
+ * inter-line spacing. Mirrors the line-advance math every drawing helper
+ * in this file and in generate-pdf/route.ts already uses (fontSize + spacing
+ * per line), so a measured height always matches what actually gets drawn.
+ */
+export function measureWrappedBlockHeight(
+  text: string,
+  font: PDFFont,
+  fontSize: number,
+  maxWidth: number,
+  lineSpacing: number
+): number {
+  if (!text) return 0;
+  return measureWrappedLineCount(text, font, fontSize, maxWidth) * (fontSize + lineSpacing);
 }
 
 /**

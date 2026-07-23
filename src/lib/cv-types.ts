@@ -368,6 +368,7 @@ TRANSFORMATION RULES:
 11. SKILLS ALIGNMENT: Reorder skill categories so the most job-relevant skills appear first. Rename categories to match job description terminology where applicable.
 12. EDUCATION: Move education below experience unless the candidate is entry-level (< 3 years experience) or the job specifically prioritizes education.
 13. OUTPUT CLEANLINESS: Use plain text only. Do not include markdown symbols such as **, __, or headings. Do not use em/en dashes; use standard hyphen "-".
+14. OVERALL LENGTH: Write for a focused, professional 1-2 page CV, which is what recruiters expect for standard job applications - not an exhaustive record of everything the candidate has ever done. Prioritize the most relevant work experience entries, projects, and skill groups for THIS job rather than including everything from the source CV; it is fine to omit the least relevant items entirely. The only exception is when the source CV itself signals an academic or research career (e.g. publications, grants, teaching positions, multiple degrees) - in that case a longer, more complete CV is the norm and expected.
 
 Return ONLY valid JSON matching this exact structure:
 {
@@ -405,7 +406,8 @@ Important rules:
 - Each bullet MUST include or imply a measurable result
 - The personal statement must be exactly 3 lines
 - Maximum 5-6 bullets per work experience entry
-- Preserve certifications if they exist in the source CV`;
+- Preserve certifications if they exist in the source CV
+- Target a focused 1-2 page professional CV; trim to the most relevant entries rather than including everything, unless the source clearly indicates an academic/research career`;
 
 export const SECTION_INSIGHT_SYSTEM_PROMPT = `You are an expert CV reviewer, ATS optimization specialist, and career coach. Analyze a specific section of a CV against a job description and provide detailed, actionable insights with specific metrics.
 

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, PDFPage, PDFFont, StandardFonts } from 'pdf-lib';
 import type { ParsedCV, CVFormatId } from '@/lib/cv-types';
-import { buildContactParts, PAGE_WIDTH, PAGE_HEIGHT, splitTextIntoWordLines, embedNotoSansFont } from '@/lib/pdf-utils';
+import {
+  buildContactParts, PAGE_WIDTH, PAGE_HEIGHT,
+  measureWrappedLineCount, measureWrappedBlockHeight, embedNotoSansFont,
+} from '@/lib/pdf-utils';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';
 
 // ===== FONT LOADING =====
@@ -36,6 +39,16 @@ async function loadFonts(doc: PDFDocument): Promise<Fonts> {
 
 // ===== TEXT UTILITIES =====
 
+// All body text and bullets are left-aligned, not justified. Justified text
+// at CV-column widths reads worse (uneven "rivers" of whitespace between
+// words - see e.g. https://www.dayjob.com/should-text-be-justified-in-a-cv-425/
+// and https://www.jobscan.co/blog/how-to-set-resume-margins/, both of which
+// recommend left alignment as the professional/ATS-safe default), and the
+// previous justified renderer positioned each word with a separate drawText
+// call and no literal space glyph between them - text extractors (ATS
+// parsers, copy-paste, this app's own OCR pipeline) can read that back with
+// words run together. wrapText below always returns full line strings with
+// real space characters, drawn with a single drawText call per line.
 function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: number): string[] {
   if (!text) return [''];
   const words = text.split(' ');
@@ -76,31 +89,6 @@ function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: numbe
   return lines.length > 0 ? lines : [''];
 }
 
-/**
- * Draw justified words on a page at position (x, y).
- * Distributes space evenly BETWEEN WORDS (not between characters).
- * Last line and single-word lines are left-aligned.
- */
-function drawJustifiedWordsOnPage(
-  page: PDFPage, words: string[], x: number, y: number,
-  fontSize: number, font: PDFFont, color: ReturnType<typeof rgb>, maxWidth: number
-): void {
-  if (words.length <= 1) {
-    page.drawText(words.join(' '), { x, y, size: fontSize, font, color });
-    return;
-  }
-  const wordWidths = words.map(w => font.widthOfTextAtSize(w, fontSize));
-  const totalWordWidth = wordWidths.reduce((a, b) => a + b, 0);
-  const totalSpace = maxWidth - totalWordWidth;
-  const gapWidth = totalSpace / (words.length - 1);
-  let currentX = x;
-  for (let i = 0; i < words.length; i++) {
-    page.drawText(words[i], { x: currentX, y, size: fontSize, font, color });
-    currentX += wordWidths[i];
-    if (i < words.length - 1) currentX += gapWidth;
-  }
-}
-
 // ===== COLOR CONSTANTS =====
 const EU_PRIMARY = rgb(0, 51 / 255, 153 / 255);        // #003399
 const EU_BODY_TEXT = rgb(30 / 255, 30 / 255, 30 / 255); // #1e1e1e
@@ -128,7 +116,7 @@ const EU_LINE_SPACING = 3.5;
 const EU_SECTION_GAP_BEFORE = 4 * MM;
 const EU_SECTION_GAP_AFTER = 4 * MM;
 const EU_ENTRY_GAP = 1.5 * MM;
-const EU_BULLET_PREFIX = '\u2022  ';
+const EU_BULLET_PREFIX = '•  ';
 
 // Shared vertical rhythm for non-Europass formats
 const PRO_LINE_SPACING = 4;
@@ -153,23 +141,8 @@ function checkPage(ctx: PdfCtx, needed: number) {
   }
 }
 
-function drawJustifiedBlock(ctx: PdfCtx, text: string, x: number, width: number, fontSize: number, color = EU_BODY_TEXT) {
-  if (!text) return;
-  const wordLines = splitTextIntoWordLines(text, ctx.fonts.regular, fontSize, width);
-  for (let i = 0; i < wordLines.length; i++) {
-    const words = wordLines[i];
-    const isLastLine = i === wordLines.length - 1;
-    checkPage(ctx, fontSize + EU_LINE_SPACING);
-    if (isLastLine || words.length <= 1) {
-      ctx.page.drawText(words.join(' '), { x, y: ctx.y, size: fontSize, font: ctx.fonts.regular, color });
-    } else {
-      drawJustifiedWordsOnPage(ctx.page, words, x, ctx.y, fontSize, ctx.fonts.regular, color, width);
-    }
-    ctx.y -= (fontSize + EU_LINE_SPACING);
-  }
-}
-
 function drawTextBlock(ctx: PdfCtx, text: string, x: number, width: number, font: PDFFont, fontSize: number, color = EU_BODY_TEXT, spacing = EU_LINE_SPACING) {
+  if (!text) return;
   const lines = wrapText(text, font, fontSize, width);
   for (const line of lines) {
     checkPage(ctx, fontSize + spacing);
@@ -198,93 +171,96 @@ function euDrawSectionHeader(ctx: PdfCtx, title: string) {
   ctx.y -= EU_SECTION_GAP_AFTER;
 }
 
+function euMeasureBulletsHeight(ctx: PdfCtx, bullets: string[], width: number): number {
+  const bulletW = ctx.fonts.regular.widthOfTextAtSize(EU_BULLET_PREFIX, EU_BULLET_SIZE);
+  const textWidth = width - bulletW;
+  let height = 0;
+  for (const bullet of bullets) {
+    const lineCount = measureWrappedLineCount(bullet, ctx.fonts.regular, EU_BULLET_SIZE, textWidth);
+    height += lineCount * (EU_BULLET_SIZE + EU_LINE_SPACING) + EU_ENTRY_GAP;
+  }
+  return height;
+}
+
 function euDrawBullets(ctx: PdfCtx, bullets: string[], x: number, width: number) {
   const bulletW = ctx.fonts.regular.widthOfTextAtSize(EU_BULLET_PREFIX, EU_BULLET_SIZE);
+  const textWidth = width - bulletW;
   for (const bullet of bullets) {
     checkPage(ctx, EU_BULLET_SIZE + EU_LINE_SPACING);
     ctx.page.drawText(EU_BULLET_PREFIX, {
       x, y: ctx.y, size: EU_BULLET_SIZE,
       font: ctx.fonts.regular, color: EU_BODY_TEXT,
     });
-    const textWidth = width - bulletW;
-    const wordLines = splitTextIntoWordLines(bullet, ctx.fonts.regular, EU_BULLET_SIZE, textWidth);
-    for (let li = 0; li < wordLines.length; li++) {
-      const words = wordLines[li];
-      const isLast = li === wordLines.length - 1;
+    const lines = wrapText(bullet, ctx.fonts.regular, EU_BULLET_SIZE, textWidth);
+    for (let li = 0; li < lines.length; li++) {
       checkPage(ctx, EU_BULLET_SIZE + EU_LINE_SPACING);
       const lineX = li === 0 ? x + bulletW : x;
-      if (isLast || words.length <= 1) {
-        ctx.page.drawText(words.join(' '), { x: lineX, y: ctx.y, size: EU_BULLET_SIZE, font: ctx.fonts.regular, color: EU_BODY_TEXT });
-      } else {
-        drawJustifiedWordsOnPage(ctx.page, words, lineX, ctx.y, EU_BULLET_SIZE, ctx.fonts.regular, EU_BODY_TEXT, textWidth);
-      }
+      ctx.page.drawText(lines[li], { x: lineX, y: ctx.y, size: EU_BULLET_SIZE, font: ctx.fonts.regular, color: EU_BODY_TEXT });
       ctx.y -= (EU_BULLET_SIZE + EU_LINE_SPACING);
     }
     ctx.y -= EU_ENTRY_GAP;
   }
 }
 
+// Two-column entries (date on the left, content on the right) are measured
+// in full BEFORE anything is drawn, and checkPage is called exactly once for
+// the combined height. Previously each column was drawn independently and a
+// page break partway through either one would silently move ctx.page to a
+// new page while the other column's y-tracking still assumed the old page,
+// corrupting the layout (misaligned columns, overlapping text, or dozens of
+// broken pages). Measuring first guarantees both columns are drawn on the
+// same ctx.page, since the one checkPage call up front already accounted
+// for everything about to be drawn.
 function euDrawEntry(ctx: PdfCtx, dateRange: string, title: string, subtitle: string, bullets?: string[]) {
-  checkPage(ctx, 50);
+  const leftWidth = EU_LEFT_COL_WIDTH - 5;
+  const rightWidth = PAGE_WIDTH - EU_CONTACT_X - EU_RIGHT_MARGIN;
+
+  const leftHeight = measureWrappedBlockHeight(dateRange, ctx.fonts.bold, EU_DATE_SIZE, leftWidth, EU_LINE_SPACING);
+  let rightHeight = measureWrappedBlockHeight(title, ctx.fonts.bold, EU_TITLE_SIZE, rightWidth, EU_LINE_SPACING);
+  if (subtitle) rightHeight += measureWrappedBlockHeight(subtitle, ctx.fonts.italic, EU_TITLE_SIZE, rightWidth, EU_LINE_SPACING);
+  if (bullets && bullets.length > 0) rightHeight += euMeasureBulletsHeight(ctx, bullets, rightWidth);
+
+  checkPage(ctx, Math.max(leftHeight, rightHeight) + 4);
+
   const entryStartY = ctx.y;
-
-  drawTextBlock(ctx, dateRange, EU_MARGIN, EU_LEFT_COL_WIDTH - 5,
-    ctx.fonts.bold, EU_DATE_SIZE, EU_PRIMARY);
-
+  drawTextBlock(ctx, dateRange, EU_MARGIN, leftWidth, ctx.fonts.bold, EU_DATE_SIZE, EU_PRIMARY);
   const dateEndY = ctx.y;
 
   ctx.y = entryStartY;
-  ctx.page.drawText(title, {
-    x: EU_CONTACT_X, y: ctx.y, size: EU_TITLE_SIZE,
-    font: ctx.fonts.bold, color: EU_BLACK,
-  });
-  ctx.y -= (EU_TITLE_SIZE + EU_LINE_SPACING);
-
+  drawTextBlock(ctx, title, EU_CONTACT_X, rightWidth, ctx.fonts.bold, EU_TITLE_SIZE, EU_BLACK);
   if (subtitle) {
-    ctx.page.drawText(subtitle, {
-      x: EU_CONTACT_X, y: ctx.y, size: EU_TITLE_SIZE,
-      font: ctx.fonts.italic, color: EU_BLACK,
-    });
-    ctx.y -= (EU_TITLE_SIZE + EU_LINE_SPACING);
+    drawTextBlock(ctx, subtitle, EU_CONTACT_X, rightWidth, ctx.fonts.italic, EU_TITLE_SIZE, EU_BLACK);
   }
 
   ctx.y = Math.min(ctx.y, dateEndY);
   ctx.y -= 2;
 
   if (bullets && bullets.length > 0) {
-    const rightWidth = PAGE_WIDTH - EU_CONTACT_X - EU_RIGHT_MARGIN;
     euDrawBullets(ctx, bullets, EU_CONTACT_X, rightWidth);
   }
   ctx.y -= 2;
 }
 
 function euDrawEducation(ctx: PdfCtx, edu: { dateRange: string; degree: string; institution: string; grade?: string }) {
-  checkPage(ctx, 40);
-  const entryStartY = ctx.y;
+  const leftWidth = EU_LEFT_COL_WIDTH - 5;
+  const rightWidth = PAGE_WIDTH - EU_CONTACT_X - EU_RIGHT_MARGIN;
 
-  drawTextBlock(ctx, edu.dateRange, EU_MARGIN, EU_LEFT_COL_WIDTH - 5,
-    ctx.fonts.bold, EU_DATE_SIZE, EU_PRIMARY);
+  const leftHeight = measureWrappedBlockHeight(edu.dateRange, ctx.fonts.bold, EU_DATE_SIZE, leftWidth, EU_LINE_SPACING);
+  let rightHeight = measureWrappedBlockHeight(edu.degree, ctx.fonts.bold, EU_TITLE_SIZE, rightWidth, EU_LINE_SPACING)
+    + measureWrappedBlockHeight(edu.institution, ctx.fonts.italic, EU_TITLE_SIZE, rightWidth, EU_LINE_SPACING);
+  if (edu.grade) rightHeight += measureWrappedBlockHeight(edu.grade, ctx.fonts.regular, EU_BODY_SIZE, rightWidth, EU_LINE_SPACING);
+
+  checkPage(ctx, Math.max(leftHeight, rightHeight) + 2);
+
+  const entryStartY = ctx.y;
+  drawTextBlock(ctx, edu.dateRange, EU_MARGIN, leftWidth, ctx.fonts.bold, EU_DATE_SIZE, EU_PRIMARY);
   const dateEndY = ctx.y;
 
   ctx.y = entryStartY;
-  ctx.page.drawText(edu.degree, {
-    x: EU_CONTACT_X, y: ctx.y, size: EU_TITLE_SIZE,
-    font: ctx.fonts.bold, color: EU_BLACK,
-  });
-  ctx.y -= (EU_TITLE_SIZE + EU_LINE_SPACING);
-
-  ctx.page.drawText(edu.institution, {
-    x: EU_CONTACT_X, y: ctx.y, size: EU_TITLE_SIZE,
-    font: ctx.fonts.italic, color: EU_BLACK,
-  });
-  ctx.y -= (EU_TITLE_SIZE + EU_LINE_SPACING);
-
+  drawTextBlock(ctx, edu.degree, EU_CONTACT_X, rightWidth, ctx.fonts.bold, EU_TITLE_SIZE, EU_BLACK);
+  drawTextBlock(ctx, edu.institution, EU_CONTACT_X, rightWidth, ctx.fonts.italic, EU_TITLE_SIZE, EU_BLACK);
   if (edu.grade) {
-    ctx.page.drawText(edu.grade, {
-      x: EU_CONTACT_X, y: ctx.y, size: EU_BODY_SIZE,
-      font: ctx.fonts.regular, color: EU_BODY_TEXT,
-    });
-    ctx.y -= (EU_BODY_SIZE + EU_LINE_SPACING);
+    drawTextBlock(ctx, edu.grade, EU_CONTACT_X, rightWidth, ctx.fonts.regular, EU_BODY_SIZE, EU_BODY_TEXT);
   }
 
   ctx.y = Math.min(ctx.y, dateEndY);
@@ -341,40 +317,33 @@ async function generateEuropassPDF(cv: ParsedCV): Promise<Uint8Array> {
   // ===== PERSONAL STATEMENT =====
   if (cv.personalStatement) {
     euDrawSectionHeader(ctx, 'Personal Statement');
-    // Full-width justified block (as in Europass reference)
     const stmtWidth = PAGE_WIDTH - EU_MARGIN - EU_RIGHT_MARGIN;
-    drawJustifiedBlock(ctx, cv.personalStatement, EU_MARGIN, stmtWidth, EU_BODY_SIZE);
+    drawTextBlock(ctx, cv.personalStatement, EU_MARGIN, stmtWidth, ctx.fonts.regular, EU_BODY_SIZE, EU_BODY_TEXT);
     ctx.y -= 4;
   }
 
   // ===== TECHNICAL PORTFOLIO & PROJECTS (before Work Experience, per Europass standard) =====
   if (cv.projects && cv.projects.length > 0) {
     euDrawSectionHeader(ctx, 'Technical Portfolio & Projects');
+    const leftWidth = EU_LEFT_COL_WIDTH - 5;
+    const rightWidth = PAGE_WIDTH - EU_CONTACT_X - EU_RIGHT_MARGIN;
     for (const proj of cv.projects) {
-      // Two-column layout: category on left, title+description on right
-      checkPage(ctx, 40);
+      const leftHeight = measureWrappedBlockHeight(proj.category || '', ctx.fonts.bold, EU_DATE_SIZE, leftWidth, EU_LINE_SPACING);
+      let rightHeight = measureWrappedBlockHeight(proj.title || '', ctx.fonts.bold, EU_TITLE_SIZE, rightWidth, EU_LINE_SPACING);
+      if (proj.description) rightHeight += measureWrappedBlockHeight(proj.description, ctx.fonts.regular, EU_BODY_SIZE, rightWidth, EU_LINE_SPACING);
+      checkPage(ctx, Math.max(leftHeight, rightHeight) + 2);
+
       const entryStartY = ctx.y;
-
-      // Left column: category label in bold blue
-      drawTextBlock(ctx, proj.category || '', EU_MARGIN, EU_LEFT_COL_WIDTH - 5,
-        ctx.fonts.bold, EU_DATE_SIZE, EU_PRIMARY);
-
+      drawTextBlock(ctx, proj.category || '', EU_MARGIN, leftWidth, ctx.fonts.bold, EU_DATE_SIZE, EU_PRIMARY);
       const dateEndY = ctx.y;
 
-      // Right column: project title (bold) + description (justified)
       ctx.y = entryStartY;
-      ctx.page.drawText(proj.title || '', {
-        x: EU_CONTACT_X, y: ctx.y, size: EU_TITLE_SIZE,
-        font: ctx.fonts.bold, color: EU_BLACK,
-      });
-      ctx.y -= (EU_TITLE_SIZE + EU_LINE_SPACING);
-
+      drawTextBlock(ctx, proj.title || '', EU_CONTACT_X, rightWidth, ctx.fonts.bold, EU_TITLE_SIZE, EU_BLACK);
       ctx.y = Math.min(ctx.y, dateEndY);
       ctx.y -= 2;
 
       if (proj.description) {
-        const rightWidth = PAGE_WIDTH - EU_CONTACT_X - EU_RIGHT_MARGIN;
-        drawJustifiedBlock(ctx, proj.description, EU_CONTACT_X, rightWidth, EU_BODY_SIZE);
+        drawTextBlock(ctx, proj.description, EU_CONTACT_X, rightWidth, ctx.fonts.regular, EU_BODY_SIZE, EU_BODY_TEXT);
       }
       ctx.y -= 2;
     }
@@ -399,23 +368,19 @@ async function generateEuropassPDF(cv: ParsedCV): Promise<Uint8Array> {
   // ===== TECHNICAL MASTERY (Skills) =====
   if (cv.skills && cv.skills.length > 0) {
     euDrawSectionHeader(ctx, 'Technical Mastery');
+    const leftWidth = EU_LEFT_COL_WIDTH - 5;
+    const rightWidth = PAGE_WIDTH - EU_CONTACT_X - EU_RIGHT_MARGIN;
     for (const group of cv.skills) {
-      // Two-column layout matching Europass: category left, description right
-      checkPage(ctx, 40);
+      const leftHeight = measureWrappedBlockHeight(group.category || '', ctx.fonts.bold, EU_DATE_SIZE, leftWidth, EU_LINE_SPACING);
+      const rightHeight = measureWrappedBlockHeight(group.skills || '', ctx.fonts.regular, EU_BODY_SIZE, rightWidth, EU_LINE_SPACING);
+      checkPage(ctx, Math.max(leftHeight, rightHeight) + 2);
+
       const entryStartY = ctx.y;
-
-      // Left column: skill category name in bold blue
-      drawTextBlock(ctx, group.category || '', EU_MARGIN, EU_LEFT_COL_WIDTH - 5,
-        ctx.fonts.bold, EU_DATE_SIZE, EU_PRIMARY);
-
+      drawTextBlock(ctx, group.category || '', EU_MARGIN, leftWidth, ctx.fonts.bold, EU_DATE_SIZE, EU_PRIMARY);
       const dateEndY = ctx.y;
 
-      // Right column: skills list (justified)
-      const rightWidth = PAGE_WIDTH - EU_CONTACT_X - EU_RIGHT_MARGIN;
       ctx.y = entryStartY;
-      drawJustifiedBlock(ctx, group.skills, EU_CONTACT_X, rightWidth, EU_BODY_SIZE);
-
-      // Use the minimum y between left and right column
+      drawTextBlock(ctx, group.skills || '', EU_CONTACT_X, rightWidth, ctx.fonts.regular, EU_BODY_SIZE, EU_BODY_TEXT);
       ctx.y = Math.min(ctx.y, dateEndY);
       ctx.y -= 2;
     }
@@ -462,41 +427,18 @@ async function generateATSPDF(cv: ParsedCV): Promise<Uint8Array> {
   }
 
   function drawBullets(bullets: string[]) {
-    const bw = fonts.regular.widthOfTextAtSize('\u2022  ', 10);
+    const bw = fonts.regular.widthOfTextAtSize('•  ', 10);
     const textWidth = contentWidth - bw;
     for (const bullet of bullets) {
       checkSpace(14);
-      page.drawText('\u2022', { x: margin, y, size: 10, font: fonts.regular, color: black });
-      const wordLines = splitTextIntoWordLines(bullet, fonts.regular, 10, textWidth);
-      for (let li = 0; li < wordLines.length; li++) {
-        const words = wordLines[li];
-        const isLast = li === wordLines.length - 1;
+      page.drawText('•', { x: margin, y, size: 10, font: fonts.regular, color: black });
+      const lines = wrapText(bullet, fonts.regular, 10, textWidth);
+      for (let li = 0; li < lines.length; li++) {
         checkSpace(10 + PRO_LINE_SPACING);
-        if (isLast || words.length <= 1) {
-          page.drawText(words.join(' '), { x: margin + bw, y, size: 10, font: fonts.regular, color: black });
-        } else {
-          drawJustifiedWordsOnPage(page, words, margin + bw, y, 10, fonts.regular, black, textWidth);
-        }
+        page.drawText(lines[li], { x: margin + bw, y, size: 10, font: fonts.regular, color: black });
         y -= (10 + PRO_LINE_SPACING);
       }
       y -= 2;
-    }
-  }
-
-  function drawJustified(text: string, fontSize: number, font: PDFFont = fonts.regular, color = black, indent = 0) {
-    if (!text) return;
-    const w = contentWidth - indent;
-    const wordLines = splitTextIntoWordLines(text, font, fontSize, w);
-    for (let i = 0; i < wordLines.length; i++) {
-      const words = wordLines[i];
-      const isLast = i === wordLines.length - 1;
-      checkSpace(fontSize + PRO_LINE_SPACING);
-      if (isLast || words.length <= 1) {
-        page.drawText(words.join(' '), { x: margin + indent, y, size: fontSize, font, color });
-      } else {
-        drawJustifiedWordsOnPage(page, words, margin + indent, y, fontSize, font, color, w);
-      }
-      y -= (fontSize + PRO_LINE_SPACING);
     }
   }
 
@@ -522,7 +464,7 @@ async function generateATSPDF(cv: ParsedCV): Promise<Uint8Array> {
 
   if (cv.personalStatement) {
     drawSectionHeader('Professional Summary');
-    drawJustified(cv.personalStatement, 10);
+    drawWrapped(cv.personalStatement, 10);
     y -= 4;
   }
 
@@ -554,7 +496,7 @@ async function generateATSPDF(cv: ParsedCV): Promise<Uint8Array> {
   if (cv.skills && cv.skills.length > 0) {
     drawSectionHeader('Skills');
     for (const skill of cv.skills) {
-      drawJustified(`${skill.category}: ${skill.skills}`, 10, fonts.regular, black);
+      drawWrapped(`${skill.category}: ${skill.skills}`, 10, fonts.regular, black);
       y -= 4;
     }
   }
@@ -597,39 +539,27 @@ async function generateModernPDF(cv: ParsedCV): Promise<Uint8Array> {
   }
 
   function drawBullets(bullets: string[]) {
-    const bw = fonts.regular.widthOfTextAtSize('\u2022  ', 10);
+    const bw = fonts.regular.widthOfTextAtSize('•  ', 10);
     const textWidth = MAIN_WIDTH - bw;
     for (const bullet of bullets) {
       checkSpace(14);
-      page.drawText('\u2022', { x: MAIN_LEFT, y, size: 10, font: fonts.regular, color: DARK_TEXT });
-      const wordLines = splitTextIntoWordLines(bullet, fonts.regular, 10, textWidth);
-      for (let li = 0; li < wordLines.length; li++) {
-        const words = wordLines[li];
-        const isLast = li === wordLines.length - 1;
+      page.drawText('•', { x: MAIN_LEFT, y, size: 10, font: fonts.regular, color: DARK_TEXT });
+      const lines = wrapText(bullet, fonts.regular, 10, textWidth);
+      for (let li = 0; li < lines.length; li++) {
         checkSpace(13);
-        if (isLast || words.length <= 1) {
-          page.drawText(words.join(' '), { x: MAIN_LEFT + bw, y, size: 10, font: fonts.regular, color: DARK_TEXT });
-        } else {
-          drawJustifiedWordsOnPage(page, words, MAIN_LEFT + bw, y, 10, fonts.regular, DARK_TEXT, textWidth);
-        }
+        page.drawText(lines[li], { x: MAIN_LEFT + bw, y, size: 10, font: fonts.regular, color: DARK_TEXT });
         y -= 13;
       }
       y -= 2;
     }
   }
 
-  function drawJustified(text: string, fontSize: number, font: PDFFont = fonts.regular, color = DARK_TEXT) {
+  function drawWrappedText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = DARK_TEXT) {
     if (!text) return;
-    const wordLines = splitTextIntoWordLines(text, font, fontSize, MAIN_WIDTH);
-    for (let i = 0; i < wordLines.length; i++) {
-      const words = wordLines[i];
-      const isLast = i === wordLines.length - 1;
+    const lines = wrapText(text, font, fontSize, MAIN_WIDTH);
+    for (const line of lines) {
       checkSpace(fontSize + PRO_LINE_SPACING);
-      if (isLast || words.length <= 1) {
-        page.drawText(words.join(' '), { x: MAIN_LEFT, y, size: fontSize, font, color });
-      } else {
-        drawJustifiedWordsOnPage(page, words, MAIN_LEFT, y, fontSize, font, color, MAIN_WIDTH);
-      }
+      page.drawText(line, { x: MAIN_LEFT, y, size: fontSize, font, color });
       y -= (fontSize + PRO_LINE_SPACING);
     }
   }
@@ -716,7 +646,7 @@ async function generateModernPDF(cv: ParsedCV): Promise<Uint8Array> {
 
   if (cv.personalStatement) {
     drawSectionHeader('About Me');
-    drawJustified(cv.personalStatement, 10, fonts.italic);
+    drawWrappedText(cv.personalStatement, 10, fonts.italic);
     y -= 4;
   }
 
@@ -751,7 +681,7 @@ async function generateModernPDF(cv: ParsedCV): Promise<Uint8Array> {
       checkSpace(20);
       const label = proj.category ? `[${proj.category}] ` : '';
       drawMainWrapped(`${label}${proj.title || ''}`, 10, fonts.bold, DARK_TEXT, 1);
-      if (proj.description) drawJustified(proj.description, 9);
+      if (proj.description) drawWrappedText(proj.description, 9);
       y -= 4;
     }
   }
@@ -778,6 +708,8 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
   const LEFT_COL_W = 115;
   const CONTENT_START = margin + LEFT_COL_W + 10;
   const CONTENT_W = contentWidth - LEFT_COL_W - 10;
+  const DATE_LINE_H = 12;
+  const BULLET_LINE_H = 13;
 
   const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 
@@ -836,22 +768,6 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
     y -= 14;
   }
 
-  function drawJustifiedOnCurrent(text: string, fontSize: number, font: PDFFont = fonts.regular, color = DARK, maxWidth = contentWidth, startX = margin) {
-    if (!text) return;
-    const wordLines = splitTextIntoWordLines(text, font, fontSize, maxWidth);
-    for (let i = 0; i < wordLines.length; i++) {
-      const words = wordLines[i];
-      const isLast = i === wordLines.length - 1;
-      ensureSpace(fontSize + PRO_LINE_SPACING);
-      if (isLast || words.length <= 1) {
-        currentPage.drawText(words.join(' '), { x: startX, y, size: fontSize, font, color });
-      } else {
-        drawJustifiedWordsOnPage(currentPage, words, startX, y, fontSize, font, color, maxWidth);
-      }
-      y -= (fontSize + PRO_LINE_SPACING);
-    }
-  }
-
   function drawWrappedOnCurrent(text: string, fontSize: number, font: PDFFont, color: ReturnType<typeof rgb>, maxWidth: number, startX: number, gap = 0) {
     if (!text) return;
     const lines = wrapText(text, font, fontSize, maxWidth);
@@ -865,21 +781,38 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
 
   if (cv.personalStatement) {
     drawSectionHeader('Profile');
-    drawJustifiedOnCurrent(cv.personalStatement, 10, fonts.italic);
+    drawWrappedOnCurrent(cv.personalStatement, 10, fonts.italic, DARK, contentWidth, margin);
     y -= 4;
   }
 
   if (cv.workExperience && cv.workExperience.length > 0) {
     drawSectionHeader('Experience');
     for (const exp of cv.workExperience) {
-      ensureSpace(20);
+      // Measure both the date column and the title/subtitle/bullets column
+      // up front and reserve space for the taller one in a single ensureSpace
+      // call, so a page break (if one is needed) happens before the entry
+      // starts rather than splitting the two columns onto different pages.
+      const leftHeight = exp.dateRange
+        ? measureWrappedLineCount(exp.dateRange, fonts.bold, 9, LEFT_COL_W) * DATE_LINE_H
+        : 0;
+      let rightHeight = measureWrappedBlockHeight(exp.title || '', fonts.bold, 11, CONTENT_W, PRO_LINE_SPACING) + 1;
+      if (exp.subtitle) rightHeight += measureWrappedBlockHeight(exp.subtitle, fonts.italic, 10, CONTENT_W, PRO_LINE_SPACING) + 1;
+      if (exp.bullets && exp.bullets.length > 0) {
+        const bw = fonts.regular.widthOfTextAtSize('•  ', 10);
+        const bulletWidth = CONTENT_W - bw;
+        for (const bullet of exp.bullets) {
+          rightHeight += measureWrappedLineCount(bullet, fonts.regular, 10, bulletWidth) * BULLET_LINE_H + 2;
+        }
+      }
+      ensureSpace(Math.max(leftHeight, rightHeight) + PRO_ENTRY_GAP);
+
       const entryStartY = y;
 
       if (exp.dateRange) {
         const dateLines = wrapText(exp.dateRange, fonts.bold, 9, LEFT_COL_W);
         for (const dl of dateLines) {
           currentPage.drawText(dl, { x: margin, y, size: 9, font: fonts.bold, color: PURPLE });
-          y -= 12;
+          y -= DATE_LINE_H;
         }
       }
       const afterDateY = y;
@@ -893,22 +826,16 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
       y -= 3;
 
       if (exp.bullets && exp.bullets.length > 0) {
-        const bw = fonts.regular.widthOfTextAtSize('\u2022  ', 10);
+        const bw = fonts.regular.widthOfTextAtSize('•  ', 10);
         const textWidth = CONTENT_W - bw;
         for (const bullet of exp.bullets) {
           ensureSpace(14);
-          currentPage.drawText('\u2022', { x: CONTENT_START, y, size: 10, font: fonts.regular, color: PURPLE });
-          const wordLines = splitTextIntoWordLines(bullet, fonts.regular, 10, textWidth);
-          for (let li = 0; li < wordLines.length; li++) {
-            const words = wordLines[li];
-            const isLast = li === wordLines.length - 1;
-            ensureSpace(13);
-            if (isLast || words.length <= 1) {
-              currentPage.drawText(words.join(' '), { x: CONTENT_START + bw, y, size: 10, font: fonts.regular, color: DARK });
-            } else {
-              drawJustifiedWordsOnPage(currentPage, words, CONTENT_START + bw, y, 10, fonts.regular, DARK, textWidth);
-            }
-            y -= 13;
+          currentPage.drawText('•', { x: CONTENT_START, y, size: 10, font: fonts.regular, color: PURPLE });
+          const lines = wrapText(bullet, fonts.regular, 10, textWidth);
+          for (let li = 0; li < lines.length; li++) {
+            ensureSpace(BULLET_LINE_H);
+            currentPage.drawText(lines[li], { x: CONTENT_START + bw, y, size: 10, font: fonts.regular, color: DARK });
+            y -= BULLET_LINE_H;
           }
           y -= 2;
         }
@@ -920,11 +847,16 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
   if (cv.education && cv.education.length > 0) {
     drawSectionHeader('Education');
     for (const edu of cv.education) {
-      ensureSpace(20);
+      const leftHeight = edu.dateRange ? DATE_LINE_H : 0;
+      let rightHeight = measureWrappedBlockHeight(edu.degree || '', fonts.bold, 11, CONTENT_W, PRO_LINE_SPACING) + 1;
+      if (edu.institution) rightHeight += measureWrappedBlockHeight(edu.institution, fonts.italic, 10, CONTENT_W, PRO_LINE_SPACING) + 1;
+      if (edu.grade) rightHeight += measureWrappedBlockHeight(edu.grade, fonts.regular, 10, CONTENT_W, PRO_LINE_SPACING) + 1;
+      ensureSpace(Math.max(leftHeight, rightHeight) + PRO_ENTRY_GAP);
+
       const entryStartY = y;
       if (edu.dateRange) {
         currentPage.drawText(edu.dateRange, { x: margin, y, size: 9, font: fonts.bold, color: PURPLE });
-        y -= 12;
+        y -= DATE_LINE_H;
       }
       const afterDateY = y;
 
@@ -947,7 +879,7 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
       ensureSpace(20);
       const label = proj.category ? `[${proj.category}] ` : '';
       drawWrappedOnCurrent(`${label}${proj.title || ''}`, 10, fonts.bold, DARK, contentWidth, margin, 1);
-      if (proj.description) drawJustifiedOnCurrent(proj.description, 9);
+      if (proj.description) drawWrappedOnCurrent(proj.description, 9, fonts.regular, DARK, contentWidth, margin);
       y -= 4;
     }
   }
@@ -962,11 +894,11 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
       let currentLine = '';
       for (const sk of skillsList) {
         const test = currentLine ? `${currentLine}, ${sk}` : sk;
-        const tw = fonts.regular.widthOfTextAtSize(`\u2022  ${test}`, 10);
+        const tw = fonts.regular.widthOfTextAtSize(`•  ${test}`, 10);
         if (tw > contentWidth && currentLine) {
           ensureSpace(14);
-          currentPage.drawText('\u2022', { x: margin, y, size: 10, font: fonts.regular, color: PURPLE });
-          const bw = fonts.regular.widthOfTextAtSize('\u2022  ', 10);
+          currentPage.drawText('•', { x: margin, y, size: 10, font: fonts.regular, color: PURPLE });
+          const bw = fonts.regular.widthOfTextAtSize('•  ', 10);
           currentPage.drawText(currentLine, { x: margin + bw, y, size: 10, font: fonts.regular, color: DARK });
           y -= 14;
           currentLine = sk;
@@ -976,8 +908,8 @@ async function generateCreativePDF(cv: ParsedCV): Promise<Uint8Array> {
       }
       if (currentLine) {
         ensureSpace(14);
-        currentPage.drawText('\u2022', { x: margin, y, size: 10, font: fonts.regular, color: PURPLE });
-        const bw = fonts.regular.widthOfTextAtSize('\u2022  ', 10);
+        currentPage.drawText('•', { x: margin, y, size: 10, font: fonts.regular, color: PURPLE });
+        const bw = fonts.regular.widthOfTextAtSize('•  ', 10);
         currentPage.drawText(currentLine, { x: margin + bw, y, size: 10, font: fonts.regular, color: DARK });
         y -= 14;
       }
@@ -1017,40 +949,18 @@ async function generateClassicPDF(cv: ParsedCV): Promise<Uint8Array> {
   }
 
   function drawBullets(bullets: string[]) {
-    const bw = fonts.regular.widthOfTextAtSize('\u2013  ', 10);
+    const bw = fonts.regular.widthOfTextAtSize('–  ', 10);
     const textWidth = contentWidth - bw;
     for (const bullet of bullets) {
       checkSpace(15);
-      page.drawText('\u2013', { x: margin, y, size: 10, font: fonts.regular, color: DARK });
-      const wordLines = splitTextIntoWordLines(bullet, fonts.regular, 10, textWidth);
-      for (let li = 0; li < wordLines.length; li++) {
-        const words = wordLines[li];
-        const isLast = li === wordLines.length - 1;
+      page.drawText('–', { x: margin, y, size: 10, font: fonts.regular, color: DARK });
+      const lines = wrapText(bullet, fonts.regular, 10, textWidth);
+      for (let li = 0; li < lines.length; li++) {
         checkSpace(14);
-        if (isLast || words.length <= 1) {
-          page.drawText(words.join(' '), { x: margin + bw, y, size: 10, font: fonts.regular, color: DARK });
-        } else {
-          drawJustifiedWordsOnPage(page, words, margin + bw, y, 10, fonts.regular, DARK, textWidth);
-        }
+        page.drawText(lines[li], { x: margin + bw, y, size: 10, font: fonts.regular, color: DARK });
         y -= 14;
       }
       y -= 2;
-    }
-  }
-
-  function drawJustified(text: string, fontSize: number, font: PDFFont = fonts.regular, color = DARK) {
-    if (!text) return;
-    const wordLines = splitTextIntoWordLines(text, font, fontSize, contentWidth);
-    for (let i = 0; i < wordLines.length; i++) {
-      const words = wordLines[i];
-      const isLast = i === wordLines.length - 1;
-      checkSpace(fontSize + PRO_LINE_SPACING);
-      if (isLast || words.length <= 1) {
-        page.drawText(words.join(' '), { x: margin, y, size: fontSize, font, color });
-      } else {
-        drawJustifiedWordsOnPage(page, words, margin, y, fontSize, font, color, contentWidth);
-      }
-      y -= (fontSize + PRO_LINE_SPACING);
     }
   }
 
@@ -1098,7 +1008,7 @@ async function generateClassicPDF(cv: ParsedCV): Promise<Uint8Array> {
 
   if (cv.personalStatement) {
     drawCenteredSectionHeader('Professional Summary');
-    drawJustified(cv.personalStatement, 10, fonts.italic);
+    drawWrappedClassic(cv.personalStatement, 10, fonts.italic, DARK);
     y -= 4;
   }
 
@@ -1133,7 +1043,7 @@ async function generateClassicPDF(cv: ParsedCV): Promise<Uint8Array> {
       checkSpace(20);
       const label = proj.category ? `${proj.category}: ` : '';
       drawWrappedClassic(`${label}${proj.title || ''}`, 10, fonts.bold, DARK, 1);
-      if (proj.description) drawJustified(proj.description, 10);
+      if (proj.description) drawWrappedClassic(proj.description, 10, fonts.regular, DARK);
       y -= 4;
     }
   }
@@ -1141,7 +1051,7 @@ async function generateClassicPDF(cv: ParsedCV): Promise<Uint8Array> {
   if (cv.skills && cv.skills.length > 0) {
     drawCenteredSectionHeader('Skills');
     for (const skill of cv.skills) {
-      drawJustified(`${skill.category}: ${skill.skills}`, 10, fonts.regular, DARK);
+      drawWrappedClassic(`${skill.category}: ${skill.skills}`, 10, fonts.regular, DARK);
       y -= 4;
     }
   }

@@ -3,7 +3,7 @@ import { PDFDocument, rgb, PDFFont, StandardFonts } from 'pdf-lib';
 import type { CoverLetterData, CoverLetterFormatId } from '@/lib/cv-types';
 import { sanitizeCoverLetterData } from '@/lib/text-cleaning';
 import {
-  splitTextIntoLines, splitTextIntoWordLines,
+  splitTextIntoLines,
   PAGE_WIDTH, PAGE_HEIGHT, embedNotoSansFont,
 } from '@/lib/pdf-utils';
 
@@ -62,31 +62,11 @@ async function generateProfessionalPDF(cl: CoverLetterData): Promise<Uint8Array>
     }
   }
 
-  // Page-break-aware justified drawing
-  function drawJustified(text: string, fontSize: number, lineSpacing = CL_LINE_LOOSE) {
-    if (!text) return;
-    const wordLines = splitTextIntoWordLines(text, fonts.regular, fontSize, contentWidth);
-    for (let i = 0; i < wordLines.length; i++) {
-      const words = wordLines[i];
-      const isLast = i === wordLines.length - 1;
-      checkSpace(fontSize + lineSpacing);
-      if (isLast || words.length <= 1) {
-        page.drawText(words.join(' '), { x: LEFT_MARGIN, y, size: fontSize, font: fonts.regular, color: textColor });
-      } else {
-        const wordWidths = words.map(w => fonts.regular.widthOfTextAtSize(w, fontSize));
-        const totalWW = wordWidths.reduce((a, b) => a + b, 0);
-        const gap = (contentWidth - totalWW) / (words.length - 1);
-        let cx = LEFT_MARGIN;
-        for (let j = 0; j < words.length; j++) {
-          page.drawText(words[j], { x: cx, y, size: fontSize, font: fonts.regular, color: textColor });
-          cx += wordWidths[j] + (j < words.length - 1 ? gap : 0);
-        }
-      }
-      y -= (fontSize + lineSpacing);
-    }
-  }
-
-  // Page-break-aware left-aligned drawing
+  // Page-break-aware left-aligned drawing. Body paragraphs use this too
+  // (not justified) - see the note above wrapText in generate-pdf/route.ts
+  // for why: justified text reads worse at this column width and, more
+  // importantly, resume/cover-letter style guides consistently recommend
+  // left alignment for business correspondence.
   function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = CL_LINE_NORMAL) {
     const lines = splitTextIntoLines(text, font, fontSize, contentWidth);
     for (const line of lines) {
@@ -128,18 +108,18 @@ async function generateProfessionalPDF(cl: CoverLetterData): Promise<Uint8Array>
     y -= CL_LINE_NORMAL;
   }
 
-  // --- Body paragraphs (justified) ---
-  drawJustified(cl.openingParagraph || '', 11, 5);
+  // --- Body paragraphs ---
+  drawText(cl.openingParagraph || '', 11, fonts.regular, textColor, CL_LINE_LOOSE);
   y -= CL_PARAGRAPH_GAP;
 
   if (cl.bodyParagraphs && cl.bodyParagraphs.length > 0) {
     for (const para of cl.bodyParagraphs) {
-      drawJustified(para, 11, 5);
+      drawText(para, 11, fonts.regular, textColor, CL_LINE_LOOSE);
       y -= CL_PARAGRAPH_GAP;
     }
   }
 
-  drawJustified(cl.closingParagraph || '', 11, 5);
+  drawText(cl.closingParagraph || '', 11, fonts.regular, textColor, CL_LINE_LOOSE);
   y -= CL_PARAGRAPH_GAP;
 
   // --- Sign-off ---
@@ -169,29 +149,6 @@ async function generateModernPDF(cl: CoverLetterData): Promise<Uint8Array> {
     if (y - needed < margin) {
       page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
       y = PAGE_HEIGHT - margin;
-    }
-  }
-
-  function drawJustified(text: string, fontSize: number, lineSpacing = CL_LINE_NORMAL) {
-    if (!text) return;
-    const wordLines = splitTextIntoWordLines(text, fonts.regular, fontSize, contentWidth);
-    for (let i = 0; i < wordLines.length; i++) {
-      const words = wordLines[i];
-      const isLast = i === wordLines.length - 1;
-      checkSpace(fontSize + lineSpacing);
-      if (isLast || words.length <= 1) {
-        page.drawText(words.join(' '), { x: margin, y, size: fontSize, font: fonts.regular, color: textColor });
-      } else {
-        const wordWidths = words.map(w => fonts.regular.widthOfTextAtSize(w, fontSize));
-        const totalWW = wordWidths.reduce((a, b) => a + b, 0);
-        const gap = (contentWidth - totalWW) / (words.length - 1);
-        let cx = margin;
-        for (let j = 0; j < words.length; j++) {
-          page.drawText(words[j], { x: cx, y, size: fontSize, font: fonts.regular, color: textColor });
-          cx += wordWidths[j] + (j < words.length - 1 ? gap : 0);
-        }
-      }
-      y -= (fontSize + lineSpacing);
     }
   }
 
@@ -243,17 +200,17 @@ async function generateModernPDF(cl: CoverLetterData): Promise<Uint8Array> {
     y -= 4;
   }
 
-  drawJustified(cl.openingParagraph || '', 11, 4);
+  drawText(cl.openingParagraph || '', 11, fonts.regular, textColor, 4);
   y -= CL_PARAGRAPH_GAP;
 
   if (cl.bodyParagraphs && cl.bodyParagraphs.length > 0) {
     for (const para of cl.bodyParagraphs) {
-      drawJustified(para, 11, 4);
+      drawText(para, 11, fonts.regular, textColor, 4);
       y -= CL_PARAGRAPH_GAP;
     }
   }
 
-  drawJustified(cl.closingParagraph || '', 11, 4);
+  drawText(cl.closingParagraph || '', 11, fonts.regular, textColor, 4);
   y -= 16;
 
   drawText(cl.signOff || '', 11);
@@ -310,29 +267,6 @@ async function generateCreativePDF(cl: CoverLetterData): Promise<Uint8Array> {
     }
   }
 
-  function drawJustified(text: string, fontSize: number, lineSpacing = CL_LINE_NORMAL) {
-    if (!text) return;
-    const wordLines = splitTextIntoWordLines(text, fonts.regular, fontSize, contentWidth);
-    for (let i = 0; i < wordLines.length; i++) {
-      const words = wordLines[i];
-      const isLast = i === wordLines.length - 1;
-      checkSpace(fontSize + lineSpacing);
-      if (isLast || words.length <= 1) {
-        page.drawText(words.join(' '), { x: margin, y, size: fontSize, font: fonts.regular, color: textColor });
-      } else {
-        const wordWidths = words.map(w => fonts.regular.widthOfTextAtSize(w, fontSize));
-        const totalWW = wordWidths.reduce((a, b) => a + b, 0);
-        const gap = (contentWidth - totalWW) / (words.length - 1);
-        let cx = margin;
-        for (let j = 0; j < words.length; j++) {
-          page.drawText(words[j], { x: cx, y, size: fontSize, font: fonts.regular, color: textColor });
-          cx += wordWidths[j] + (j < words.length - 1 ? gap : 0);
-        }
-      }
-      y -= (fontSize + lineSpacing);
-    }
-  }
-
   function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = CL_LINE_TIGHT) {
     const lines = splitTextIntoLines(text, font, fontSize, contentWidth);
     for (const line of lines) {
@@ -372,17 +306,17 @@ async function generateCreativePDF(cl: CoverLetterData): Promise<Uint8Array> {
     y -= 4;
   }
 
-  drawJustified(cl.openingParagraph || '', 11, 4);
+  drawText(cl.openingParagraph || '', 11, fonts.regular, textColor, 4);
   y -= 8;
 
   if (cl.bodyParagraphs && cl.bodyParagraphs.length > 0) {
     for (const para of cl.bodyParagraphs) {
-      drawJustified(para, 10.5, CL_LINE_TIGHT);
+      drawText(para, 10.5, fonts.regular, textColor, CL_LINE_TIGHT);
       y -= CL_PARAGRAPH_GAP;
     }
   }
 
-  drawJustified(cl.closingParagraph || '', 10.5, 4);
+  drawText(cl.closingParagraph || '', 10.5, fonts.regular, textColor, 4);
   y -= 14;
 
   // Colored divider before closing
@@ -421,29 +355,6 @@ async function generateConcisePDF(cl: CoverLetterData): Promise<Uint8Array> {
     }
   }
 
-  function drawJustified(text: string, fontSize: number, lineSpacing = CL_LINE_TIGHT) {
-    if (!text) return;
-    const wordLines = splitTextIntoWordLines(text, fonts.regular, fontSize, contentWidth);
-    for (let i = 0; i < wordLines.length; i++) {
-      const words = wordLines[i];
-      const isLast = i === wordLines.length - 1;
-      checkSpace(fontSize + lineSpacing);
-      if (isLast || words.length <= 1) {
-        page.drawText(words.join(' '), { x: margin, y, size: fontSize, font: fonts.regular, color: textColor });
-      } else {
-        const wordWidths = words.map(w => fonts.regular.widthOfTextAtSize(w, fontSize));
-        const totalWW = wordWidths.reduce((a, b) => a + b, 0);
-        const gap = (contentWidth - totalWW) / (words.length - 1);
-        let cx = margin;
-        for (let j = 0; j < words.length; j++) {
-          page.drawText(words[j], { x: cx, y, size: fontSize, font: fonts.regular, color: textColor });
-          cx += wordWidths[j] + (j < words.length - 1 ? gap : 0);
-        }
-      }
-      y -= (fontSize + lineSpacing);
-    }
-  }
-
   function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = CL_LINE_TIGHT) {
     const lines = splitTextIntoLines(text, font, fontSize, contentWidth);
     for (const line of lines) {
@@ -479,17 +390,17 @@ async function generateConcisePDF(cl: CoverLetterData): Promise<Uint8Array> {
     y -= 2;
   }
 
-  drawJustified(cl.openingParagraph || '', 10.5, 3);
+  drawText(cl.openingParagraph || '', 10.5, fonts.regular, textColor, 3);
   y -= 4;
 
   if (cl.bodyParagraphs && cl.bodyParagraphs.length > 0) {
     for (const para of cl.bodyParagraphs) {
-      drawJustified(para, 10.5, 3);
+      drawText(para, 10.5, fonts.regular, textColor, 3);
       y -= 4;
     }
   }
 
-  drawJustified(cl.closingParagraph || '', 10.5, 3);
+  drawText(cl.closingParagraph || '', 10.5, fonts.regular, textColor, 3);
   y -= 10;
 
   drawText(cl.signOff || '', 10.5);
@@ -523,29 +434,6 @@ async function generateFormalPDF(cl: CoverLetterData): Promise<Uint8Array> {
   function centerDraw(text: string, yPos: number, fontSize: number, font: PDFFont, color = textColor) {
     const tw = font.widthOfTextAtSize(text, fontSize);
     page.drawText(text, { x: (PAGE_WIDTH - tw) / 2, y: yPos, size: fontSize, font, color });
-  }
-
-  function drawJustified(text: string, fontSize: number, lineSpacing = CL_LINE_LOOSE) {
-    if (!text) return;
-    const wordLines = splitTextIntoWordLines(text, fonts.regular, fontSize, contentWidth);
-    for (let i = 0; i < wordLines.length; i++) {
-      const words = wordLines[i];
-      const isLast = i === wordLines.length - 1;
-      checkSpace(fontSize + lineSpacing);
-      if (isLast || words.length <= 1) {
-        page.drawText(words.join(' '), { x: margin, y, size: fontSize, font: fonts.regular, color: textColor });
-      } else {
-        const wordWidths = words.map(w => fonts.regular.widthOfTextAtSize(w, fontSize));
-        const totalWW = wordWidths.reduce((a, b) => a + b, 0);
-        const gap = (contentWidth - totalWW) / (words.length - 1);
-        let cx = margin;
-        for (let j = 0; j < words.length; j++) {
-          page.drawText(words[j], { x: cx, y, size: fontSize, font: fonts.regular, color: textColor });
-          cx += wordWidths[j] + (j < words.length - 1 ? gap : 0);
-        }
-      }
-      y -= (fontSize + lineSpacing);
-    }
   }
 
   function drawText(text: string, fontSize: number, font: PDFFont = fonts.regular, color = textColor, ls = CL_LINE_NORMAL) {
@@ -598,17 +486,17 @@ async function generateFormalPDF(cl: CoverLetterData): Promise<Uint8Array> {
     y -= 8;
   }
 
-  drawJustified(cl.openingParagraph || '', 12, 5);
+  drawText(cl.openingParagraph || '', 12, fonts.regular, textColor, CL_LINE_LOOSE);
   y -= 8;
 
   if (cl.bodyParagraphs && cl.bodyParagraphs.length > 0) {
     for (const para of cl.bodyParagraphs) {
-      drawJustified(para, 12, 5);
+      drawText(para, 12, fonts.regular, textColor, CL_LINE_LOOSE);
       y -= 8;
     }
   }
 
-  drawJustified(cl.closingParagraph || '', 12, 5);
+  drawText(cl.closingParagraph || '', 12, fonts.regular, textColor, CL_LINE_LOOSE);
   y -= 18;
 
   drawText(cl.signOff || '', 12);
