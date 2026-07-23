@@ -1,35 +1,45 @@
 {
   "version": {
-    "commit": "145eabcc9627621c67d894d4d0efa9f9189fd591",
-    "short": "145eabc",
-    "generatedAt": "2026-07-23T09:20:28.861Z",
-    "baseCommit": "43d6898281f77002ea1538fe1a766901ad1b1b2b",
+    "commit": "5e20b3ec3261fb43239f6f42a75190ca57d45d67",
+    "short": "5e20b3e",
+    "generatedAt": "2026-07-23T10:51:55.168Z",
+    "baseCommit": "145eabcc9627621c67d894d4d0efa9f9189fd591",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tsrc/app/api/generate-cover-letter-pdf/route.ts",
-      "M\tsrc/app/api/generate-pdf/route.ts",
+      "D\tmiddleware.ts",
+      "M\tprisma/schema.prisma",
+      "M\tsrc/app/api/cron/cleanup-sessions/route.ts",
+      "M\tsrc/app/api/generate-cover-letter/route.ts",
       "M\tsrc/lib/cv-types.ts",
-      "M\tsrc/lib/pdf-utils.ts"
+      "A\tsrc/lib/daily-rate-limit.ts",
+      "D\tsrc/lib/rate-limiter.ts",
+      "M\tsrc/proxy.ts"
     ],
-    "diffStat": " docs/codebase-map.json                         |  23 +-\n docs/codebase-map.md                           |  11 +-\n src/app/api/generate-cover-letter-pdf/route.ts | 156 ++--------\n src/app/api/generate-pdf/route.ts              | 396 ++++++++++---------------\n src/lib/cv-types.ts                            |   4 +-\n src/lib/pdf-utils.ts                           | 117 ++------\n 6 files changed, 210 insertions(+), 497 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json                     | 40 ++++++++++-----\n docs/codebase-map.md                       | 15 +++---\n middleware.ts                              | 71 --------------------------\n prisma/schema.prisma                       | 19 +++++++\n src/app/api/cron/cleanup-sessions/route.ts | 17 ++++++-\n src/app/api/generate-cover-letter/route.ts |  9 +++-\n src/lib/cv-types.ts                        | 16 ++++--\n src/lib/daily-rate-limit.ts                | 65 +++++++++++++++++++++++\n src/lib/rate-limiter.ts                    | 82 ------------------------------\n src/proxy.ts                               | 19 ++++++-\n 10 files changed, 173 insertions(+), 180 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": true,
+    "incremental": false,
     "hashChangedFiles": [
-      "src/app/api/generate-cover-letter-pdf/route.ts",
-      "src/app/api/generate-pdf/route.ts",
+      "prisma/schema.prisma",
+      "src/app/api/cron/cleanup-sessions/route.ts",
+      "src/app/api/generate-cover-letter/route.ts",
       "src/lib/cv-types.ts",
-      "src/lib/pdf-utils.ts"
+      "src/lib/daily-rate-limit.ts",
+      "src/proxy.ts"
     ],
-    "newFiles": [],
-    "removedFiles": [],
+    "newFiles": [
+      "src/lib/daily-rate-limit.ts"
+    ],
+    "removedFiles": [
+      "middleware.ts",
+      "src/lib/rate-limiter.ts"
+    ],
     "packageJsonChanged": false,
-    "prismaChanged": false
+    "prismaChanged": true
   },
   "tree": [
-    "middleware.ts",
     "next.config.ts",
     "prisma/",
     "  schema.prisma",
@@ -161,10 +171,10 @@
     "    cookie-consent-context.tsx",
     "    cv-store.ts",
     "    cv-types.ts",
+    "    daily-rate-limit.ts",
     "    db.ts",
     "    pdf-utils.ts",
     "    rate-limit.ts",
-    "    rate-limiter.ts",
     "    request-queue.ts",
     "    response-cache.ts",
     "    script-auto-blocker.ts",
@@ -175,11 +185,6 @@
     "watchdog.ts"
   ],
   "nodes": [
-    {
-      "id": "middleware.ts",
-      "path": "middleware.ts",
-      "risk": "high"
-    },
     {
       "id": "next.config.ts",
       "path": "next.config.ts",
@@ -671,6 +676,11 @@
       "risk": "high"
     },
     {
+      "id": "src/lib/daily-rate-limit.ts",
+      "path": "src/lib/daily-rate-limit.ts",
+      "risk": "low"
+    },
+    {
       "id": "src/lib/db.ts",
       "path": "src/lib/db.ts",
       "risk": "low"
@@ -683,11 +693,6 @@
     {
       "id": "src/lib/rate-limit.ts",
       "path": "src/lib/rate-limit.ts",
-      "risk": "low"
-    },
-    {
-      "id": "src/lib/rate-limiter.ts",
-      "path": "src/lib/rate-limiter.ts",
       "risk": "low"
     },
     {
@@ -838,18 +843,18 @@
     },
     {
       "file": "src/lib/cv-types.ts",
-      "commitTouches": 14
+      "commitTouches": 15
     },
     {
       "file": "src/components/cv-builder/cv-input-step.tsx",
       "commitTouches": 13
     },
     {
-      "file": "src/lib/api-calls.ts",
-      "commitTouches": 11
+      "file": "src/app/api/generate-cover-letter/route.ts",
+      "commitTouches": 12
     },
     {
-      "file": "src/app/api/generate-cover-letter/route.ts",
+      "file": "src/lib/api-calls.ts",
       "commitTouches": 11
     },
     {
@@ -902,16 +907,18 @@
     }
   ],
   "affectedModules": [
-    "src/app/api/generate-cover-letter-pdf/route.ts",
-    "src/app/api/generate-pdf/route.ts",
+    "prisma/schema.prisma",
+    "src/app/api/cron/cleanup-sessions/route.ts",
+    "src/app/api/generate-cover-letter/route.ts",
     "src/lib/api-calls.ts",
     "src/lib/cv-store.ts",
     "src/lib/cv-types.ts",
-    "src/lib/pdf-utils.ts",
-    "src/lib/text-cleaning.ts"
+    "src/lib/daily-rate-limit.ts",
+    "src/lib/text-cleaning.ts",
+    "src/proxy.ts"
   ],
   "metrics": {
-    "fileCount": 111,
+    "fileCount": 110,
     "edgeCount": 4
   }
 }
