@@ -1,21 +1,23 @@
 {
   "version": {
-    "commit": "0c6b8a1b0b42ddb307d96f7eb53989bee8b6273b",
-    "short": "0c6b8a1",
-    "generatedAt": "2026-07-23T06:15:41.232Z",
-    "baseCommit": "dc43bcfa9193b2e69ab11000ef47a13b21dfa846",
+    "commit": "006270487d19e8c8c2f05d91177be86fee1138ff",
+    "short": "0062704",
+    "generatedAt": "2026-07-23T06:36:54.310Z",
+    "baseCommit": "0c6b8a1b0b42ddb307d96f7eb53989bee8b6273b",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tsrc/components/cv-builder/landing-page.tsx"
+      "M\tsrc/app/builder/page.tsx",
+      "M\tsrc/components/cv-builder/processing-step.tsx"
     ],
-    "diffStat": " docs/codebase-map.json                     | 129 ++++++++++++++++++++++-------\n docs/codebase-map.md                       |  33 ++++++--\n src/components/cv-builder/landing-page.tsx | 127 +++++-----------------------\n 3 files changed, 148 insertions(+), 141 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json                        | 95 ++++-----------------------\n docs/codebase-map.md                          | 31 ++-------\n src/app/builder/page.tsx                      |  2 +-\n src/components/cv-builder/processing-step.tsx | 69 +++----------------\n 4 files changed, 25 insertions(+), 172 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
     "incremental": true,
     "hashChangedFiles": [
-      "src/components/cv-builder/landing-page.tsx"
+      "src/app/builder/page.tsx",
+      "src/components/cv-builder/processing-step.tsx"
     ],
     "newFiles": [],
     "removedFiles": [],
@@ -851,6 +853,10 @@
       "commitTouches": 11
     },
     {
+      "file": "src/components/cv-builder/processing-step.tsx",
+      "commitTouches": 10
+    },
+    {
       "file": "src/components/cv-builder/landing-page.tsx",
       "commitTouches": 10
     },
@@ -869,10 +875,6 @@
     {
       "file": "src/app/api/ai-chat/route.ts",
       "commitTouches": 10
-    },
-    {
-      "file": "src/components/cv-builder/processing-step.tsx",
-      "commitTouches": 9
     },
     {
       "file": "src/lib/request-queue.ts",
@@ -896,7 +898,8 @@
     }
   ],
   "affectedModules": [
-    "src/components/cv-builder/landing-page.tsx"
+    "src/app/builder/page.tsx",
+    "src/components/cv-builder/processing-step.tsx"
   ],
   "metrics": {
     "fileCount": 111,
