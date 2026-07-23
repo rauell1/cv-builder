@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowRight, Globe, BatteryCharging, Leaf, Heart } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Logo } from '@/components/ui/logo';
 
 export const metadata: Metadata = {
   title: 'Engineering & Sustainability Projects',
@@ -42,9 +43,7 @@ export default function ProjectsPage() {
       <header className="sticky top-0 z-50 glass-nav border-b border-border">
         <div className="h-0.5 bg-stripe-gradient" aria-hidden="true" />
         <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 font-semibold text-foreground text-sm">
-            <span>Roy Okola Otieno</span>
-          </Link>
+          <Logo size="sm" href="/" />
           <div className="flex gap-4">
             <Link href="/" className="text-xs text-muted-foreground hover:text-primary transition-colors">Home</Link>
             <Link href="/builder" className="text-xs text-muted-foreground hover:text-primary transition-colors">CV Builder</Link>

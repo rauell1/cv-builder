@@ -51,7 +51,9 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/logo.svg",
+    shortcut: "/logo.svg",
+    apple: "/logo.svg",
   },
   openGraph: {
     title: "Roy Okola Otieno | Software Architect & Clean-Energy Developer",
@@ -79,7 +81,7 @@ export default function RootLayout({
     "@id": "https://cv-builder.rauell.systems/#organization",
     "name": "Roy Okola Otieno Portfolio & Lab",
     "url": "https://cv-builder.rauell.systems",
-    "logo": "https://cv-builder.rauell.systems/logo.png",
+    "logo": "https://cv-builder.rauell.systems/logo.svg",
     "sameAs": [
       "https://github.com/rauell1",
       "https://x.com"

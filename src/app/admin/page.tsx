@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { signOutAdmin } from './actions';
+import { Logo } from '@/components/ui/logo';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,9 +88,12 @@ export default async function AdminPage() {
     <div className="min-h-screen bg-muted/40 px-4 py-8 sm:px-8">
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Generation Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Signed in as {session.user.email}</p>
+          <div className="flex items-center gap-4">
+            <Logo size="md" href="/" />
+            <div>
+              <h1 className="text-xl font-semibold text-foreground">Generation Dashboard</h1>
+              <p className="text-xs text-muted-foreground">Signed in as {session.user.email}</p>
+            </div>
           </div>
           <form action={signOutAdmin}>
             <Button variant="outline" size="sm" type="submit">Sign out</Button>

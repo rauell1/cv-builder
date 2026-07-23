@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { useEffect } from 'react';
+import { Logo } from '@/components/ui/logo';
 
 const BUILDER_STEPS = ['cv-input', 'job-desc', 'processing', 'output'] as const;
 
@@ -46,14 +47,7 @@ export default function BuilderPage() {
               </Button>
             </Link>
             <Separator orientation="vertical" className="h-5 bg-border" />
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shadow-glow-sm" aria-hidden="true">
-                <Cpu className="w-3.5 h-3.5 text-white" />
-              </div>
-              <span className="text-sm font-semibold text-foreground tracking-tight">
-                AI CV Builder
-              </span>
-            </div>
+            <Logo size="sm" href="/" />
           </div>
           <span className="text-xs text-muted-foreground hidden sm:inline">
             Step {currentStepNumber > 0 ? currentStepNumber : 1} of {BUILDER_STEPS.length}

@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Logo } from '@/components/ui/logo';
 
 export default function AdminSignUpPage() {
   const [state, formAction, isPending] = useActionState(signUpWithEmail, null);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-muted px-4 gap-6">
+      <Logo size="lg" />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-lg">Create admin account</CardTitle>

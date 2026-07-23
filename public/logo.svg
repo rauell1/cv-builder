@@ -1,29 +1,74 @@
-<?xml version="1.0" encoding="utf-8"?>
-<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 30 30" style="enable-background:new 0 0 30 30;" xml:space="preserve">
-<defs>
-  <style type="text/css">
-    .st194{fill:#2D2D2D;stroke:#FFFFFF;stroke-width:0.6317;stroke-miterlimit:10;}
-    .st23{fill:#FFFFFF;}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" width="100%" height="100%">
+  <defs>
+    <!-- Main Emblem Background Gradient -->
+    <linearGradient id="cv-logo-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5"/>
+      <stop offset="50%" stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#D946EF"/>
+    </linearGradient>
 
-    .z-breathe {
-      animation: breathe 2.5s ease-in-out infinite;
-    }
+    <!-- Document Card Surface Gradient -->
+    <linearGradient id="cv-doc-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F3F4F6"/>
+    </linearGradient>
 
-    @keyframes breathe {
-      0%, 100% { opacity: 0.7; }
-      50% { opacity: 1; }
-    }
-  </style>
-</defs>
+    <!-- AI Sparkle Glow Gradient -->
+    <linearGradient id="cv-sparkle-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
 
-<g>
-  <path class="st194" d="M24.51,28.51H5.49c-2.21,0-4-1.79-4-4V5.49c0-2.21,1.79-4,4-4h19.03c2.21,0,4,1.79,4,4v19.03
-    C28.51,26.72,26.72,28.51,24.51,28.51z"/>
-  <g class="z-breathe">
-    <path class="st23" d="M15.47,7.1l-1.3,1.85c-0.2,0.29-0.54,0.47-0.9,0.47h-7.1V7.09C6.16,7.1,15.47,7.1,15.47,7.1z"/>
-    <polygon class="st23" points="24.3,7.1 13.14,22.91 5.7,22.91 16.86,7.1"/>
-    <path class="st23" d="M14.53,22.91l1.31-1.86c0.2-0.29,0.54-0.47,0.9-0.47h7.09v2.33H14.53z"/>
+    <!-- Accent Lines Gradient -->
+    <linearGradient id="cv-line-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+
+    <!-- Soft Drop Shadow -->
+    <filter id="cv-shadow" x="-10%" y="-10%" width="120%" height="120%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#4F46E5" flood-opacity="0.35"/>
+    </filter>
+    
+    <filter id="sparkle-glow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#06B6D4" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Outer Rounded Shield/Tile Container -->
+  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#cv-logo-bg)" filter="url(#cv-shadow)"/>
+  
+  <!-- Subtle Glassmorphism Overlay Highlight -->
+  <rect x="32" y="32" width="448" height="224" rx="112" fill="white" fill-opacity="0.08"/>
+
+  <!-- CV Document Sheet Base -->
+  <g transform="translate(136, 112)">
+    <!-- Main Page Body -->
+    <path d="M 20 0 H 170 L 240 70 V 268 C 240 279.046 231.046 288 220 288 H 20 C 8.954 288 0 279.046 0 268 V 20 C 0 8.954 8.954 0 20 0 Z" fill="url(#cv-doc-grad)" />
+    
+    <!-- Folded Corner -->
+    <path d="M 170 0 V 54 C 170 62.837 177.163 70 186 70 H 240 Z" fill="#E5E7EB"/>
+
+    <!-- Document Header / Avatar Mockup -->
+    <circle cx="52" cy="64" r="22" fill="url(#cv-logo-bg)" fill-opacity="0.15"/>
+    <rect x="90" y="52" width="65" height="10" rx="5" fill="url(#cv-line-grad)"/>
+    <rect x="90" y="68" width="45" height="7" rx="3.5" fill="#9CA3AF" fill-opacity="0.6"/>
+
+    <!-- Resume Content Lines -->
+    <rect x="32" y="112" width="176" height="8" rx="4" fill="url(#cv-line-grad)"/>
+    <rect x="32" y="132" width="140" height="7" rx="3.5" fill="#D1D5DB"/>
+    <rect x="32" y="148" width="160" height="7" rx="3.5" fill="#E5E7EB"/>
+
+    <rect x="32" y="176" width="176" height="8" rx="4" fill="url(#cv-line-grad)"/>
+    <rect x="32" y="196" width="150" height="7" rx="3.5" fill="#D1D5DB"/>
+    <rect x="32" y="212" width="120" height="7" rx="3.5" fill="#E5E7EB"/>
+    
+    <rect x="32" y="240" width="176" height="8" rx="4" fill="url(#cv-sparkle-grad)"/>
   </g>
-</g>
+
+  <!-- Floating Glowing AI Sparkle 1 (Large) -->
+  <path d="M 360 100 Q 360 140 400 140 Q 360 140 360 180 Q 360 140 320 140 Q 360 140 360 100 Z" fill="url(#cv-sparkle-grad)" filter="url(#sparkle-glow)"/>
+
+  <!-- Floating AI Sparkle 2 (Small) -->
+  <path d="M 120 360 Q 120 380 140 380 Q 120 380 120 400 Q 120 380 100 380 Q 120 380 120 360 Z" fill="#FFFFFF" fill-opacity="0.9"/>
 </svg>

@@ -20,6 +20,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
+import { Logo } from '@/components/ui/logo';
 import {
   AVAILABLE_MODELS,
   AI_PROVIDERS,
@@ -180,14 +181,7 @@ export function LandingPage() {
       <nav className="sticky top-0 z-50 glass-nav" aria-label="Main navigation">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shadow-glow-sm" aria-hidden="true">
-              <Cpu className="w-4.5 h-4.5 text-white" />
-            </div>
-            <span className="text-sm font-semibold text-foreground tracking-tight">
-              AI CV Builder
-            </span>
-          </div>
+          <Logo size="md" href="/" />
 
           {/* Nav Links */}
           <div className="hidden sm:flex items-center gap-6">
@@ -279,9 +273,7 @@ export function LandingPage() {
             {/* Logo / Brand with decorative gradient orb */}
             <m.div variants={itemVariants} className="mb-8 relative">
               <div className="hero-orb" role="img" aria-hidden="true" />
-              <div className="relative w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-glow">
-                <Cpu className="w-8 h-8 text-white" />
-              </div>
+              <Logo size="xl" showText={false} href={null} animated={false} />
             </m.div>
 
             {/* Title */}
@@ -700,13 +692,8 @@ export function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-8">
             {/* Brand */}
             <div className="sm:col-span-2">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center" aria-hidden="true">
-                  <Cpu className="w-4.5 h-4.5 text-white" />
-                </div>
-                <span className="text-sm font-semibold text-foreground tracking-tight">
-                  AI CV Builder
-                </span>
+              <div className="mb-3">
+                <Logo size="md" href="/" />
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed max-w-xs mb-4">
                 Multi-model AI-powered CV builder with intelligent parsing, job-matching, and professional PDF generation.
