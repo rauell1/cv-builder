@@ -22,9 +22,8 @@ import fsPromises from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { createRequire } from 'module';
+import sharp from 'sharp';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const sharp = require('sharp') as typeof import('sharp');
 const cjsRequire = createRequire(import.meta.url);
 
 export const runtime = 'nodejs';
