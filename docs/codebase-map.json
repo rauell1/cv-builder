@@ -1,21 +1,67 @@
 {
   "version": {
-    "commit": "18b7bb9cf4650193b779abe45438045bd80f921d",
-    "short": "18b7bb9",
-    "generatedAt": "2026-07-23T05:58:50.547Z",
-    "baseCommit": "190e8192a9598e91f004c7966015639d325b97c3",
+    "commit": "dc43bcfa9193b2e69ab11000ef47a13b21dfa846",
+    "short": "dc43bcf",
+    "generatedAt": "2026-07-23T06:02:09.923Z",
+    "baseCommit": "18b7bb9cf4650193b779abe45438045bd80f921d",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tsrc/components/privacy/cookie-preferences-modal.tsx"
+      "M\tsrc/app/api/consent/log/route.ts",
+      "M\tsrc/app/api/cron/cleanup-sessions/route.ts",
+      "M\tsrc/app/api/enhance-achievements/route.ts",
+      "M\tsrc/app/api/extract-file/route.ts",
+      "M\tsrc/app/api/parse-cv/route.ts",
+      "M\tsrc/app/api/score-cv/route.ts",
+      "M\tsrc/app/cookies/page.tsx",
+      "M\tsrc/app/privacy/page.tsx",
+      "M\tsrc/app/terms/page.tsx",
+      "M\tsrc/components/cv-builder/cv-input-step.tsx",
+      "M\tsrc/components/cv-builder/job-desc-step.tsx",
+      "M\tsrc/components/cv-builder/landing-page.tsx",
+      "M\tsrc/components/cv-builder/output-step.tsx",
+      "M\tsrc/components/cv-builder/processing-step.tsx",
+      "M\tsrc/instrumentation.ts",
+      "M\tsrc/lib/ai-provider.ts",
+      "M\tsrc/lib/api-calls.ts",
+      "M\tsrc/lib/config.ts",
+      "M\tsrc/lib/cv-types.ts",
+      "M\tsrc/lib/rate-limiter.ts",
+      "M\tsrc/lib/request-queue.ts",
+      "M\tsrc/lib/response-cache.ts",
+      "M\tsrc/lib/sdk-retry.ts",
+      "M\tsrc/proxy.ts"
     ],
-    "diffStat": " docs/codebase-map.json                             | 68 ++++++----------------\n docs/codebase-map.md                               | 21 +++----\n .../privacy/cookie-preferences-modal.tsx           |  9 ++-\n 3 files changed, 34 insertions(+), 64 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json                        | 28 +++++----------\n docs/codebase-map.md                          | 13 +++----\n src/app/api/consent/log/route.ts              |  2 +-\n src/app/api/cron/cleanup-sessions/route.ts    |  2 +-\n src/app/api/enhance-achievements/route.ts     |  8 ++---\n src/app/api/extract-file/route.ts             | 24 ++++++-------\n src/app/api/parse-cv/route.ts                 |  6 ++--\n src/app/api/score-cv/route.ts                 |  4 +--\n src/app/cookies/page.tsx                      |  4 +--\n src/app/privacy/page.tsx                      | 12 +++----\n src/app/terms/page.tsx                        |  6 ++--\n src/components/cv-builder/cv-input-step.tsx   | 10 +++---\n src/components/cv-builder/job-desc-step.tsx   |  4 +--\n src/components/cv-builder/landing-page.tsx    |  2 +-\n src/components/cv-builder/output-step.tsx     |  2 +-\n src/components/cv-builder/processing-step.tsx | 16 ++++-----\n src/instrumentation.ts                        |  2 +-\n src/lib/ai-provider.ts                        | 38 ++++++++++----------\n src/lib/api-calls.ts                          | 12 +++----\n src/lib/config.ts                             |  8 ++---\n src/lib/cv-types.ts                           | 50 +++++++++++++--------------\n src/lib/rate-limiter.ts                       |  2 +-\n src/lib/request-queue.ts                      | 12 +++----\n src/lib/response-cache.ts                     |  4 +--\n src/lib/sdk-retry.ts                          |  2 +-\n src/proxy.ts                                  |  6 ++--\n 26 files changed, 133 insertions(+), 146 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
     "incremental": true,
     "hashChangedFiles": [
-      "src/components/privacy/cookie-preferences-modal.tsx"
+      "src/app/api/consent/log/route.ts",
+      "src/app/api/cron/cleanup-sessions/route.ts",
+      "src/app/api/enhance-achievements/route.ts",
+      "src/app/api/extract-file/route.ts",
+      "src/app/api/parse-cv/route.ts",
+      "src/app/api/score-cv/route.ts",
+      "src/app/cookies/page.tsx",
+      "src/app/privacy/page.tsx",
+      "src/app/terms/page.tsx",
+      "src/components/cv-builder/cv-input-step.tsx",
+      "src/components/cv-builder/job-desc-step.tsx",
+      "src/components/cv-builder/landing-page.tsx",
+      "src/components/cv-builder/output-step.tsx",
+      "src/components/cv-builder/processing-step.tsx",
+      "src/instrumentation.ts",
+      "src/lib/ai-provider.ts",
+      "src/lib/api-calls.ts",
+      "src/lib/config.ts",
+      "src/lib/cv-types.ts",
+      "src/lib/rate-limiter.ts",
+      "src/lib/request-queue.ts",
+      "src/lib/response-cache.ts",
+      "src/lib/sdk-retry.ts",
+      "src/proxy.ts"
     ],
     "newFiles": [],
     "removedFiles": [],
@@ -816,15 +862,15 @@
   "hotspots": [
     {
       "file": "src/lib/ai-provider.ts",
-      "commitTouches": 43
+      "commitTouches": 44
     },
     {
       "file": "src/app/api/extract-file/route.ts",
-      "commitTouches": 24
+      "commitTouches": 25
     },
     {
       "file": "src/app/api/parse-cv/route.ts",
-      "commitTouches": 24
+      "commitTouches": 25
     },
     {
       "file": "src/app/api/analyze-job/route.ts",
@@ -832,7 +878,15 @@
     },
     {
       "file": "src/components/cv-builder/cv-input-step.tsx",
+      "commitTouches": 13
+    },
+    {
+      "file": "src/lib/cv-types.ts",
       "commitTouches": 12
+    },
+    {
+      "file": "src/lib/api-calls.ts",
+      "commitTouches": 11
     },
     {
       "file": "src/app/api/generate-cover-letter/route.ts",
@@ -843,15 +897,15 @@
       "commitTouches": 11
     },
     {
-      "file": "src/lib/cv-types.ts",
-      "commitTouches": 11
-    },
-    {
-      "file": "src/app/layout.tsx",
+      "file": "src/app/api/enhance-achievements/route.ts",
       "commitTouches": 10
     },
     {
-      "file": "src/lib/api-calls.ts",
+      "file": "src/app/api/score-cv/route.ts",
+      "commitTouches": 10
+    },
+    {
+      "file": "src/app/layout.tsx",
       "commitTouches": 10
     },
     {
@@ -859,7 +913,15 @@
       "commitTouches": 10
     },
     {
-      "file": "src/app/api/enhance-achievements/route.ts",
+      "file": "src/components/cv-builder/landing-page.tsx",
+      "commitTouches": 9
+    },
+    {
+      "file": "src/components/cv-builder/processing-step.tsx",
+      "commitTouches": 9
+    },
+    {
+      "file": "src/lib/request-queue.ts",
       "commitTouches": 9
     },
     {
@@ -867,24 +929,8 @@
       "commitTouches": 9
     },
     {
-      "file": "src/app/api/score-cv/route.ts",
-      "commitTouches": 9
-    },
-    {
       "file": "src/app/api/health/route.ts",
       "commitTouches": 9
-    },
-    {
-      "file": "src/components/cv-builder/landing-page.tsx",
-      "commitTouches": 8
-    },
-    {
-      "file": "src/components/cv-builder/processing-step.tsx",
-      "commitTouches": 8
-    },
-    {
-      "file": "src/lib/request-queue.ts",
-      "commitTouches": 8
     },
     {
       "file": "src/app/api/generate-cover-letter-pdf/route.ts",
@@ -896,7 +942,32 @@
     }
   ],
   "affectedModules": [
-    "src/components/privacy/cookie-preferences-modal.tsx"
+    "src/app/api/consent/log/route.ts",
+    "src/app/api/cron/cleanup-sessions/route.ts",
+    "src/app/api/enhance-achievements/route.ts",
+    "src/app/api/extract-file/route.ts",
+    "src/app/api/parse-cv/route.ts",
+    "src/app/api/score-cv/route.ts",
+    "src/app/cookies/page.tsx",
+    "src/app/privacy/page.tsx",
+    "src/app/terms/page.tsx",
+    "src/components/cv-builder/cv-input-step.tsx",
+    "src/components/cv-builder/job-desc-step.tsx",
+    "src/components/cv-builder/landing-page.tsx",
+    "src/components/cv-builder/output-step.tsx",
+    "src/components/cv-builder/processing-step.tsx",
+    "src/instrumentation.ts",
+    "src/lib/ai-provider.ts",
+    "src/lib/api-calls.ts",
+    "src/lib/config.ts",
+    "src/lib/cv-store.ts",
+    "src/lib/cv-types.ts",
+    "src/lib/rate-limiter.ts",
+    "src/lib/request-queue.ts",
+    "src/lib/response-cache.ts",
+    "src/lib/sdk-retry.ts",
+    "src/lib/text-cleaning.ts",
+    "src/proxy.ts"
   ],
   "metrics": {
     "fileCount": 111,
