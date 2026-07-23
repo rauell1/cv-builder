@@ -303,7 +303,7 @@ export function ProcessingStep() {
                   <Settings className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="text-xl font-light text-foreground mb-1 tracking-tight">Choose AI Model</h3>
-                <p className="text-sm text-muted-foreground font-light">Select an AI model to restructure your CV. GLM models are built-in in Z.ai and may require an API key on external hosting.</p>
+                <p className="text-sm text-muted-foreground font-light">Select an AI model to restructure your CV. All models run on our servers - completely free, no API key needed from you.</p>
               </div>
 
               {/* Provider-grouped model cards */}
@@ -314,16 +314,9 @@ export function ProcessingStep() {
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-base">{group.provider.icon}</span>
                       <h4 className="text-sm font-normal text-foreground">{group.provider.name}</h4>
-                      {!group.models.some((m) => m.requiresApiKey) && (
-                        <Badge className="text-[10px] px-1.5 py-0 rounded-[4px] bg-[rgba(21,190,83,0.2)] text-[#108c3d] border border-[rgba(21,190,83,0.4)] h-5">
-                          Built-in (Z.ai)
-                        </Badge>
-                      )}
-                      {group.models.some((m) => m.requiresApiKey) && (
-                        <Badge className="text-[10px] px-1.5 py-0 rounded-[4px] bg-muted text-muted-foreground border border-border h-5">
-                          Requires Key
-                        </Badge>
-                      )}
+                      <Badge className="text-[10px] px-1.5 py-0 rounded-[4px] bg-[rgba(21,190,83,0.2)] text-[#108c3d] border border-[rgba(21,190,83,0.4)] h-5">
+                        Free to Use
+                      </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mb-3 ml-7 font-light">{group.provider.description}</p>
 
@@ -370,7 +363,7 @@ export function ProcessingStep() {
                                 {model.description}
                               </p>
 
-                              <div className="flex items-center justify-between pl-6">
+                              <div className="flex items-center pl-6">
                                 {/* Speed indicator */}
                                 <div className="flex items-center gap-1.5">
                                   <div className={`w-1.5 h-1.5 rounded-full ${speed.dotColor}`} />
@@ -378,17 +371,6 @@ export function ProcessingStep() {
                                     {speed.label}
                                   </span>
                                 </div>
-
-                                {/* Built-in / API key badge */}
-                                {model.requiresApiKey ? (
-                                  <Badge variant="outline" className="text-[10px] text-muted-foreground border-border rounded-[4px] h-5">
-                                    Needs Key
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-[10px] text-[#108c3d] border-[rgba(21,190,83,0.4)] rounded-[4px] h-5">
-                                    Built-in (Z.ai)
-                                  </Badge>
-                                )}
                               </div>
                             </CardContent>
                           </Card>
@@ -398,36 +380,6 @@ export function ProcessingStep() {
                   </div>
                 ))}
               </div>
-
-              {/* API key warning - visually distinct with left accent border */}
-              {activeModelConfig.requiresApiKey && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-5"
-                >
-                  <Card className="border-l-4 border-l-[#9b6829] border-border bg-amber-50/60 rounded-[6px]">
-                    <CardContent className="p-4 flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[rgba(155,104,41,0.12)] flex items-center justify-center shrink-0 mt-0.5">
-                        <AlertCircle className="w-4 h-4 text-[#9b6829]" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">
-                          API Key Required
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1 font-light leading-relaxed">
-                          {activeModelConfig.name} requires the{' '}
-                          <code className="bg-border px-1 py-0.5 rounded-[4px] text-[11px] font-mono">
-                            {activeModelConfig.apiEnvKey}
-                          </code>{' '}
-                          environment variable. If not set, the request will fail.
-                          Consider using a GLM model instead.
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )}
 
               {/* Start Processing button */}
               <div className="mt-6 flex flex-col items-center">
@@ -710,12 +662,7 @@ export function ProcessingStep() {
                             </SelectItem>
                             {group.models.map((model) => (
                               <SelectItem key={model.id} value={model.id} className="pl-6">
-                                <span className="flex items-center gap-2">
-                                  {model.name}
-                                  {!model.requiresApiKey && (
-                                    <span className="text-[10px] text-[#15be53]">(built-in in Z.ai)</span>
-                                  )}
-                                </span>
+                                {model.name}
                               </SelectItem>
                             ))}
                           </div>
@@ -737,9 +684,9 @@ export function ProcessingStep() {
                   <CardContent className="p-5">
                     <h4 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1.5">
                       <Zap className="w-4 h-4 text-[#15be53]" />
-                      NVIDIA NIM models are available when configured
+                      Try an NVIDIA NIM model instead
                     </h4>
-                    <p className="text-xs text-muted-foreground mb-4 font-light">Use NVIDIA_API_KEY on hosted deployments, then retry below</p>
+                    <p className="text-xs text-muted-foreground mb-4 font-light">Pick another model below and retry</p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       {nvidiaFallbackModels.map((model, idx) => {
                         const speed = getSpeedLabel(model.speed);

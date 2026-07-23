@@ -84,7 +84,7 @@ export default function BuilderPage() {
             AI-powered CV intelligence
           </p>
           <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-            Made with <Heart className="w-3 h-3 text-[#ea2261] fill-[#ea2261]" aria-label="love" /> by Z.ai
+            Made with <Heart className="w-3 h-3 text-[#ea2261] fill-[#ea2261]" aria-label="love" /> by Roy Okola Otieno
           </p>
         </div>
       </footer>
