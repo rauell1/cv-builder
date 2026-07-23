@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 
 /**
- * Persistent daily request cap per IP + route category, backed by Postgres.
+ * Persistent daily request cap per (subject, category), backed by Postgres.
  *
  * The in-memory limiter in rate-limit.ts stops rapid bursts cheaply, but its
  * state is per serverless instance and resets constantly - it cannot stop a
@@ -9,7 +9,14 @@ import { db } from '@/lib/db';
  * which still runs up real cost on our NVIDIA/Google API keys. This checks
  * a much longer window (a calendar day) that actually holds across every
  * instance, since it lives in the database rather than process memory.
+ *
+ * Checked as two independent dimensions per request - IP and an anonymous
+ * visitor cookie (see visitor.ts) - so evading the cap requires BOTH
+ * rotating IP (e.g. via VPN) AND clearing cookies in the same session, not
+ * just one.
  */
+
+export type RateLimitSubjectType = 'ip' | 'visitor';
 
 export const DAILY_LIMITS: Record<string, number> = {
   ai: 150,
@@ -24,16 +31,16 @@ function todayUTC(): string {
 }
 
 /**
- * Atomically increments today's counter for this ip+category and returns
- * the count after incrementing. A single INSERT ... ON CONFLICT DO UPDATE
- * is used (rather than a separate read-then-write) so concurrent requests
- * from the same IP can't race past the limit.
+ * Atomically increments today's counter for this subject+category and
+ * returns the count after incrementing. A single INSERT ... ON CONFLICT DO
+ * UPDATE is used (rather than a separate read-then-write) so concurrent
+ * requests from the same subject can't race past the limit.
  */
-async function incrementAndGetCount(ip: string, category: string, day: string): Promise<number> {
+async function incrementAndGetCount(subject: string, subjectType: RateLimitSubjectType, category: string, day: string): Promise<number> {
   const rows = await db.$queryRaw<{ count: number }[]>`
-    INSERT INTO "DailyRateLimit" (id, ip, category, day, count, "updatedAt")
-    VALUES (gen_random_uuid()::text, ${ip}, ${category}, ${day}, 1, now())
-    ON CONFLICT (ip, category, day)
+    INSERT INTO "DailyRateLimit" (id, subject, "subjectType", category, day, count, "updatedAt")
+    VALUES (gen_random_uuid()::text, ${subject}, ${subjectType}, ${category}, ${day}, 1, now())
+    ON CONFLICT (subject, "subjectType", category, day)
     DO UPDATE SET count = "DailyRateLimit".count + 1, "updatedAt" = now()
     RETURNING count;
   `;
@@ -41,25 +48,26 @@ async function incrementAndGetCount(ip: string, category: string, day: string): 
 }
 
 /**
- * Checks (and records) today's request against the daily cap for this
- * ip+category. Fails open on any database error - a DB hiccup should not
- * take the whole site down, since the per-minute in-memory limiter in
+ * Checks (and records) today's request against the daily cap for one
+ * subject dimension. Fails open on any database error - a DB hiccup should
+ * not take the whole site down, since the per-minute in-memory limiter in
  * rate-limit.ts still provides a baseline of protection either way.
  */
 export async function checkDailyRateLimit(
-  ip: string,
+  subject: string | null | undefined,
+  subjectType: RateLimitSubjectType,
   category: string
 ): Promise<{ allowed: boolean; count: number; limit: number }> {
   const limit = DAILY_LIMITS[category];
-  if (!limit || ip === 'unknown') {
+  if (!limit || !subject || subject === 'unknown') {
     return { allowed: true, count: 0, limit: limit ?? Infinity };
   }
 
   try {
-    const count = await incrementAndGetCount(ip, category, todayUTC());
+    const count = await incrementAndGetCount(subject, subjectType, category, todayUTC());
     return { allowed: count <= limit, count, limit };
   } catch (err) {
-    console.warn('[daily-rate-limit] Check failed, failing open:', err instanceof Error ? err.message : err);
+    console.warn(`[daily-rate-limit] Check failed for ${subjectType}, failing open:`, err instanceof Error ? err.message : err);
     return { allowed: true, count: 0, limit };
   }
 }

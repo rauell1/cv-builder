@@ -1,8 +1,9 @@
 /**
  * In-memory rate limiter for API routes.
  * Per-IP, per-route-category sliding window rate limiting.
- * No external dependencies.
  */
+
+import { ipAddress } from '@vercel/functions';
 
 interface RateLimitEntry {
   timestamps: number[];
@@ -84,14 +85,13 @@ export function checkRateLimit(
 
 /**
  * Resolve client IP from request headers.
+ *
+ * Uses Vercel's own ipAddress() helper rather than hand-parsing
+ * x-forwarded-for: Vercel's edge overwrites that header before it reaches
+ * application code (a client-supplied value can't spoof it), and the
+ * official helper stays correct if Vercel ever changes how it's populated.
+ * See https://vercel.com/docs/headers/request-headers.
  */
 export function resolveClientIp(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const firstIp = forwarded.split(',')[0].trim();
-    if (firstIp) return firstIp;
-  }
-  const realIp = request.headers.get('x-real-ip');
-  if (realIp) return realIp.trim();
-  return 'unknown';
+  return ipAddress(request) || 'unknown';
 }

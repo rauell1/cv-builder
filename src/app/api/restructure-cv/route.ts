@@ -12,6 +12,8 @@ import {
 } from '@/lib/cv-types';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';
 import { resolveClientIp } from '@/lib/rate-limit';
+import { getVisitorIdFromRequest } from '@/lib/visitor';
+import { getRequestGeo } from '@/lib/geo';
 import { logGenerationEvent } from '@/lib/generation-log';
 
 export const runtime = 'nodejs';
@@ -61,6 +63,8 @@ function fixCommonJSONIssues(json: string): string {
 export async function POST(request: NextRequest) {
   const requestStart = Date.now();
   const ip = resolveClientIp(request);
+  const visitorId = getVisitorIdFromRequest(request);
+  const geo = getRequestGeo(request);
   try {
     const body = await request.json();
     const { parsedCv, jobAnalysis, jobDescText, sessionId, modelId } = body;
@@ -136,6 +140,10 @@ export async function POST(request: NextRequest) {
         errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
         durationMs: Date.now() - requestStart,
         ip,
+        visitorId,
+        country: geo.country,
+        region: geo.region,
+        city: geo.city,
       });
       return NextResponse.json(
         { success: false, error: 'AI returned an invalid response format for CV restructuring. Please try again.' },
@@ -171,6 +179,10 @@ export async function POST(request: NextRequest) {
       model: usedModel,
       durationMs: Date.now() - requestStart,
       ip,
+      visitorId,
+      country: geo.country,
+      region: geo.region,
+      city: geo.city,
     });
     return NextResponse.json({
       success: true,
@@ -187,6 +199,10 @@ export async function POST(request: NextRequest) {
       errorMessage: message,
       durationMs: Date.now() - requestStart,
       ip,
+      visitorId,
+      country: geo.country,
+      region: geo.region,
+      city: geo.city,
     });
     return NextResponse.json(
       { success: false, error: message },

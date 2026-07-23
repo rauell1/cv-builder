@@ -17,6 +17,8 @@ import {
 } from '@/lib/cv-types';
 import { sanitizeCoverLetterData } from '@/lib/text-cleaning';
 import { resolveClientIp } from '@/lib/rate-limit';
+import { getVisitorIdFromRequest } from '@/lib/visitor';
+import { getRequestGeo } from '@/lib/geo';
 import { logGenerationEvent } from '@/lib/generation-log';
 
 export const runtime = 'nodejs';
@@ -74,6 +76,8 @@ function isValidCoverLetterData(obj: unknown): obj is CoverLetterData {
 export async function POST(request: NextRequest) {
   const requestStart = Date.now();
   const ip = resolveClientIp(request);
+  const visitorId = getVisitorIdFromRequest(request);
+  const geo = getRequestGeo(request);
   try {
     const body: GenerateCoverLetterRequest = await request.json();
     const { cvData, jobAnalysis, jobDescText, formatId, modelId } = body;
@@ -162,6 +166,10 @@ export async function POST(request: NextRequest) {
         errorMessage: message,
         durationMs: Date.now() - requestStart,
         ip,
+        visitorId,
+        country: geo.country,
+        region: geo.region,
+        city: geo.city,
       });
       return NextResponse.json(
         { success: false, error: message },
@@ -184,6 +192,10 @@ export async function POST(request: NextRequest) {
         errorMessage: message,
         durationMs: Date.now() - requestStart,
         ip,
+        visitorId,
+        country: geo.country,
+        region: geo.region,
+        city: geo.city,
       });
       return NextResponse.json(
         { success: false, error: `Failed to parse AI response as JSON: ${message}` },
@@ -201,6 +213,10 @@ export async function POST(request: NextRequest) {
         errorMessage: 'AI response missing required CoverLetterData fields',
         durationMs: Date.now() - requestStart,
         ip,
+        visitorId,
+        country: geo.country,
+        region: geo.region,
+        city: geo.city,
       });
       return NextResponse.json(
         { success: false, error: 'AI response does not contain all required cover letter fields' },
@@ -221,6 +237,10 @@ export async function POST(request: NextRequest) {
       model: usedModel,
       durationMs: Date.now() - requestStart,
       ip,
+      visitorId,
+      country: geo.country,
+      region: geo.region,
+      city: geo.city,
     });
     return NextResponse.json({
       success: true,
@@ -236,6 +256,10 @@ export async function POST(request: NextRequest) {
       errorMessage: message,
       durationMs: Date.now() - requestStart,
       ip,
+      visitorId,
+      country: geo.country,
+      region: geo.region,
+      city: geo.city,
     });
     return NextResponse.json(
       { success: false, error: message },

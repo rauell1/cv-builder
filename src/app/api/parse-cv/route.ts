@@ -6,6 +6,8 @@ import { aiQueue } from '@/lib/request-queue';
 import { parsingCache, hashContent } from '@/lib/response-cache';
 import { sanitizeParsedCV } from '@/lib/text-cleaning';
 import { resolveClientIp } from '@/lib/rate-limit';
+import { getVisitorIdFromRequest } from '@/lib/visitor';
+import { getRequestGeo } from '@/lib/geo';
 import { logGenerationEvent } from '@/lib/generation-log';
 
 export const runtime = 'nodejs';
@@ -559,6 +561,8 @@ ${cvText.substring(0, 10000)}`;
 export async function POST(request: NextRequest) {
   const requestStart = Date.now();
   const ip = resolveClientIp(request);
+  const visitorId = getVisitorIdFromRequest(request);
+  const geo = getRequestGeo(request);
   const controller = new AbortController();
   const timeoutTimer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -692,6 +696,10 @@ export async function POST(request: NextRequest) {
           errorMessage: aiErr instanceof Error ? aiErr.message : String(aiErr),
           durationMs: Date.now() - requestStart,
           ip,
+          visitorId,
+          country: geo.country,
+          region: geo.region,
+          city: geo.city,
         });
         parsedCv = parseBuiltIn(cvText);
         usedModel = 'builtin-parser';
@@ -751,6 +759,10 @@ export async function POST(request: NextRequest) {
       model: usedModel,
       durationMs: Date.now() - requestStart,
       ip,
+      visitorId,
+      country: geo.country,
+      region: geo.region,
+      city: geo.city,
     });
     return NextResponse.json({
       success: true,
@@ -772,6 +784,10 @@ export async function POST(request: NextRequest) {
       errorMessage: message,
       durationMs: Date.now() - requestStart,
       ip,
+      visitorId,
+      country: geo.country,
+      region: geo.region,
+      city: geo.city,
     });
 
     // Handle abort / timeout

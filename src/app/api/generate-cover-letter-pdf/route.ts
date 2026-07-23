@@ -3,6 +3,8 @@ import { PDFDocument, rgb, PDFFont, StandardFonts } from 'pdf-lib';
 import type { CoverLetterData, CoverLetterFormatId } from '@/lib/cv-types';
 import { sanitizeCoverLetterData } from '@/lib/text-cleaning';
 import { resolveClientIp } from '@/lib/rate-limit';
+import { getVisitorIdFromRequest } from '@/lib/visitor';
+import { getRequestGeo } from '@/lib/geo';
 import { logGenerationEvent } from '@/lib/generation-log';
 import {
   splitTextIntoLines,
@@ -518,6 +520,8 @@ async function generateFormalPDF(cl: CoverLetterData): Promise<Uint8Array> {
 export async function POST(request: NextRequest) {
   const requestStart = Date.now();
   const ip = resolveClientIp(request);
+  const visitorId = getVisitorIdFromRequest(request);
+  const geo = getRequestGeo(request);
   try {
     const body = await request.json();
     const { coverLetter, formatId } = body as {
@@ -589,6 +593,10 @@ export async function POST(request: NextRequest) {
       model: formatId,
       durationMs: Date.now() - requestStart,
       ip,
+      visitorId,
+      country: geo.country,
+      region: geo.region,
+      city: geo.city,
     });
     return new NextResponse(pdfBytes as unknown as BodyInit, { headers });
   } catch (error: unknown) {
@@ -600,6 +608,10 @@ export async function POST(request: NextRequest) {
       errorMessage: message,
       durationMs: Date.now() - requestStart,
       ip,
+      visitorId,
+      country: geo.country,
+      region: geo.region,
+      city: geo.city,
     });
     return NextResponse.json(
       { success: false, error: message },

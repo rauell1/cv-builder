@@ -23,7 +23,7 @@ async function getStats() {
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  const [totalsByType, recentFailures, recentEvents, dailyRateLimits] = await Promise.all([
+  const [totalsByType, recentFailures, recentEvents, dailyRateLimits, topLocations, visitorRows] = await Promise.all([
     db.generationEvent.groupBy({
       by: ['type', 'success'],
       where: { createdAt: { gte: since7d } },
@@ -39,9 +39,21 @@ async function getStats() {
       take: 25,
     }),
     db.dailyRateLimit.findMany({
-      where: { day: new Date().toISOString().slice(0, 10) },
+      where: { day: new Date().toISOString().slice(0, 10), subjectType: 'ip' },
       orderBy: { count: 'desc' },
       take: 10,
+    }),
+    db.generationEvent.groupBy({
+      by: ['country', 'city'],
+      where: { createdAt: { gte: since7d }, country: { not: null } },
+      _count: { _all: true },
+      orderBy: { _count: { id: 'desc' } },
+      take: 10,
+    }),
+    db.generationEvent.findMany({
+      where: { createdAt: { gte: since24h }, visitorId: { not: null } },
+      distinct: ['visitorId'],
+      select: { visitorId: true },
     }),
   ]);
 
@@ -56,12 +68,18 @@ async function getStats() {
     byType.set(row.type, entry);
   }
 
-  return { byType, recentFailures, recentEvents, dailyRateLimits, last24hCount, last24hFailures };
+  return {
+    byType, recentFailures, recentEvents, dailyRateLimits, topLocations,
+    uniqueVisitors24h: visitorRows.length, last24hCount, last24hFailures,
+  };
 }
 
 export default async function AdminPage() {
   const session = await requireAdmin();
-  const { byType, recentFailures, recentEvents, dailyRateLimits, last24hCount, last24hFailures } = await getStats();
+  const {
+    byType, recentFailures, recentEvents, dailyRateLimits, topLocations,
+    uniqueVisitors24h, last24hCount, last24hFailures,
+  } = await getStats();
 
   const typeRows = Array.from(byType.entries()).sort((a, b) => (b[1].success + b[1].failure) - (a[1].success + a[1].failure));
 
@@ -79,7 +97,7 @@ export default async function AdminPage() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Last 24h</CardTitle>
@@ -102,13 +120,22 @@ export default async function AdminPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Unique visitors (24h)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-semibold">{uniqueVisitors24h}</p>
+              <p className="text-xs text-muted-foreground">by anonymous session cookie</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Top IP today (by category)</CardTitle>
             </CardHeader>
             <CardContent>
               {dailyRateLimits[0] ? (
                 <>
                   <p className="text-2xl font-semibold">{dailyRateLimits[0].count}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{dailyRateLimits[0].ip} · {dailyRateLimits[0].category}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{dailyRateLimits[0].subject} · {dailyRateLimits[0].category}</p>
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">No traffic yet today</p>
@@ -116,6 +143,29 @@ export default async function AdminPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Top locations */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Top locations (last 7 days)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {topLocations.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No location data yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {topLocations.map((row) => (
+                  <div key={`${row.country}-${row.city}`} className="flex items-center justify-between text-sm border-b border-border/60 pb-2 last:border-0">
+                    <span className="text-foreground">
+                      {[row.city, row.country].filter(Boolean).join(', ') || 'Unknown'}
+                    </span>
+                    <span className="text-muted-foreground">{row._count._all} requests</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Success/failure by type, last 7 days */}
         <Card>

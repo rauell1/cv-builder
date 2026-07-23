@@ -20,22 +20,27 @@ model CVSession {
   updatedAt   DateTime @updatedAt
 }
 
-// Persistent daily request cap, keyed by IP + route category + calendar day.
-// The in-memory limiter in src/lib/rate-limit.ts stops rapid bursts, but its
-// state is per serverless instance and resets constantly - it can't stop a
-// sustained abuser who stays just under the per-minute limit for hours,
-// which still racks up real cost on our AI provider keys. This table is
-// checked/incremented atomically (see src/lib/daily-rate-limit.ts) so the
-// cap actually holds across every instance.
+// Persistent daily request cap, keyed by (subject, category, day). Subject is
+// either an IP address or the anonymous visitor cookie (see
+// src/lib/visitor.ts) - checked as two independent dimensions per request,
+// so evading the cap requires BOTH rotating IP (e.g. via VPN) AND clearing
+// cookies, not just one. The in-memory limiter in src/lib/rate-limit.ts
+// stops rapid bursts, but its state is per serverless instance and resets
+// constantly - it can't stop a sustained abuser who stays just under the
+// per-minute limit for hours, which still racks up real cost on our AI
+// provider keys. This table is checked/incremented atomically (see
+// src/lib/daily-rate-limit.ts) so the cap actually holds across every
+// instance.
 model DailyRateLimit {
-  id       String   @id @default(cuid())
-  ip       String
-  category String
-  day      String // calendar date as YYYY-MM-DD (UTC)
-  count    Int      @default(0)
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  subject     String   // an IP address or a visitor cookie value
+  subjectType String   // 'ip' | 'visitor'
+  category    String
+  day         String   // calendar date as YYYY-MM-DD (UTC)
+  count       Int      @default(0)
+  updatedAt   DateTime @updatedAt
 
-  @@unique([ip, category, day])
+  @@unique([subject, subjectType, category, day])
   @@index([day])
 }
 
@@ -47,12 +52,17 @@ model GenerationEvent {
   id           String   @id @default(cuid())
   type         String   // e.g. 'parse-cv', 'restructure-cv', 'generate-pdf'
   success      Boolean
-  model        String? // AI model used, if this event involved one
-  errorMessage String? // truncated failure reason, if success is false
+  model        String?  // AI model used, if this event involved one
+  errorMessage String?  // truncated failure reason, if success is false
   durationMs   Int?
   ip           String?
+  visitorId    String?  // anonymous session cookie value, see src/lib/visitor.ts
+  country      String?  // ISO 3166-1 alpha-2, from Vercel's geo headers
+  region       String?  // ISO 3166-2 region code
+  city         String?
   createdAt    DateTime @default(now())
 
   @@index([createdAt])
   @@index([type, success])
+  @@index([country])
 }

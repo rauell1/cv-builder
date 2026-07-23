@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { callAIWithFallback, DEFAULT_TEXT_MODEL } from '@/lib/ai-provider';
 import type { AchievementEnhancement } from '@/lib/cv-types';
 import { resolveClientIp } from '@/lib/rate-limit';
+import { getVisitorIdFromRequest } from '@/lib/visitor';
+import { getRequestGeo } from '@/lib/geo';
 import { logGenerationEvent } from '@/lib/generation-log';
 
 export const runtime = 'nodejs';
@@ -27,6 +29,8 @@ The "improvements" array must have the same length, describing what was changed 
 export async function POST(request: NextRequest) {
   const requestStart = Date.now();
   const ip = resolveClientIp(request);
+  const visitorId = getVisitorIdFromRequest(request);
+  const geo = getRequestGeo(request);
   try {
     const body = await request.json();
     const { bullets, jobContext } = body;
@@ -93,6 +97,10 @@ export async function POST(request: NextRequest) {
         errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
         durationMs: Date.now() - requestStart,
         ip,
+        visitorId,
+        country: geo.country,
+        region: geo.region,
+        city: geo.city,
       });
       return NextResponse.json(
         { success: false, error: 'AI returned an invalid format for achievement enhancement. Please try again.' },
@@ -106,6 +114,10 @@ export async function POST(request: NextRequest) {
       model: usedModel,
       durationMs: Date.now() - requestStart,
       ip,
+      visitorId,
+      country: geo.country,
+      region: geo.region,
+      city: geo.city,
     });
     return NextResponse.json({
       success: true,
@@ -121,6 +133,10 @@ export async function POST(request: NextRequest) {
       errorMessage: message,
       durationMs: Date.now() - requestStart,
       ip,
+      visitorId,
+      country: geo.country,
+      region: geo.region,
+      city: geo.city,
     });
     return NextResponse.json(
       { success: false, error: message },

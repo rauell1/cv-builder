@@ -18,6 +18,10 @@ interface LogParams {
   errorMessage?: string | null;
   durationMs?: number;
   ip?: string | null;
+  visitorId?: string | null;
+  country?: string | null;
+  region?: string | null;
+  city?: string | null;
 }
 
 /**
@@ -37,6 +41,10 @@ export async function logGenerationEvent(params: LogParams): Promise<void> {
         errorMessage: params.errorMessage ? params.errorMessage.substring(0, 500) : null,
         durationMs: params.durationMs ?? null,
         ip: params.ip ?? null,
+        visitorId: params.visitorId ?? null,
+        country: params.country ?? null,
+        region: params.region ?? null,
+        city: params.city ?? null,
       },
     });
   } catch (err) {
@@ -67,6 +75,7 @@ async function sendFailureAlert(params: LogParams): Promise<void> {
           <tr><td style="color: #666;">Model</td><td>${escapeHtml(params.model || 'n/a')}</td></tr>
           <tr><td style="color: #666;">Duration</td><td>${params.durationMs ? `${params.durationMs}ms` : 'n/a'}</td></tr>
           <tr><td style="color: #666;">IP</td><td>${escapeHtml(params.ip || 'unknown')}</td></tr>
+          <tr><td style="color: #666;">Location</td><td>${escapeHtml([params.city, params.region, params.country].filter(Boolean).join(', ') || 'unknown')}</td></tr>
           <tr><td style="color: #666;">Time (UTC)</td><td>${timestamp}</td></tr>
         </table>
         <p style="margin-top: 16px; color: #666;">Error</p>
