@@ -1,9 +1,9 @@
 {
   "version": {
-    "commit": "590919277600d1e78e896822314b4d32d88c878b",
-    "short": "5909192",
-    "generatedAt": "2026-07-23T00:26:26.032Z",
-    "baseCommit": "590919277600d1e78e896822314b4d32d88c878b",
+    "commit": "6d8a09773dbe8a78e87468ca09db46c41a501847",
+    "short": "6d8a097",
+    "generatedAt": "2026-07-23T00:30:40.905Z",
+    "baseCommit": "6d8a09773dbe8a78e87468ca09db46c41a501847",
     "changeSummary": [],
     "diffStat": ""
   },
@@ -12,8 +12,7 @@
     "incremental": true,
     "hashChangedFiles": [
       "src/components/privacy/cookie-banner.tsx",
-      "src/components/privacy/cookie-preferences-modal.tsx",
-      "src/components/privacy/privacy-footer-trigger.tsx"
+      "src/components/privacy/policy-generator-modal.tsx"
     ],
     "newFiles": [],
     "removedFiles": [],
@@ -901,8 +900,7 @@
   ],
   "affectedModules": [
     "src/components/privacy/cookie-banner.tsx",
-    "src/components/privacy/cookie-preferences-modal.tsx",
-    "src/components/privacy/privacy-footer-trigger.tsx"
+    "src/components/privacy/policy-generator-modal.tsx"
   ],
   "metrics": {
     "fileCount": 112,

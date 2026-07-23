@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 export const CookieBanner: React.FC = () => {
   const {
     hasConsented,
+    isPreferencesOpen,
+    isPolicyGeneratorOpen,
     geoRegion,
     language,
     setLanguage,
@@ -20,7 +22,8 @@ export const CookieBanner: React.FC = () => {
     openPolicyGenerator,
   } = useCookieConsent();
 
-  if (hasConsented) return null;
+  // Hide banner if user has already consented OR if any privacy modal is currently open!
+  if (hasConsented || isPreferencesOpen || isPolicyGeneratorOpen) return null;
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
@@ -31,7 +34,7 @@ export const CookieBanner: React.FC = () => {
       className="fixed bottom-0 inset-x-0 z-40 p-3 sm:p-4 pointer-events-none animate-in slide-in-from-bottom-5 duration-300"
     >
       <div className="max-w-6xl mx-auto pointer-events-auto relative overflow-hidden rounded-2xl border border-primary/20 bg-background/95 dark:bg-card/95 text-card-foreground shadow-2xl backdrop-blur-xl p-4 sm:p-5">
-        {/* Top Gradient Border Line */}
+        {/* Top Gradient Accent Line */}
         <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary via-emerald-500 to-indigo-500" />
 
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">

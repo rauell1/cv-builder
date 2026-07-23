@@ -192,53 +192,53 @@ The services are provided **"AS IS"** without warranties of any kind. **${compan
 
   return (
     <Dialog open={isPolicyGeneratorOpen} onOpenChange={setIsPolicyGeneratorOpen}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto z-[9999] p-6 bg-card text-card-foreground border-border/80 rounded-2xl shadow-2xl">
+      <DialogContent className="sm:max-w-4xl max-w-[calc(100%-2rem)] w-full max-h-[92vh] overflow-y-auto overflow-x-hidden p-6 bg-card text-card-foreground border-border/80 rounded-2xl shadow-2xl">
         <DialogHeader className="space-y-1">
-          <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+          <div className="flex items-center gap-2 text-primary font-semibold text-xs uppercase tracking-wider">
             <Sparkles className="h-4 w-4" />
-            <span>Automated Compliance Document Generator</span>
+            <span>Automated Legal Document Generator</span>
           </div>
           <DialogTitle className="text-xl font-bold tracking-tight">
             Legal Policy & Terms Generator
           </DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
+          <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
             Generate and export fully compliant Privacy Policies, Cookie Policies, and Terms of Service tailored to your organization.
           </DialogDescription>
         </DialogHeader>
 
-        {/* Input Configuration Panel */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-xl bg-muted/40 border border-border/60 my-2">
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold">Company / App Name</Label>
+        {/* Input Configuration Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3.5 rounded-xl bg-muted/40 border border-border/60 my-2">
+          <div className="space-y-1 min-w-0">
+            <Label className="text-xs font-semibold text-foreground truncate block">Company / App Name</Label>
             <Input
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
-              className="h-8 text-xs bg-background"
+              className="h-8 text-xs bg-background border-border/60 focus-visible:ring-1"
             />
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold">Domain Name</Label>
+          <div className="space-y-1 min-w-0">
+            <Label className="text-xs font-semibold text-foreground truncate block">Domain Name</Label>
             <Input
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
-              className="h-8 text-xs bg-background"
+              className="h-8 text-xs bg-background border-border/60 focus-visible:ring-1"
             />
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold">Privacy Contact Email</Label>
+          <div className="space-y-1 min-w-0">
+            <Label className="text-xs font-semibold text-foreground truncate block">Privacy Contact Email</Label>
             <Input
               value={contactEmail}
               onChange={(e) => setContactEmail(e.target.value)}
-              className="h-8 text-xs bg-background"
+              className="h-8 text-xs bg-background border-border/60 focus-visible:ring-1"
             />
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold">Effective Date</Label>
+          <div className="space-y-1 min-w-0">
+            <Label className="text-xs font-semibold text-foreground truncate block">Effective Date</Label>
             <Input
               type="date"
               value={effectiveDate}
               onChange={(e) => setEffectiveDate(e.target.value)}
-              className="h-8 text-xs bg-background"
+              className="h-8 text-xs bg-background border-border/60 focus-visible:ring-1"
             />
           </div>
         </div>
@@ -246,7 +246,7 @@ The services are provided **"AS IS"** without warranties of any kind. **${compan
         {/* Document Display Tabs */}
         <Tabs value={activePolicyTab} className="w-full">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-            <TabsList className="bg-muted/60 p-1 rounded-xl">
+            <TabsList className="bg-muted/60 p-1 rounded-xl shrink-0">
               <TabsTrigger value="privacy" className="gap-1.5 text-xs font-medium rounded-lg">
                 <FileText className="h-3.5 w-3.5" />
                 Privacy Policy
@@ -262,7 +262,7 @@ The services are provided **"AS IS"** without warranties of any kind. **${compan
             </TabsList>
 
             {/* View & Export Controls */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center rounded-lg border border-border/60 bg-muted/30 p-0.5">
                 <Button
                   variant={viewFormat === "markdown" ? "secondary" : "ghost"}
@@ -305,7 +305,7 @@ The services are provided **"AS IS"** without warranties of any kind. **${compan
           </div>
 
           <TabsContent value={activePolicyTab} className="mt-0">
-            <div className="border border-border/60 rounded-xl p-5 bg-background font-mono text-xs overflow-y-auto max-h-[50vh] leading-relaxed whitespace-pre-wrap text-foreground">
+            <div className="border border-border/60 rounded-xl p-5 bg-background font-mono text-xs overflow-y-auto max-h-[50vh] leading-relaxed whitespace-pre-wrap text-foreground select-text">
               {viewFormat === "markdown" ? currentMarkdown : convertMarkdownToHTML(currentMarkdown)}
             </div>
           </TabsContent>
