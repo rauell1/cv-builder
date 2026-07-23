@@ -1,38 +1,97 @@
 {
   "version": {
-    "commit": "4338304c2f56103b37f9972aa5020a395b948be1",
-    "short": "4338304",
-    "generatedAt": "2026-07-23T00:34:59.474Z",
-    "baseCommit": "c3004b3e83b6fd6574713b09a4d5e98eb7459d14",
+    "commit": "33b27c8261dc9488b68883e7693dd6172585b1ce",
+    "short": "33b27c8",
+    "generatedAt": "2026-07-23T16:16:40.860Z",
+    "baseCommit": "4338304c2f56103b37f9972aa5020a395b948be1",
     "changeSummary": [
+      "M\tREADME.md",
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tsrc/components/privacy/policy-generator-modal.tsx",
-      "M\ttsconfig.tsbuildinfo"
+      "D\tmiddleware.ts",
+      "M\tpackage-lock.json",
+      "M\tpackage.json",
+      "A\tprisma/rls.sql",
+      "M\tprisma/schema.prisma",
+      "M\tpublic/logo.svg",
+      "A\tsrc/app/admin/actions.ts",
+      "A\tsrc/app/admin/page.tsx",
+      "A\tsrc/app/admin/sign-in/actions.ts",
+      "A\tsrc/app/admin/sign-in/page.tsx",
+      "A\tsrc/app/admin/sign-up/actions.ts",
+      "A\tsrc/app/admin/sign-up/page.tsx",
+      "M\tsrc/app/api/analyze-job/route.ts",
+      "A\tsrc/app/api/auth/[...path]/route.ts",
+      "M\tsrc/app/api/consent/log/route.ts",
+      "M\tsrc/app/api/cron/cleanup-sessions/route.ts",
+      "M\tsrc/app/api/enhance-achievements/route.ts",
+      "M\tsrc/app/api/extract-file/route.ts",
+      "M\tsrc/app/api/generate-cover-letter-pdf/route.ts",
+      "M\tsrc/app/api/generate-cover-letter/route.ts",
+      "M\tsrc/app/api/generate-pdf/route.ts",
+      "M\tsrc/app/api/parse-cv/route.ts",
+      "M\tsrc/app/api/restructure-cv/route.ts",
+      "M\tsrc/app/api/score-cv/route.ts",
+      "M\tsrc/app/builder/page.tsx",
+      "M\tsrc/app/cookies/page.tsx",
+      "M\tsrc/app/layout.tsx",
+      "M\tsrc/app/privacy/page.tsx",
+      "M\tsrc/app/projects/page.tsx",
+      "M\tsrc/app/terms/page.tsx",
+      "M\tsrc/components/cv-builder/cv-input-step.tsx",
+      "M\tsrc/components/cv-builder/job-desc-step.tsx",
+      "M\tsrc/components/cv-builder/landing-page.tsx",
+      "M\tsrc/components/cv-builder/output-step.tsx",
+      "M\tsrc/components/cv-builder/processing-step.tsx",
+      "M\tsrc/components/privacy/cookie-banner.tsx",
+      "M\tsrc/components/privacy/cookie-preferences-modal.tsx",
+      "… and 23 more paths"
     ],
-    "diffStat": " docs/codebase-map.json                            |  10 +-\n docs/codebase-map.md                              |   8 +-\n src/components/privacy/policy-generator-modal.tsx | 483 +++++++++++++++-------\n tsconfig.tsbuildinfo                              |   2 +-\n 4 files changed, 344 insertions(+), 159 deletions(-)\n"
+    "diffStat": " README.md                                          |    6 +-\n docs/codebase-map.json                             |   25 +-\n docs/codebase-map.md                               |   13 +-\n middleware.ts                                      |   71 -\n package-lock.json                                  | 2736 ++++++++++++++++++--\n package.json                                       |    5 +-\n prisma/rls.sql                                     |   30 +\n prisma/schema.prisma                               |   49 +-\n public/logo.svg                                    |   99 +-\n src/app/admin/actions.ts                           |    9 +\n src/app/admin/page.tsx                             |  269 ++\n src/app/admin/sign-in/actions.ts                   |   20 +\n src/app/admin/sign-in/page.tsx                     |   42 +\n src/app/admin/sign-up/actions.ts                   |   34 +\n src/app/admin/sign-up/page.tsx                     |   46 +\n src/app/api/analyze-job/route.ts                   |   44 +-\n src/app/api/auth/[...path]/route.ts                |    3 +\n src/app/api/consent/log/route.ts                   |   17 +-\n src/app/api/cron/cleanup-sessions/route.ts         |   19 +-\n src/app/api/enhance-achievements/route.ts          |   50 +-\n src/app/api/extract-file/route.ts                  |   24 +-\n src/app/api/generate-cover-letter-pdf/route.ts     |  186 +-\n src/app/api/generate-cover-letter/route.ts         |   74 +-\n src/app/api/generate-pdf/route.ts                  |  426 ++-\n src/app/api/parse-cv/route.ts                      |   51 +-\n src/app/api/restructure-cv/route.ts                |   42 +\n src/app/api/score-cv/route.ts                      |   46 +-\n src/app/builder/page.tsx                           |   12 +-\n src/app/cookies/page.tsx                           |   62 +-\n src/app/layout.tsx                                 |    8 +-\n src/app/privacy/page.tsx                           |  100 +-\n src/app/projects/page.tsx                          |    5 +-\n src/app/terms/page.tsx                             |   81 +-\n src/components/cv-builder/cv-input-step.tsx        |   10 +-\n src/components/cv-builder/job-desc-step.tsx        |    4 +-\n src/components/cv-builder/landing-page.tsx         |  150 +-\n src/components/cv-builder/output-step.tsx          |    2 +-\n src/components/cv-builder/processing-step.tsx      |   83 +-\n src/components/privacy/cookie-banner.tsx           |   33 +-\n .../privacy/cookie-preferences-modal.tsx           |    9 +-\n src/components/privacy/policy-generator-modal.tsx  |  503 ----\n src/components/ui/logo.tsx                         |  121 +\n src/instrumentation.ts                             |    2 +-\n src/lib/ai-provider.ts                             |   64 +-\n src/lib/api-calls.ts                               |   12 +-\n src/lib/auth/client.ts                             |    5 +\n src/lib/auth/server.ts                             |    6 +\n src/lib/config.ts                                  |    8 +-\n src/lib/cookie-consent-context.tsx                 |   15 -\n src/lib/cv-types.ts                                |   76 +-\n src/lib/daily-rate-limit.ts                        |   73 +\n src/lib/generation-log.ts                          |   98 +\n src/lib/geo.ts                                     |   17 +\n src/lib/pdf-utils.ts                               |  117 +-\n src/lib/rate-limit.ts                              |   18 +-\n src/lib/rate-limiter.ts                            |   82 -\n src/lib/request-queue.ts                           |   12 +-\n src/lib/resend.ts                                  |   44 +\n src/lib/response-cache.ts                          |    4 +-\n src/lib/sdk-retry.ts                               |    2 +-\n src/lib/visitor.ts                                 |   45 +\n src/proxy.ts                                       |   80 +-\n tsconfig.tsbuildinfo                               |    2 +-\n 63 files changed, 4521 insertions(+), 1880 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": false,
-    "hashChangedFiles": [],
-    "newFiles": [],
+    "incremental": true,
+    "hashChangedFiles": [
+      "src/app/admin/page.tsx",
+      "src/app/admin/sign-in/page.tsx",
+      "src/app/admin/sign-up/page.tsx",
+      "src/app/builder/page.tsx",
+      "src/app/layout.tsx",
+      "src/app/projects/page.tsx",
+      "src/components/cv-builder/landing-page.tsx",
+      "src/components/ui/logo.tsx"
+    ],
+    "newFiles": [
+      "src/components/ui/logo.tsx"
+    ],
     "removedFiles": [],
     "packageJsonChanged": false,
     "prismaChanged": false
   },
   "tree": [
-    "middleware.ts",
     "next.config.ts",
     "prisma/",
     "  schema.prisma",
     "src/",
     "  app/",
+    "    admin/",
+    "      actions.ts",
+    "      page.tsx",
+    "      sign-in/",
+    "        actions.ts",
+    "        page.tsx",
+    "      sign-up/",
+    "        actions.ts",
+    "        page.tsx",
     "    api/",
     "      ai-chat/",
     "        route.ts",
     "      analyze-job/",
     "        route.ts",
+    "      auth/",
+    "        [...path]/",
+    "          route.ts",
     "      consent/",
     "        log/",
     "          route.ts",
@@ -92,7 +151,6 @@
     "    privacy/",
     "      cookie-banner.tsx",
     "      cookie-preferences-modal.tsx",
-    "      policy-generator-modal.tsx",
     "      privacy-footer-trigger.tsx",
     "    ui/",
     "      accordion.tsx",
@@ -119,6 +177,7 @@
     "      input-otp.tsx",
     "      input.tsx",
     "      label.tsx",
+    "      logo.tsx",
     "      menubar.tsx",
     "      navigation-menu.tsx",
     "      pagination.tsx",
@@ -151,29 +210,31 @@
     "    ai-provider.ts",
     "    ai-rate-limit-paths.ts",
     "    api-calls.ts",
+    "    auth/",
+    "      client.ts",
+    "      server.ts",
     "    config.ts",
     "    cookie-consent-context.tsx",
     "    cv-store.ts",
     "    cv-types.ts",
+    "    daily-rate-limit.ts",
     "    db.ts",
+    "    generation-log.ts",
+    "    geo.ts",
     "    pdf-utils.ts",
     "    rate-limit.ts",
-    "    rate-limiter.ts",
     "    request-queue.ts",
+    "    resend.ts",
     "    response-cache.ts",
     "    script-auto-blocker.ts",
     "    sdk-retry.ts",
     "    text-cleaning.ts",
     "    utils.ts",
+    "    visitor.ts",
     "  proxy.ts",
     "watchdog.ts"
   ],
   "nodes": [
-    {
-      "id": "middleware.ts",
-      "path": "middleware.ts",
-      "risk": "high"
-    },
     {
       "id": "next.config.ts",
       "path": "next.config.ts",
@@ -185,6 +246,36 @@
       "risk": "low"
     },
     {
+      "id": "src/app/admin/actions.ts",
+      "path": "src/app/admin/actions.ts",
+      "risk": "low"
+    },
+    {
+      "id": "src/app/admin/page.tsx",
+      "path": "src/app/admin/page.tsx",
+      "risk": "low"
+    },
+    {
+      "id": "src/app/admin/sign-in/actions.ts",
+      "path": "src/app/admin/sign-in/actions.ts",
+      "risk": "low"
+    },
+    {
+      "id": "src/app/admin/sign-in/page.tsx",
+      "path": "src/app/admin/sign-in/page.tsx",
+      "risk": "low"
+    },
+    {
+      "id": "src/app/admin/sign-up/actions.ts",
+      "path": "src/app/admin/sign-up/actions.ts",
+      "risk": "low"
+    },
+    {
+      "id": "src/app/admin/sign-up/page.tsx",
+      "path": "src/app/admin/sign-up/page.tsx",
+      "risk": "low"
+    },
+    {
       "id": "src/app/api/ai-chat/route.ts",
       "path": "src/app/api/ai-chat/route.ts",
       "risk": "medium"
@@ -192,6 +283,11 @@
     {
       "id": "src/app/api/analyze-job/route.ts",
       "path": "src/app/api/analyze-job/route.ts",
+      "risk": "medium"
+    },
+    {
+      "id": "src/app/api/auth/[...path]/route.ts",
+      "path": "src/app/api/auth/[...path]/route.ts",
       "risk": "medium"
     },
     {
@@ -370,11 +466,6 @@
       "risk": "low"
     },
     {
-      "id": "src/components/privacy/policy-generator-modal.tsx",
-      "path": "src/components/privacy/policy-generator-modal.tsx",
-      "risk": "low"
-    },
-    {
       "id": "src/components/privacy/privacy-footer-trigger.tsx",
       "path": "src/components/privacy/privacy-footer-trigger.tsx",
       "risk": "low"
@@ -497,6 +588,11 @@
     {
       "id": "src/components/ui/label.tsx",
       "path": "src/components/ui/label.tsx",
+      "risk": "low"
+    },
+    {
+      "id": "src/components/ui/logo.tsx",
+      "path": "src/components/ui/logo.tsx",
       "risk": "low"
     },
     {
@@ -650,6 +746,16 @@
       "risk": "medium"
     },
     {
+      "id": "src/lib/auth/client.ts",
+      "path": "src/lib/auth/client.ts",
+      "risk": "low"
+    },
+    {
+      "id": "src/lib/auth/server.ts",
+      "path": "src/lib/auth/server.ts",
+      "risk": "low"
+    },
+    {
       "id": "src/lib/config.ts",
       "path": "src/lib/config.ts",
       "risk": "low"
@@ -670,8 +776,23 @@
       "risk": "high"
     },
     {
+      "id": "src/lib/daily-rate-limit.ts",
+      "path": "src/lib/daily-rate-limit.ts",
+      "risk": "low"
+    },
+    {
       "id": "src/lib/db.ts",
       "path": "src/lib/db.ts",
+      "risk": "low"
+    },
+    {
+      "id": "src/lib/generation-log.ts",
+      "path": "src/lib/generation-log.ts",
+      "risk": "low"
+    },
+    {
+      "id": "src/lib/geo.ts",
+      "path": "src/lib/geo.ts",
       "risk": "low"
     },
     {
@@ -685,13 +806,13 @@
       "risk": "low"
     },
     {
-      "id": "src/lib/rate-limiter.ts",
-      "path": "src/lib/rate-limiter.ts",
+      "id": "src/lib/request-queue.ts",
+      "path": "src/lib/request-queue.ts",
       "risk": "low"
     },
     {
-      "id": "src/lib/request-queue.ts",
-      "path": "src/lib/request-queue.ts",
+      "id": "src/lib/resend.ts",
+      "path": "src/lib/resend.ts",
       "risk": "low"
     },
     {
@@ -720,6 +841,11 @@
       "risk": "low"
     },
     {
+      "id": "src/lib/visitor.ts",
+      "path": "src/lib/visitor.ts",
+      "risk": "low"
+    },
+    {
       "id": "src/proxy.ts",
       "path": "src/proxy.ts",
       "risk": "low"
@@ -731,6 +857,21 @@
     }
   ],
   "edges": [
+    {
+      "from": "src/app/admin/page.tsx",
+      "to": "src/app/admin/actions.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/app/admin/sign-in/page.tsx",
+      "to": "src/app/admin/sign-in/actions.ts",
+      "kind": "import"
+    },
+    {
+      "from": "src/app/admin/sign-up/page.tsx",
+      "to": "src/app/admin/sign-up/actions.ts",
+      "kind": "import"
+    },
     {
       "from": "src/lib/api-calls.ts",
       "to": "src/lib/cv-types.ts",
@@ -764,6 +905,10 @@
     {
       "path": "/api/analyze-job",
       "file": "src/app/api/analyze-job/route.ts"
+    },
+    {
+      "path": "/api/auth/[...path]",
+      "file": "src/app/api/auth/[...path]/route.ts"
     },
     {
       "path": "/api/consent/log",
@@ -821,38 +966,58 @@
   "hotspots": [
     {
       "file": "src/lib/ai-provider.ts",
-      "commitTouches": 43
-    },
-    {
-      "file": "src/app/api/extract-file/route.ts",
-      "commitTouches": 24
+      "commitTouches": 45
     },
     {
       "file": "src/app/api/parse-cv/route.ts",
-      "commitTouches": 24
+      "commitTouches": 27
+    },
+    {
+      "file": "src/app/api/extract-file/route.ts",
+      "commitTouches": 25
     },
     {
       "file": "src/app/api/analyze-job/route.ts",
-      "commitTouches": 20
-    },
-    {
-      "file": "src/components/cv-builder/cv-input-step.tsx",
-      "commitTouches": 12
-    },
-    {
-      "file": "src/app/api/generate-cover-letter/route.ts",
-      "commitTouches": 11
-    },
-    {
-      "file": "src/app/api/restructure-cv/route.ts",
-      "commitTouches": 11
+      "commitTouches": 22
     },
     {
       "file": "src/lib/cv-types.ts",
+      "commitTouches": 15
+    },
+    {
+      "file": "src/app/api/generate-cover-letter/route.ts",
+      "commitTouches": 14
+    },
+    {
+      "file": "src/app/api/restructure-cv/route.ts",
+      "commitTouches": 13
+    },
+    {
+      "file": "src/components/cv-builder/cv-input-step.tsx",
+      "commitTouches": 13
+    },
+    {
+      "file": "src/app/api/enhance-achievements/route.ts",
+      "commitTouches": 12
+    },
+    {
+      "file": "src/app/api/score-cv/route.ts",
+      "commitTouches": 12
+    },
+    {
+      "file": "src/app/layout.tsx",
+      "commitTouches": 11
+    },
+    {
+      "file": "src/components/cv-builder/landing-page.tsx",
       "commitTouches": 11
     },
     {
       "file": "src/lib/api-calls.ts",
+      "commitTouches": 11
+    },
+    {
+      "file": "src/components/cv-builder/processing-step.tsx",
       "commitTouches": 10
     },
     {
@@ -860,11 +1025,15 @@
       "commitTouches": 10
     },
     {
-      "file": "src/app/layout.tsx",
+      "file": "src/app/api/generate-cover-letter-pdf/route.ts",
       "commitTouches": 9
     },
     {
-      "file": "src/app/api/enhance-achievements/route.ts",
+      "file": "src/app/api/generate-pdf/route.ts",
+      "commitTouches": 9
+    },
+    {
+      "file": "src/lib/request-queue.ts",
       "commitTouches": 9
     },
     {
@@ -872,37 +1041,22 @@
       "commitTouches": 9
     },
     {
-      "file": "src/app/api/score-cv/route.ts",
-      "commitTouches": 9
-    },
-    {
       "file": "src/app/api/health/route.ts",
       "commitTouches": 9
-    },
-    {
-      "file": "src/components/cv-builder/landing-page.tsx",
-      "commitTouches": 8
-    },
-    {
-      "file": "src/components/cv-builder/processing-step.tsx",
-      "commitTouches": 8
-    },
-    {
-      "file": "src/lib/request-queue.ts",
-      "commitTouches": 8
-    },
-    {
-      "file": "src/app/api/generate-cover-letter-pdf/route.ts",
-      "commitTouches": 6
-    },
-    {
-      "file": "src/app/api/generate-pdf/route.ts",
-      "commitTouches": 6
     }
   ],
-  "affectedModules": [],
+  "affectedModules": [
+    "src/app/admin/page.tsx",
+    "src/app/admin/sign-in/page.tsx",
+    "src/app/admin/sign-up/page.tsx",
+    "src/app/builder/page.tsx",
+    "src/app/layout.tsx",
+    "src/app/projects/page.tsx",
+    "src/components/cv-builder/landing-page.tsx",
+    "src/components/ui/logo.tsx"
+  ],
   "metrics": {
-    "fileCount": 112,
-    "edgeCount": 4
+    "fileCount": 124,
+    "edgeCount": 7
   }
 }
