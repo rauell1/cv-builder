@@ -1,27 +1,24 @@
 {
   "version": {
-    "commit": "b0d7635bcece51d0cd03033c36bf09858ed5f7dd",
-    "short": "b0d7635",
-    "generatedAt": "2026-07-23T08:08:33.142Z",
-    "baseCommit": "04f2abcf25ee851ffe78366399c0b542d1300ac4",
+    "commit": "43d6898281f77002ea1538fe1a766901ad1b1b2b",
+    "short": "43d6898",
+    "generatedAt": "2026-07-23T08:15:46.124Z",
+    "baseCommit": "b0d7635bcece51d0cd03033c36bf09858ed5f7dd",
     "changeSummary": [
-      "M\tREADME.md",
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tprisma/schema.prisma"
+      "M\tpackage.json"
     ],
-    "diffStat": " README.md              |  6 +++---\n docs/codebase-map.json | 33 ++++++++++++++++++---------------\n docs/codebase-map.md   | 12 ++++++------\n prisma/schema.prisma   |  2 +-\n 4 files changed, 28 insertions(+), 25 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json | 27 +++++++++++----------------\n docs/codebase-map.md   | 14 +++++++-------\n package.json           |  3 ++-\n 3 files changed, 20 insertions(+), 24 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
     "incremental": false,
-    "hashChangedFiles": [
-      "prisma/schema.prisma"
-    ],
+    "hashChangedFiles": [],
     "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
-    "prismaChanged": true
+    "prismaChanged": false
   },
   "tree": [
     "middleware.ts",
@@ -896,9 +893,7 @@
       "commitTouches": 6
     }
   ],
-  "affectedModules": [
-    "prisma/schema.prisma"
-  ],
+  "affectedModules": [],
   "metrics": {
     "fileCount": 111,
     "edgeCount": 4
