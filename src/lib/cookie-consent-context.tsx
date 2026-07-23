@@ -36,15 +36,11 @@ interface CookieConsentContextType {
   bannerStyle: BannerStyle;
   language: LanguageCode;
   isPreferencesOpen: boolean;
-  isPolicyGeneratorOpen: boolean;
-  activePolicyTab: "privacy" | "cookies" | "terms";
   consentHistory: ConsentRecord[];
   setGeoRegion: (region: GeoRegion) => void;
   setBannerStyle: (style: BannerStyle) => void;
   setLanguage: (lang: LanguageCode) => void;
   setIsPreferencesOpen: (open: boolean) => void;
-  openPolicyGenerator: (tab?: "privacy" | "cookies" | "terms") => void;
-  setIsPolicyGeneratorOpen: (open: boolean) => void;
   acceptAll: () => void;
   rejectNonEssential: () => void;
   updateConsent: (newCategories: Partial<ConsentCategories>) => void;
@@ -901,8 +897,6 @@ export const CookieConsentProvider: React.FC<{ children: React.ReactNode }> = ({
   const [bannerStyle, setBannerStyle] = useState<BannerStyle>("bottom-bar");
   const [language, setLanguage] = useState<LanguageCode>("en");
   const [isPreferencesOpen, setIsPreferencesOpen] = useState<boolean>(false);
-  const [isPolicyGeneratorOpen, setIsPolicyGeneratorOpen] = useState<boolean>(false);
-  const [activePolicyTab, setActivePolicyTab] = useState<"privacy" | "cookies" | "terms">("privacy");
   const [consentHistory, setConsentHistory] = useState<ConsentRecord[]>([]);
 
   // Setup Google Consent Mode v2 & IAB TCF v2.3 Stub
@@ -1098,11 +1092,6 @@ export const CookieConsentProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
-  const openPolicyGenerator = (tab: "privacy" | "cookies" | "terms" = "privacy") => {
-    setActivePolicyTab(tab);
-    setIsPolicyGeneratorOpen(true);
-  };
-
   const exportConsentLogs = (format: "json" | "csv") => {
     if (!consentHistory.length) return;
     let content = "";
@@ -1150,15 +1139,11 @@ export const CookieConsentProvider: React.FC<{ children: React.ReactNode }> = ({
         bannerStyle,
         language,
         isPreferencesOpen,
-        isPolicyGeneratorOpen,
-        activePolicyTab,
         consentHistory,
         setGeoRegion,
         setBannerStyle,
         setLanguage,
         setIsPreferencesOpen,
-        openPolicyGenerator,
-        setIsPolicyGeneratorOpen,
         acceptAll,
         rejectNonEssential,
         updateConsent,

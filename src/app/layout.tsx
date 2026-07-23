@@ -6,7 +6,6 @@ import { Analytics } from '@vercel/analytics/next';
 import { CookieConsentProvider } from "@/lib/cookie-consent-context";
 import { CookieBanner } from "@/components/privacy/cookie-banner";
 import { CookiePreferencesModal } from "@/components/privacy/cookie-preferences-modal";
-import { PolicyGeneratorModal } from "@/components/privacy/policy-generator-modal";
 import { PrivacyFooterTrigger } from "@/components/privacy/privacy-footer-trigger";
 
 const appSans = Space_Grotesk({
@@ -156,7 +155,6 @@ export default function RootLayout({
           {children}
           <CookieBanner />
           <CookiePreferencesModal />
-          <PolicyGeneratorModal />
           <PrivacyFooterTrigger />
           <Toaster />
           <Analytics />

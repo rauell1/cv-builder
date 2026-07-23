@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useCookieConsent, SUPPORTED_LANGUAGES, TRANSLATIONS, LanguageCode } from "@/lib/cookie-consent-context";
 import { ShieldCheck, Cookie, Globe, Settings, Check, X, FileText, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,6 @@ export const CookieBanner: React.FC = () => {
   const {
     hasConsented,
     isPreferencesOpen,
-    isPolicyGeneratorOpen,
     geoRegion,
     language,
     setLanguage,
@@ -19,11 +19,10 @@ export const CookieBanner: React.FC = () => {
     acceptAll,
     rejectNonEssential,
     setIsPreferencesOpen,
-    openPolicyGenerator,
   } = useCookieConsent();
 
-  // Hide banner if user has already consented OR if any privacy modal is currently open!
-  if (hasConsented || isPreferencesOpen || isPolicyGeneratorOpen) return null;
+  // Hide banner if user has already consented OR if the preferences modal is currently open!
+  if (hasConsented || isPreferencesOpen) return null;
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
@@ -98,29 +97,37 @@ export const CookieBanner: React.FC = () => {
                 {t.tcfNotice}
               </span>
               <span>•</span>
-              <button
-                onClick={() => openPolicyGenerator("privacy")}
+              {/* Opens in a new tab so reviewing a legal page never loses in-progress
+                  CV builder form state on this tab. */}
+              <Link
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="hover:text-primary transition-colors flex items-center gap-1 font-medium"
               >
                 <FileText className="h-3 w-3" />
                 {t.privacyPolicy}
-              </button>
+              </Link>
               <span>•</span>
-              <button
-                onClick={() => openPolicyGenerator("cookies")}
+              <Link
+                href="/cookies"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="hover:text-primary transition-colors flex items-center gap-1 font-medium"
               >
                 <Cookie className="h-3 w-3" />
                 {t.cookiePolicy}
-              </button>
+              </Link>
               <span>•</span>
-              <button
-                onClick={() => openPolicyGenerator("terms")}
+              <Link
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="hover:text-primary transition-colors flex items-center gap-1 font-medium"
               >
                 <Lock className="h-3 w-3" />
                 {t.terms}
-              </button>
+              </Link>
             </div>
           </div>
 
