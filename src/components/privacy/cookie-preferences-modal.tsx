@@ -87,7 +87,12 @@ export const CookiePreferencesModal: React.FC = () => {
 
   return (
     <Dialog open={isPreferencesOpen} onOpenChange={setIsPreferencesOpen}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-6 bg-background text-foreground border-border/80 rounded-2xl shadow-2xl">
+      {/* sm:max-w-3xl (not just max-w-3xl) is required here: DialogContent's
+          base class already sets sm:max-w-lg, and an unprefixed max-w-3xl
+          loses to that at any real viewport width, silently capping the
+          dialog at 512px and forcing the footer buttons into horizontal
+          overflow. */}
+      <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-6 bg-background text-foreground border-border/80 rounded-2xl shadow-2xl">
         <DialogHeader className="space-y-1">
           <div className="flex items-center gap-2 text-primary font-semibold text-xs uppercase tracking-wider">
             <Shield className="h-4 w-4" />
@@ -293,7 +298,7 @@ export const CookiePreferencesModal: React.FC = () => {
             Reset Consent State
           </Button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <Button
               variant="outline"
               size="sm"
