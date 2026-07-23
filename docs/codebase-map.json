@@ -1,63 +1,21 @@
 {
   "version": {
-    "commit": "f1018a86c93d23e71ce8ee44c5c9f5f6dec0714c",
-    "short": "f1018a8",
-    "generatedAt": "2026-07-23T00:22:36.899Z",
-    "baseCommit": "e1347d2331953091518db1bef609789fe8d52a72",
-    "changeSummary": [
-      "M\tREADME.md",
-      "M\tdocs/codebase-map.json",
-      "M\tdocs/codebase-map.md"
-    ],
-    "diffStat": " README.md              | 10 +++++++++-\n docs/codebase-map.json | 12 ++++++------\n docs/codebase-map.md   |  8 ++++----\n 3 files changed, 19 insertions(+), 11 deletions(-)\n"
+    "commit": "590919277600d1e78e896822314b4d32d88c878b",
+    "short": "5909192",
+    "generatedAt": "2026-07-23T00:26:26.032Z",
+    "baseCommit": "590919277600d1e78e896822314b4d32d88c878b",
+    "changeSummary": [],
+    "diffStat": ""
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
     "incremental": true,
     "hashChangedFiles": [
-      "src/app/api/analyze-job/route.ts",
-      "src/app/api/consent/log/route.ts",
-      "src/app/api/cron/cleanup-sessions/route.ts",
-      "src/app/api/enhance-achievements/route.ts",
-      "src/app/api/extract-file/route.ts",
-      "src/app/api/generate-cover-letter/route.ts",
-      "src/app/api/generate-insights/route.ts",
-      "src/app/api/parse-cv/route.ts",
-      "src/app/api/restructure-cv/route.ts",
-      "src/app/api/score-cv/route.ts",
-      "src/app/cookies/page.tsx",
-      "src/app/layout.tsx",
-      "src/app/privacy/page.tsx",
-      "src/app/terms/page.tsx",
-      "src/components/cv-builder/landing-page.tsx",
-      "src/components/cv-builder/output-step.tsx",
-      "src/components/cv-builder/processing-step.tsx",
       "src/components/privacy/cookie-banner.tsx",
       "src/components/privacy/cookie-preferences-modal.tsx",
-      "src/components/privacy/policy-generator-modal.tsx",
-      "src/components/privacy/privacy-footer-trigger.tsx",
-      "src/lib/ai-provider.ts",
-      "src/lib/cookie-consent-context.tsx",
-      "src/lib/cv-store.ts",
-      "src/lib/cv-types.ts",
-      "src/lib/request-queue.ts",
-      "src/lib/script-auto-blocker.ts",
-      "src/proxy.ts"
+      "src/components/privacy/privacy-footer-trigger.tsx"
     ],
-    "newFiles": [
-      "src/app/api/consent/log/route.ts",
-      "src/app/api/cron/cleanup-sessions/route.ts",
-      "src/app/cookies/page.tsx",
-      "src/app/privacy/page.tsx",
-      "src/app/terms/page.tsx",
-      "src/components/privacy/cookie-banner.tsx",
-      "src/components/privacy/cookie-preferences-modal.tsx",
-      "src/components/privacy/policy-generator-modal.tsx",
-      "src/components/privacy/privacy-footer-trigger.tsx",
-      "src/lib/cookie-consent-context.tsx",
-      "src/lib/script-auto-blocker.ts",
-      "src/proxy.ts"
-    ],
+    "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
     "prismaChanged": false
@@ -901,6 +859,10 @@
       "commitTouches": 10
     },
     {
+      "file": "src/app/layout.tsx",
+      "commitTouches": 9
+    },
+    {
       "file": "src/app/api/enhance-achievements/route.ts",
       "commitTouches": 9
     },
@@ -921,10 +883,6 @@
       "commitTouches": 8
     },
     {
-      "file": "src/app/layout.tsx",
-      "commitTouches": 8
-    },
-    {
       "file": "src/components/cv-builder/processing-step.tsx",
       "commitTouches": 8
     },
@@ -942,36 +900,9 @@
     }
   ],
   "affectedModules": [
-    "src/app/api/analyze-job/route.ts",
-    "src/app/api/consent/log/route.ts",
-    "src/app/api/cron/cleanup-sessions/route.ts",
-    "src/app/api/enhance-achievements/route.ts",
-    "src/app/api/extract-file/route.ts",
-    "src/app/api/generate-cover-letter/route.ts",
-    "src/app/api/generate-insights/route.ts",
-    "src/app/api/parse-cv/route.ts",
-    "src/app/api/restructure-cv/route.ts",
-    "src/app/api/score-cv/route.ts",
-    "src/app/cookies/page.tsx",
-    "src/app/layout.tsx",
-    "src/app/privacy/page.tsx",
-    "src/app/terms/page.tsx",
-    "src/components/cv-builder/landing-page.tsx",
-    "src/components/cv-builder/output-step.tsx",
-    "src/components/cv-builder/processing-step.tsx",
     "src/components/privacy/cookie-banner.tsx",
     "src/components/privacy/cookie-preferences-modal.tsx",
-    "src/components/privacy/policy-generator-modal.tsx",
-    "src/components/privacy/privacy-footer-trigger.tsx",
-    "src/lib/ai-provider.ts",
-    "src/lib/api-calls.ts",
-    "src/lib/cookie-consent-context.tsx",
-    "src/lib/cv-store.ts",
-    "src/lib/cv-types.ts",
-    "src/lib/request-queue.ts",
-    "src/lib/script-auto-blocker.ts",
-    "src/lib/text-cleaning.ts",
-    "src/proxy.ts"
+    "src/components/privacy/privacy-footer-trigger.tsx"
   ],
   "metrics": {
     "fileCount": 112,
