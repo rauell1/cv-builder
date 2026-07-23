@@ -1,9 +1,9 @@
 {
   "version": {
-    "commit": "6d8a09773dbe8a78e87468ca09db46c41a501847",
-    "short": "6d8a097",
-    "generatedAt": "2026-07-23T00:30:40.905Z",
-    "baseCommit": "6d8a09773dbe8a78e87468ca09db46c41a501847",
+    "commit": "c3004b3e83b6fd6574713b09a4d5e98eb7459d14",
+    "short": "c3004b3",
+    "generatedAt": "2026-07-23T00:34:50.023Z",
+    "baseCommit": "c3004b3e83b6fd6574713b09a4d5e98eb7459d14",
     "changeSummary": [],
     "diffStat": ""
   },
@@ -11,7 +11,6 @@
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
     "incremental": true,
     "hashChangedFiles": [
-      "src/components/privacy/cookie-banner.tsx",
       "src/components/privacy/policy-generator-modal.tsx"
     ],
     "newFiles": [],
@@ -899,7 +898,6 @@
     }
   ],
   "affectedModules": [
-    "src/components/privacy/cookie-banner.tsx",
     "src/components/privacy/policy-generator-modal.tsx"
   ],
   "metrics": {
