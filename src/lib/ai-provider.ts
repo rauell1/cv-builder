@@ -825,7 +825,7 @@ export const DEFAULT_TEXT_MODEL: string = NVIDIA_TEXT_MODELS[0];
 // Dedicated OCR/vision model for extract-file's callAIVision() path.
 export const OCR_MODEL = 'meta/llama-3.2-90b-vision-instruct';
 
-// Cross-provider redundancy safety net. Gemini 2.5 Flash has a genuine free
+// Cross-provider redundancy safety net. Gemini Flash has a genuine free
 // tier via Google AI Studio (aistudio.google.com/apikey - NOT a billed Vertex
 // AI project). Deliberately kept OUT of NVIDIA_TEXT_MODELS and appended only
 // inside callAIWithFallback() (not buildFallbackChain()), so it never becomes
@@ -833,7 +833,13 @@ export const OCR_MODEL = 'meta/llama-3.2-90b-vision-instruct';
 // last-resort fallback for a full NVIDIA outage - like the one this app
 // already hit once - instead of spending its low free-tier quota (RPM/RPD
 // limits) on ordinary traffic.
-const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash';
+//
+// Pinned to the "-latest" alias, not a dated model id (e.g. gemini-2.5-flash).
+// Google retires dated Gemini models on a matter of months and the alias is
+// the only thing they keep pointed at whatever replaces it - a dated id here
+// previously 404'd in production ("no longer available to new users") the
+// moment Google retired it, silently killing this entire fallback path.
+const GEMINI_FALLBACK_MODEL = 'gemini-flash-latest';
 
 let modelRotationIndex = 0;
 
@@ -902,7 +908,7 @@ export async function callAIWithFallback(
   // Total wall-clock budget for the whole chain. Keeps the chain inside the
   // Vercel 60s maxDuration window (with headroom for JSON parsing + response)
   // instead of letting 3-4 sequential model timeouts add up to 100s+.
-  const TOTAL_BUDGET_MS = 45_000;
+  const TOTAL_BUDGET_MS = 52_000;
   const deadline = Date.now() + TOTAL_BUDGET_MS;
   const chainStart = Date.now();
 
@@ -932,11 +938,21 @@ export async function callAIWithFallback(
     // Gemini last-resort fallback appended at the end of the chain - which
     // defeats the whole point of having it. Every remaining candidate
     // (Gemini included) is now guaranteed a fair, non-zero shot.
+    //
+    // MIN_ATTEMPT_MS is a floor on top of the even split: real NVIDIA
+    // generations for a full restructured CV routinely took 15-25s in
+    // production, but an even split across 4-5 candidates was cutting every
+    // single attempt off at 9-15s, aborting every model before it could ever
+    // finish (see the AIModelFailedError diagnostics from 2026-07-23 - every
+    // candidate timed out, none genuinely failed). Flooring at 20s means
+    // fewer candidates get tried before the overall deadline, but the ones
+    // that are tried get a real chance to finish instead of a guaranteed abort.
     const remainingCandidateCount = candidates
       .slice(i)
       .filter((m) => hasProviderCredentials(getProvider(m))).length;
-    const fairShareMs = remainingMs / Math.max(remainingCandidateCount, 1);
-    const effectiveTimeoutMs = Math.min(perModelTimeoutMs, fairShareMs);
+    const MIN_ATTEMPT_MS = 20_000;
+    const fairShareMs = Math.max(remainingMs / Math.max(remainingCandidateCount, 1), MIN_ATTEMPT_MS);
+    const effectiveTimeoutMs = Math.min(perModelTimeoutMs, fairShareMs, remainingMs);
 
     if (i > 0) {
       console.warn(`[AI] Model ${modelId} failed, trying fallback ${candidate} (${remainingMs}ms budget left)`);

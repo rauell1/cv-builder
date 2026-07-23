@@ -177,10 +177,10 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
     apiEnvKey: 'NVIDIA_API_KEY',
   },
   {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
+    id: 'gemini-flash-latest',
+    name: 'Gemini Flash',
     provider: 'google',
-    description: 'Google\'s fast model, free via Google AI Studio. Used automatically only as a last-resort fallback if every NVIDIA model fails.',
+    description: 'Google\'s fast model, free via Google AI Studio. Used automatically only as a last-resort fallback if every NVIDIA model fails. Pinned to the "latest" alias so Google\'s frequent dated-model retirements (e.g. gemini-2.5-flash) don\'t silently break this fallback again.',
     bestFor: 'Emergency backup during an NVIDIA outage',
     badge: 'Free Fallback',
     badgeColor: 'bg-sky-100 text-sky-700 border-sky-200',
