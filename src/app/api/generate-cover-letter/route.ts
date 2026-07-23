@@ -181,9 +181,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // The date is overridden here rather than trusted from the AI response -
+    // language models have no reliable way to know the actual current date
+    // (they reason from training data, not a clock), and asking one to write
+    // "today's date" reliably produces a plausible-looking but wrong date.
+    const finalData = sanitizeCoverLetterData(parsed as CoverLetterData);
+    finalData.date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
     return NextResponse.json({
       success: true,
-      data: sanitizeCoverLetterData(parsed as CoverLetterData),
+      data: finalData,
       model: usedModel,
     });
   } catch (error: unknown) {

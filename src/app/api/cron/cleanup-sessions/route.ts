@@ -33,5 +33,20 @@ export async function GET(request: NextRequest) {
 
   console.warn(`[cleanup-sessions] Deleted ${count} session(s) older than ${DATA_RETENTION.SESSION_MAX_AGE_DAYS} days`);
 
-  return NextResponse.json({ success: true, deletedCount: count, cutoff: cutoff.toISOString() });
+  // Daily rate-limit rows are only ever queried for "today", so anything
+  // more than a couple of days old is just dead weight - clean it up here
+  // too rather than running a second cron for one small table.
+  const rateLimitCutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const { count: rateLimitDeleted } = await db.dailyRateLimit.deleteMany({
+    where: { day: { lt: rateLimitCutoff } },
+  });
+
+  console.warn(`[cleanup-sessions] Deleted ${rateLimitDeleted} daily rate-limit row(s) older than ${rateLimitCutoff}`);
+
+  return NextResponse.json({
+    success: true,
+    deletedCount: count,
+    rateLimitDeletedCount: rateLimitDeleted,
+    cutoff: cutoff.toISOString(),
+  });
 }

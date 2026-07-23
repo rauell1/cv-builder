@@ -19,3 +19,22 @@ model CVSession {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// Persistent daily request cap, keyed by IP + route category + calendar day.
+// The in-memory limiter in src/lib/rate-limit.ts stops rapid bursts, but its
+// state is per serverless instance and resets constantly - it can't stop a
+// sustained abuser who stays just under the per-minute limit for hours,
+// which still racks up real cost on our AI provider keys. This table is
+// checked/incremented atomically (see src/lib/daily-rate-limit.ts) so the
+// cap actually holds across every instance.
+model DailyRateLimit {
+  id       String   @id @default(cuid())
+  ip       String
+  category String
+  day      String // calendar date as YYYY-MM-DD (UTC)
+  count    Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([ip, category, day])
+  @@index([day])
+}

@@ -297,10 +297,10 @@ Return ONLY valid JSON matching this exact structure:
     { "category": "", "title": "", "description": "" }
   ],
   "workExperience": [
-    { "dateRange": "", "title": "", "subtitle": "", "bullets": [""] }
+    { "dateRange": "ONLY the dates, e.g. 'Jun 2025 - Present' - never the job title or company", "title": "ONLY the job title/role, e.g. 'Senior Software Engineer' - never the company", "subtitle": "ONLY the company/location/work-mode, e.g. 'Acme Corp, Nairobi, Kenya, Hybrid' - never the job title", "bullets": [""] }
   ],
   "education": [
-    { "dateRange": "", "degree": "", "institution": "", "grade": "" }
+    { "dateRange": "ONLY the dates, e.g. '2018 - 2023' - never the degree name", "degree": "ONLY the degree/qualification name - never the dates", "institution": "", "grade": "" }
   ],
   "skills": [
     { "category": "", "skills": "" }
@@ -308,7 +308,12 @@ Return ONLY valid JSON matching this exact structure:
   "certifications": [
     { "name": "", "issuer": "", "date": "" }
   ]
-}`;
+}
+
+CRITICAL: dateRange, title, and subtitle are three SEPARATE fields - never
+concatenate two of them into one (e.g. dateRange must never contain the job
+title, and title must never contain the date). Each field holds exactly one
+kind of information, matching the examples in the schema above.`;
 
 export const JOB_ANALYSIS_SYSTEM_PROMPT = `You are a senior job description analyst and ATS optimization expert. Analyze the provided job description and extract comprehensive, structured insights for tailoring a CV to maximize match rate.
 
@@ -386,10 +391,10 @@ Return ONLY valid JSON matching this exact structure:
     { "category": "", "title": "", "description": "" }
   ],
   "workExperience": [
-    { "dateRange": "", "title": "", "subtitle": "", "bullets": [""] }
+    { "dateRange": "ONLY the dates, e.g. 'Jun 2025 - Present' - never the job title or company", "title": "ONLY the job title/role, e.g. 'Senior Software Engineer' - never the company", "subtitle": "ONLY the company/location/work-mode, e.g. 'Acme Corp, Nairobi, Kenya, Hybrid' - never the job title", "bullets": [""] }
   ],
   "education": [
-    { "dateRange": "", "degree": "", "institution": "", "grade": "" }
+    { "dateRange": "ONLY the dates, e.g. '2018 - 2023' - never the degree name", "degree": "ONLY the degree/qualification name - never the dates", "institution": "", "grade": "" }
   ],
   "skills": [
     { "category": "", "skills": "" }
@@ -405,6 +410,7 @@ Important rules:
 - Each bullet MUST start with an action verb
 - Each bullet MUST include or imply a measurable result
 - The personal statement must be exactly 3 lines
+- dateRange, title, and subtitle are three SEPARATE fields - never concatenate two of them into one (e.g. dateRange must never contain the job title, and title must never contain the date), even if the source CV data has them combined or in a different order
 - Maximum 5-6 bullets per work experience entry
 - Preserve certifications if they exist in the source CV
 - Target a focused 1-2 page professional CV; trim to the most relevant entries rather than including everything, unless the source clearly indicates an academic/research career`;
