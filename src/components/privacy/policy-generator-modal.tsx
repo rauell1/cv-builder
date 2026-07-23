@@ -43,114 +43,131 @@ export const PolicyGeneratorModal: React.FC = () => {
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"formatted" | "markdown" | "html">("formatted");
 
-  // Format generators for raw export
+  // Format generators for raw export — kept in sync with src/app/privacy,
+  // src/app/terms, and src/app/cookies. These describe what the app
+  // actually does (NVIDIA/Google AI processing, 30-day auto-deletion,
+  // cookie-less Vercel Analytics) rather than generic ad-tech boilerplate.
   const getRawMarkdown = (tab: string) => {
     if (tab === "cookies") {
       return `# Cookie Policy for ${companyName}
 
-**Effective Date:** ${effectiveDate}  
-**Website:** https://${domain}  
+**Effective Date:** ${effectiveDate}
+**Website:** https://${domain}
 **Contact Email:** ${contactEmail}
 
 ---
 
-## 1. What Are Cookies?
-Cookies are small text files placed on your device by websites you visit to store preferences, verify session tokens, and measure user traffic.
+## 1. Cookies vs. Local Storage
+This site sets no server-side authentication or tracking cookies. Your cookie preference choice is saved in your browser's local storage, not a cookie, so we remember it on your next visit.
 
 ---
 
-## 2. Cookie Classification Table
-- **Strictly Necessary Cookies:** Essential for session management, security nonces, and consent choices. (Always Active)
-- **Functional Cookies:** Remembers language selections, theme preferences, and form state.
-- **Analytics Cookies:** Measures page load speeds, visitor traffic, and usage metrics via Google Analytics.
-- **Marketing Cookies:** Delivers targeted campaign measurement and retargeting analytics.
+## 2. What We Actually Use
+- **Strictly Necessary:** Your cookie preference choice (local storage). No login exists, so there is no session/auth cookie.
+- **Functional:** Not currently used. Reserved for future preferences (theme, language) that are not yet implemented.
+- **Analytics (always on):** Vercel Analytics — aggregate page views and load-time metrics. Cookie-less, does not identify you, runs regardless of your preference choice.
+- **Marketing / Advertising (not used):** We do not run Google Analytics, an ad pixel, or any cross-site tracker. This category exists for completeness only.
 
 ---
 
-## 3. Compliance Frameworks
-Our cookie infrastructure complies with:
-- **Google Consent Mode v2** (\`ad_storage\`, \`analytics_storage\`, \`ad_user_data\`)
-- **IAB Transparency & Consent Framework (TCF v2.3)**
-
----
-
-## 4. Managing Your Preferences
-You can modify or revoke your consent choices at any time using our floating Cookie Settings button or through your browser settings.`;
+## 3. Managing Your Preferences
+Change your choice anytime via the Cookie Settings button, or clear your browser's local storage to reset it.`;
     }
 
     if (tab === "terms") {
       return `# Terms of Service for ${companyName}
 
-**Effective Date:** ${effectiveDate}  
-**Website:** https://${domain}  
+**Effective Date:** ${effectiveDate}
+**Website:** https://${domain}
 **Contact Email:** ${contactEmail}
 
 ---
 
-## 1. Acceptance of Terms
-By accessing or using the services provided at https://${domain}, you agree to be bound by these Terms of Service and all applicable data privacy laws.
+## 1. Agreement to Terms
+By using https://${domain} you agree to these Terms. No account or payment is required.
 
 ---
 
-## 2. Authorized Use
-Users are granted a non-exclusive, revocable license to upload CVs, convert documents, and generate ATS-formatted resumes. You agree not to upload malicious payloads, reverse-engineer proprietary algorithms, or perform automated data scraping.
+## 2. What This Service Does
+You upload a CV and a job description; AI parses, restructures, and scores your CV against the job, and can generate a cover letter. Your CV content is sent to third-party AI providers (NVIDIA, and Google as a backup) to produce these results.
 
 ---
 
-## 3. Intellectual Property
-All template designs, structural layouts, and software algorithms remain the intellectual property of ${companyName}. Users retain complete ownership of their original personal resume content.
+## 3. AI Output Is Not Guaranteed Accurate
+AI-generated content may contain errors or inaccurate claims about your experience. You are solely responsible for reviewing and correcting all AI output before using it to apply for a job. We make no warranty that any AI output is accurate or complete.
 
 ---
 
-## 4. Limitation of Liability
-The services are provided "AS IS" without warranties of any kind. ${companyName} shall not be held liable for any indirect or consequential damages arising from service interruption or third-party AI provider outages.`;
+## 4. Authorized Use
+You agree not to upload another person's personal data without their consent, submit malicious payloads, scrape or automate the service beyond normal individual use, or reverse-engineer the underlying software.
+
+---
+
+## 5. Intellectual Property
+The software, templates, and interface belong to ${companyName}. You retain full ownership of the personal content you upload.
+
+---
+
+## 6. Service Availability
+Provided "as is" and "as available," with no guaranteed uptime. The service depends on third-party AI providers that may themselves be rate-limited or unavailable at times.
+
+---
+
+## 7. Limitation of Liability
+To the fullest extent permitted by law, ${companyName} is not liable for indirect, incidental, or consequential damages arising from inaccurate AI output, service interruption, or third-party AI provider outages.`;
     }
 
     // Default Privacy Policy Markdown
     return `# Privacy Policy for ${companyName}
 
-**Effective Date:** ${effectiveDate}  
-**Website:** https://${domain}  
+**Effective Date:** ${effectiveDate}
+**Website:** https://${domain}
 **Contact Email:** ${contactEmail}
 
 ---
 
 ## 1. Introduction
-At ${companyName}, accessible from https://${domain}, your privacy is paramount. This Privacy Policy document outlines the types of information collected, stored, processed, and safeguarded in accordance with the General Data Protection Regulation (GDPR) and the California Consumer Privacy Act (CCPA / CPRA).
+${companyName}, accessible from https://${domain}, lets you upload a CV and a job description so AI can restructure your experience, match keywords, and generate a tailored CV, insights, and cover letter. No account or sign-up is required.
 
 ---
 
-## 2. Information We Collect
-We collect data strictly required to deliver, secure, and improve our services:
-- **Strictly Necessary Data:** IP address, session identifiers, security nonces, and cookie consent preferences.
-- **User Input & Resume Data:** Resume documents, job descriptions, and structured text processed locally or via private, encrypted AI APIs.
-- **Analytics & Telemetry:** Aggregated metrics regarding site speed and page interactions (only if explicit consent is granted).
+## 2. Data We Collect
+- **CV content:** the raw text/file you upload, and the name, email, phone, work history, education, and skills extracted from it.
+- **Job description text:** the job posting you paste in.
+- **Generated outputs:** the AI-restructured CV, ATS score, insights, and any cover letter.
+- **Technical data:** your IP address, read transiently in server memory for rate limiting only — not stored in our database.
+- **Cookie consent choices:** stored in browser local storage, plus a short-lived in-memory audit log server-side.
 
 ---
 
-## 3. How We Use Your Information
-We process your personal data for the following legitimate purposes:
-1. Providing AI-driven CV parsing, ATS scoring, and cover letter generation.
-2. Maintaining system uptime, preventing abuse, and enforcing platform rate limits.
-3. Fulfilling legal obligations under GDPR Article 6(1)(c) and CCPA § 1798.100.
+## 3. How Your CV Is Processed — Third-Party AI Providers
+To parse, analyze, restructure, and score your CV, its content (including your name and contact details) is sent to:
+- **NVIDIA** (NVIDIA NIM inference API) — primary AI provider.
+- **Google** (Gemini API via Google AI Studio) — backup only, used if NVIDIA is unavailable.
+
+These providers process your data solely to generate the response returned to you and do not use API-submitted content to train their models, per their own published API terms. We do not send your data to any advertising or marketing company.
 
 ---
 
-## 4. Geotargeted Consent Rights
-### A. European Union (GDPR)
-Under EU GDPR, you possess the following rights:
-- **Right to Access & Data Portability:** Request a copy of stored personal data.
-- **Right to Erasure ("Right to be Forgotten"):** Delete all cached AI inputs or session tokens.
-- **Right to Withdraw Consent:** Modify or revoke cookie consent choices anytime via our Privacy Control Center.
-
-### B. California Residents (CCPA / CPRA)
-- **Do Not Sell or Share My Personal Information:** We do NOT sell or monetarily trade your personal information.
-- **Right to Limit Sensitive Data Processing:** Limit processing of sensitive identifiers.
+## 4. How Long We Keep Your Data
+Your session (CV text, parsed data, job description, tailored output) is automatically and permanently deleted after 30 days by a scheduled daily job. There is no user account tying your data beyond that window.
 
 ---
 
-## 5. Contact Us
-For any inquiries regarding data protection or to exercise your privacy rights, please reach out to us at ${contactEmail}.`;
+## 5. Analytics
+We use Vercel Analytics for aggregate, anonymous page-view and performance metrics. It is cookie-less, does not identify you, and does not track you across other sites. We do not use Google Analytics or any advertising pixel.
+
+---
+
+## 6. Your Rights
+**EU/UK residents (GDPR):** request access to, correction of, or deletion of your data. Since sessions auto-delete after 30 days and no account exists, email us with your session ID or approximate usage time to request earlier deletion.
+
+**California residents (CCPA/CPRA):** we do not sell or share your personal information for money or other consideration, and do not use it for cross-context behavioral advertising.
+
+---
+
+## 7. Contact Us
+For privacy questions or deletion requests, contact us at ${contactEmail}.`;
   };
 
   const getRawHTML = (tab: string) => {
@@ -361,42 +378,55 @@ For any inquiries regarding data protection or to exercise your privacy rights, 
                     <div className="space-y-3">
                       <h3 className="text-base font-semibold text-foreground">1. Introduction</h3>
                       <p className="text-muted-foreground text-xs sm:text-sm">
-                        At <strong>{companyName}</strong>, your privacy is paramount. This Privacy Policy document outlines the types of information collected, stored, processed, and safeguarded in accordance with the General Data Protection Regulation (GDPR) and the California Consumer Privacy Act (CCPA / CPRA).
+                        <strong>{companyName}</strong> lets you upload a CV and a job description so AI can restructure your experience, match keywords, and generate a tailored CV, insights, and cover letter. No account or sign-up is required.
                       </p>
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="text-base font-semibold text-foreground">2. Information We Collect</h3>
+                      <h3 className="text-base font-semibold text-foreground">2. Data We Collect</h3>
                       <ul className="list-disc pl-5 space-y-1.5 text-muted-foreground text-xs sm:text-sm">
-                        <li><strong>Strictly Necessary Data:</strong> IP address, session identifiers, security nonces, and cookie consent preferences.</li>
-                        <li><strong>User Input & Resume Data:</strong> Resume documents, job descriptions, and structured text processed locally or via private, encrypted AI APIs.</li>
-                        <li><strong>Analytics & Telemetry:</strong> Aggregated metrics regarding site speed and page interactions (only if explicit consent is granted).</li>
+                        <li><strong>CV content:</strong> the raw text/file you upload, plus name, email, phone, work history, education, and skills extracted from it.</li>
+                        <li><strong>Job description text</strong> you paste in for tailoring.</li>
+                        <li><strong>Generated outputs:</strong> the AI-restructured CV, ATS score, insights, and any cover letter.</li>
+                        <li><strong>Technical data:</strong> your IP address, read transiently in server memory for rate limiting only — not stored in our database.</li>
                       </ul>
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="text-base font-semibold text-foreground">3. How We Use Your Information</h3>
-                      <ol className="list-decimal pl-5 space-y-1.5 text-muted-foreground text-xs sm:text-sm">
-                        <li>Providing AI-driven CV parsing, ATS scoring, and cover letter generation.</li>
-                        <li>Maintaining system uptime, preventing abuse, and enforcing platform rate limits.</li>
-                        <li>Fulfilling legal obligations under GDPR Article 6(1)(c) and CCPA § 1798.100.</li>
-                      </ol>
+                      <h3 className="text-base font-semibold text-foreground">3. Third-Party AI Providers</h3>
+                      <p className="text-muted-foreground text-xs sm:text-sm">
+                        To parse, restructure, and score your CV, its content (including your name and contact details) is sent to <strong>NVIDIA</strong> (NVIDIA NIM API, primary) and, only as a backup if NVIDIA is unavailable, <strong>Google</strong> (Gemini API). These providers process your data solely to generate the response returned to you and do not use API-submitted content to train their models. We do not send your data to any advertising or marketing company.
+                      </p>
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="text-base font-semibold text-foreground">4. Geotargeted Consent Rights</h3>
+                      <h3 className="text-base font-semibold text-foreground">4. Data Retention</h3>
+                      <p className="text-muted-foreground text-xs sm:text-sm">
+                        Your session (CV text, parsed data, job description, tailored output) is automatically and permanently deleted after 30 days by a scheduled daily job. There is no account tying your data beyond that window.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h3 className="text-base font-semibold text-foreground">5. Analytics</h3>
+                      <p className="text-muted-foreground text-xs sm:text-sm">
+                        We use Vercel Analytics for aggregate, anonymous page-view and performance metrics. It is cookie-less and does not identify you. We do not use Google Analytics or any advertising pixel.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h3 className="text-base font-semibold text-foreground">6. Your Rights</h3>
                       <div className="p-4 rounded-xl bg-accent/20 border border-border/60 space-y-2 text-xs text-muted-foreground">
-                        <h4 className="font-semibold text-foreground text-xs">European Union (GDPR)</h4>
-                        <p>Under EU GDPR, you possess the right to access, rectify, port, or request erasure of stored personal data, and to modify consent choices anytime via our Privacy Control Center.</p>
-                        <h4 className="font-semibold text-foreground text-xs pt-2">California Residents (CCPA / CPRA)</h4>
-                        <p>We do NOT sell or monetarily trade your personal information. You have the right to limit processing of sensitive identifiers.</p>
+                        <h4 className="font-semibold text-foreground text-xs">EU / UK residents (GDPR)</h4>
+                        <p>Request access to, correction of, or deletion of your data. Since sessions auto-delete after 30 days and no account exists, email us with your session ID or approximate usage time to request earlier deletion.</p>
+                        <h4 className="font-semibold text-foreground text-xs pt-2">California residents (CCPA/CPRA)</h4>
+                        <p>We do not sell or share your personal information for money or other consideration, and do not use it for cross-context behavioral advertising.</p>
                       </div>
                     </div>
 
                     <div className="space-y-2 pt-2 border-t border-border/40">
-                      <h3 className="text-base font-semibold text-foreground">5. Contact Us</h3>
+                      <h3 className="text-base font-semibold text-foreground">7. Contact Us</h3>
                       <p className="text-xs text-muted-foreground">
-                        For inquiries or data protection requests, reach out at <a href={`mailto:${contactEmail}`} className="text-primary font-mono font-medium hover:underline">{contactEmail}</a>.
+                        For privacy questions or deletion requests, reach out at <a href={`mailto:${contactEmail}`} className="text-primary font-mono font-medium hover:underline">{contactEmail}</a>.
                       </p>
                     </div>
                   </>
@@ -414,43 +444,50 @@ For any inquiries regarding data protection or to exercise your privacy rights, 
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="text-base font-semibold text-foreground">1. What Are Cookies?</h3>
+                      <h3 className="text-base font-semibold text-foreground">1. Cookies vs. Local Storage</h3>
                       <p className="text-muted-foreground text-xs sm:text-sm">
-                        Cookies are small text files placed on your device by websites you visit to store preferences, verify session tokens, and measure user traffic.
+                        This site sets no server-side authentication or tracking cookies. Your cookie preference choice is saved in your browser&apos;s local storage, not a cookie, so we remember it on your next visit.
                       </p>
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="text-base font-semibold text-foreground">2. Cookie Categories</h3>
+                      <h3 className="text-base font-semibold text-foreground">2. What We Actually Use</h3>
                       <div className="border border-border/60 rounded-xl overflow-hidden divide-y divide-border/40 text-xs">
                         <div className="p-3 bg-muted/20 flex items-center justify-between">
                           <div>
-                            <span className="font-semibold text-foreground block">Strictly Necessary Cookies</span>
-                            <span className="text-muted-foreground">Session management, CSRF tokens, consent flags</span>
+                            <span className="font-semibold text-foreground block">Strictly Necessary</span>
+                            <span className="text-muted-foreground">Your cookie preference choice (local storage) — no login exists, so no session/auth cookie is set</span>
                           </div>
-                          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">Always Active</Badge>
+                          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">Required</Badge>
                         </div>
                         <div className="p-3 bg-muted/20 flex items-center justify-between">
                           <div>
-                            <span className="font-semibold text-foreground block">Functional Cookies</span>
-                            <span className="text-muted-foreground">Language selection, theme, font preferences</span>
+                            <span className="font-semibold text-foreground block">Functional</span>
+                            <span className="text-muted-foreground">Not currently used — reserved for a future theme/language preference</span>
                           </div>
                           <Badge variant="outline">Optional</Badge>
                         </div>
                         <div className="p-3 bg-muted/20 flex items-center justify-between">
                           <div>
-                            <span className="font-semibold text-foreground block">Analytics Cookies</span>
-                            <span className="text-muted-foreground">Google Analytics visitor traffic & performance</span>
+                            <span className="font-semibold text-foreground block">Analytics</span>
+                            <span className="text-muted-foreground">Vercel Analytics — cookie-less, aggregate metrics only</span>
                           </div>
-                          <Badge variant="outline">Optional</Badge>
+                          <Badge variant="outline">Always on</Badge>
+                        </div>
+                        <div className="p-3 bg-muted/20 flex items-center justify-between">
+                          <div>
+                            <span className="font-semibold text-foreground block">Marketing / Advertising</span>
+                            <span className="text-muted-foreground">Not used — no Google Analytics, ad pixel, or cross-site tracker exists on this site</span>
+                          </div>
+                          <Badge variant="outline">Not used</Badge>
                         </div>
                       </div>
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="text-base font-semibold text-foreground">3. Framework Compliance</h3>
+                      <h3 className="text-base font-semibold text-foreground">3. Managing Your Preferences</h3>
                       <p className="text-muted-foreground text-xs sm:text-sm">
-                        Our website complies with <strong>Google Consent Mode v2</strong> (<code className="font-mono text-xs">ad_storage</code>, <code className="font-mono text-xs">analytics_storage</code>) and <strong>IAB TCF v2.3</strong> standards.
+                        Change your choice anytime via the Cookie Settings button, or clear your browser&apos;s local storage to reset it.
                       </p>
                     </div>
                   </>
@@ -468,23 +505,44 @@ For any inquiries regarding data protection or to exercise your privacy rights, 
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="text-base font-semibold text-foreground">1. Acceptance of Terms</h3>
+                      <h3 className="text-base font-semibold text-foreground">1. Agreement to Terms</h3>
                       <p className="text-muted-foreground text-xs sm:text-sm">
-                        By accessing or using the services provided at {domain}, you agree to be bound by these Terms of Service and all applicable data privacy laws.
+                        By using {domain} you agree to these Terms. No account or payment is required.
                       </p>
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="text-base font-semibold text-foreground">2. Permitted Use</h3>
+                      <h3 className="text-base font-semibold text-foreground">2. What This Service Does</h3>
                       <p className="text-muted-foreground text-xs sm:text-sm">
-                        Users are granted a non-exclusive license to upload CVs, convert documents, and generate ATS-formatted resumes. You agree not to upload malicious payloads or perform automated data scraping.
+                        You upload a CV and a job description; AI parses, restructures, and scores your CV against the job, and can generate a cover letter. Your CV content is sent to third-party AI providers (NVIDIA, and Google as a backup) to produce these results.
                       </p>
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="text-base font-semibold text-foreground">3. Intellectual Property</h3>
+                      <h3 className="text-base font-semibold text-foreground">3. AI Output Is Not Guaranteed Accurate</h3>
                       <p className="text-muted-foreground text-xs sm:text-sm">
-                        All template designs and software algorithms remain the intellectual property of {companyName}. Users retain complete ownership of their original personal resume content.
+                        AI-generated content may contain errors or inaccurate claims about your experience. You are solely responsible for reviewing and correcting all output before using it to apply for a job. We make no warranty that any AI output is accurate or complete.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h3 className="text-base font-semibold text-foreground">4. Authorized Use</h3>
+                      <p className="text-muted-foreground text-xs sm:text-sm">
+                        You agree not to upload another person&apos;s personal data without their consent, submit malicious payloads, scrape or automate the service beyond normal individual use, or reverse-engineer the underlying software.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h3 className="text-base font-semibold text-foreground">5. Intellectual Property</h3>
+                      <p className="text-muted-foreground text-xs sm:text-sm">
+                        The software, templates, and interface belong to {companyName}. You retain full ownership of the personal content you upload.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h3 className="text-base font-semibold text-foreground">6. Limitation of Liability</h3>
+                      <p className="text-muted-foreground text-xs sm:text-sm">
+                        Provided &quot;as is&quot; with no guaranteed uptime. To the fullest extent permitted by law, {companyName} is not liable for indirect or consequential damages arising from inaccurate AI output, service interruption, or third-party AI provider outages.
                       </p>
                     </div>
                   </>

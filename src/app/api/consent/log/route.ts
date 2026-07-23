@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 
 export interface ServerConsentLog {
   id: string;
@@ -26,9 +27,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid consent log payload" }, { status: 400 });
     }
 
-    // Anonymize IP address for compliance
+    // Pseudonymize the IP with a one-way hash — NOT base64 (which is trivially
+    // reversible encoding, not anonymization; a prior version incorrectly used
+    // base64 here while claiming it was "anonymized"). SHA-256 cannot be
+    // decoded back to the original IP. Note this is "pseudonymization" in the
+    // strict GDPR sense (Recital 26), not true anonymization: because IPv4
+    // address space is small, a determined party could still brute-force the
+    // hash by trying all ~4 billion possible IPs. It is not used for anything
+    // beyond a lightweight audit trail of consent choices.
     const forwardedFor = req.headers.get("x-forwarded-for") || "127.0.0.1";
-    const ipHash = Buffer.from(forwardedFor).toString("base64").slice(0, 12);
+    const ipHash = createHash("sha256").update(forwardedFor).digest("hex").slice(0, 16);
 
     const logEntry: ServerConsentLog = {
       id: id || "LOG-" + Math.random().toString(36).substring(2, 9).toUpperCase(),
@@ -45,8 +53,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, recordedLog: logEntry }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ error: "Failed to record consent log", details: error.message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "Failed to record consent log", details: message }, { status: 500 });
   }
 }
 
