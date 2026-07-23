@@ -110,7 +110,7 @@ export const AI_PROVIDERS: { id: AIModelProvider; name: string; description: str
 ];
 
 // Model ids here are the real NVIDIA NIM / Google catalog ids sent directly
-// to each provider's API — no marketing aliases. This is a deliberate
+// to each provider's API - no marketing aliases. This is a deliberate
 // simplification: an earlier version showed pretty names here (e.g.
 // "DeepSeek V4 Pro") that were silently translated to a different real model
 // at call time, which caused the UI/logs to report a model that wasn't
@@ -120,7 +120,7 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
     id: 'mistralai/mistral-medium-3.5-128b',
     name: 'Mistral Medium 3.5',
     provider: 'nvidia',
-    description: 'Primary text model — best quality/latency balance for CV writing and restructuring',
+    description: 'Primary text model - best quality/latency balance for CV writing and restructuring',
     bestFor: 'CV writing, restructuring, tailoring, cover letters',
     badge: 'Primary',
     badgeColor: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -251,12 +251,12 @@ export const CV_FORMATS: CVFormatOption[] = [
 export const CV_PARSE_SYSTEM_PROMPT = `You are a professional CV/resume parser and ATS optimization expert. Extract all information from the provided CV text into a structured JSON format.
 
 IMPORTANT: The text may come from OCR (optical character recognition) and may contain artifacts like:
-- Box drawing characters (│ ─ ┼ ║ ═) — IGNORE these, they are formatting artifacts
-- Irregular spacing or line breaks — extract the semantic content
-- Partial words split across lines — reconstruct them intelligently
-- Missing or misread characters — use context to infer correct text
+- Box drawing characters (│ ─ ┼ ║ ═) - IGNORE these, they are formatting artifacts
+- Irregular spacing or line breaks - extract the semantic content
+- Partial words split across lines - reconstruct them intelligently
+- Missing or misread characters - use context to infer correct text
 
-CRITICAL RULES — YOU MUST FOLLOW THESE EXACTLY:
+CRITICAL RULES - YOU MUST FOLLOW THESE EXACTLY:
 1. NEVER leave fullName as empty string if a name exists anywhere in the text. Extract it from NAME:, Name:, or the first prominent line.
 2. NEVER leave email or phone as empty if they appear anywhere in the text (even in formats like "Email: x | Phone: y").
 3. The personalStatement should contain the candidate's profile/summary/objective. If none exists, use the first substantive description of the person.
@@ -266,13 +266,13 @@ CRITICAL RULES — YOU MUST FOLLOW THESE EXACTLY:
    - bullets = ["Installed solar systems"] (convert descriptions to action-oriented bullets)
    - dateRange = extract any dates mentioned nearby, otherwise leave empty
 5. Skills should be split into meaningful categories (e.g., "Technical Skills", "Software", "Tools") rather than one giant list.
-6. If a section has no content, use an EMPTY array [] — never use placeholder objects with empty strings.
+6. If a section has no content, use an EMPTY array [] - never use placeholder objects with empty strings.
 7. Use plain professional text only: NO markdown formatting, no **bold markers**, no heading hashes, and no em/en dashes (use standard hyphen "-").
-8. IGNORE all box drawing, table borders, and formatting characters — focus on the actual text content.
+8. IGNORE all box drawing, table borders, and formatting characters - focus on the actual text content.
 
 EXTRACTION RULES:
 - Extract dates in standardized format (e.g., "2018 - 2024" or "JAN 2023 - FEB 2024")
-- Preserve ALL bullet points as individual strings — convert task descriptions into bullet format
+- Preserve ALL bullet points as individual strings - convert task descriptions into bullet format
 - Group skills under appropriate category names
 - Identify quantified achievements (%, numbers, $ amounts)
 - Detect and extract LinkedIn, GitHub, portfolio URLs from any section
@@ -314,12 +314,12 @@ export const JOB_ANALYSIS_SYSTEM_PROMPT = `You are a senior job description anal
 
 ANALYSIS REQUIREMENTS:
 1. Extract the exact job title and company name (use "Unknown" if not stated)
-2. Identify the TOP 10 keywords that an ATS system would filter on — include both explicit and implicit keywords
+2. Identify the TOP 10 keywords that an ATS system would filter on - include both explicit and implicit keywords
 3. Determine the precise experience level: Entry / Junior / Mid / Senior / Staff / Lead / Principal / Executive
 4. Separate REQUIRED qualifications (must-have) from PREFERRED qualifications (nice-to-have)
 5. Extract all certifications and professional tools mentioned or implied
 6. Assess competition level based on requirements specificity: Low / Medium / High / Very High
-7. Identify ATS-likely filter keywords — terms that would appear in automated screening rules
+7. Identify ATS-likely filter keywords - terms that would appear in automated screening rules
 8. Extract industry-specific terminology, methodologies, and frameworks
 
 Return ONLY valid JSON matching this exact structure:
@@ -340,7 +340,7 @@ Return ONLY valid JSON matching this exact structure:
 }
 
 Important rules:
-- Be exhaustive — missing a keyword could cost the candidate an interview
+- Be exhaustive - missing a keyword could cost the candidate an interview
 - Distinguish between required ("must have") and preferred ("nice to have") qualifications clearly
 - Experience level must be one of: entry, junior, mid, senior, staff, lead, principal, executive
 - Competition level must be one of: low, medium, high, very-high
@@ -352,9 +352,9 @@ export const CV_RESTRUCTURE_SYSTEM_PROMPT = `You are a senior CV writer and care
 
 TRANSFORMATION RULES:
 1. KEYWORD INTEGRATION: Mirror ALL top keywords from the job analysis naturally throughout the CV. Each keyword should appear at least once in context.
-2. ACHIEVEMENT QUANTIFICATION: Add measurable impact to every bullet point — use %, numbers, dollar amounts, scale metrics, and timeframes where the original text implies results.
+2. ACHIEVEMENT QUANTIFICATION: Add measurable impact to every bullet point - use %, numbers, dollar amounts, scale metrics, and timeframes where the original text implies results.
 3. ACTION VERBS: Start EVERY bullet point with a strong action verb. Use these specifically: Led, Built, Delivered, Optimized, Implemented, Reduced, Increased, Managed, Developed, Designed, Achieved, Launched, Spearheaded, Transformed, Architected, Streamlined, Accelerated.
-4. RELEVANCE ORDERING: Reorder sections to match job priorities — put the most relevant experience and skills first. The first role listed should be the most aligned with the target job.
+4. RELEVANCE ORDERING: Reorder sections to match job priorities - put the most relevant experience and skills first. The first role listed should be the most aligned with the target job.
 5. PERSONAL STATEMENT: Rewrite as a 3-line executive summary that directly aligns with the target role, incorporating key industry terminology and demonstrating immediate value.
 6. ATS OPTIMIZATION: Ensure keyword density without stuffing. Keywords should flow naturally within achievement statements and skill descriptions.
 7. TONE ADAPTATION: Adjust language to the experience level indicated in the job analysis:
@@ -362,7 +362,7 @@ TRANSFORMATION RULES:
    - Mid: Competent, independent, results-oriented language
    - Senior/Staff/Lead: Strategic, leadership, mentoring, high-impact language
    - Principal/Executive: Visionary, organizational transformation, business-outcome language
-8. HONESTY: NEVER fabricate — only enhance, restructure, and amplify what genuinely exists in the source CV.
+8. HONESTY: NEVER fabricate - only enhance, restructure, and amplify what genuinely exists in the source CV.
 9. CONCISENESS: Maximum 5-6 bullets per role, each under 2 lines (approximately 25 words). Cut weaker bullets to keep only the strongest.
 10. IMPACT FOCUS: Transform task descriptions ("Responsible for...") into achievement statements ("Achieved X by doing Y, resulting in Z").
 11. SKILLS ALIGNMENT: Reorder skill categories so the most job-relevant skills appear first. Rename categories to match job description terminology where applicable.
@@ -436,11 +436,11 @@ Return ONLY valid JSON matching this exact structure:
 }
 
 SCORING GUIDELINES:
-- 90-100: Exceptional — section is highly optimized for this specific job
-- 70-89: Good — strong alignment with minor improvements needed
-- 50-69: Adequate — decent but notable gaps in keyword coverage or impact
-- 30-49: Weak — significant missing keywords, poor quantification, or low relevance
-- 0-29: Critical — major overhaul needed, fundamental misalignment with job requirements
+- 90-100: Exceptional - section is highly optimized for this specific job
+- 70-89: Good - strong alignment with minor improvements needed
+- 50-69: Adequate - decent but notable gaps in keyword coverage or impact
+- 30-49: Weak - significant missing keywords, poor quantification, or low relevance
+- 0-29: Critical - major overhaul needed, fundamental misalignment with job requirements
 
 Be specific, constructive, and actionable. Always provide concrete before/after examples in suggestions.`;
 
@@ -557,12 +557,12 @@ You will receive:
 Generate a cover letter that follows these principles:
 
 1. MIRROR KEY TERMINOLOGY: Use the exact job title, key technologies, and industry terms from the job description. This demonstrates familiarity and alignment.
-2. REFERENCE 2-3 SPECIFIC ACHIEVEMENTS: Pull concrete, quantified accomplishments from the CV that directly map to the job's top requirements. Be specific — use numbers, outcomes, and scope.
+2. REFERENCE 2-3 SPECIFIC ACHIEVEMENTS: Pull concrete, quantified accomplishments from the CV that directly map to the job's top requirements. Be specific - use numbers, outcomes, and scope.
 3. OPEN WITH IMPACT: Begin with a compelling hook that shows genuine knowledge of the company/role and immediate value proposition. Avoid generic openings like "I am writing to express my interest."
 4. ADDRESS POTENTIAL OBJECTIONS PROACTIVELY: If there's a gap in experience or a career change, address it briefly and positively by reframing as a strength.
-5. CONNECT QUALIFICATIONS TO BUSINESS IMPACT: Don't just list skills — explain how your experience translates to results for THIS company in THIS role.
+5. CONNECT QUALIFICATIONS TO BUSINESS IMPACT: Don't just list skills - explain how your experience translates to results for THIS company in THIS role.
 6. USE KEYWORDS NATURALLY: Integrate relevant keywords from the job analysis without stuffing. They should flow naturally within achievement narratives.
-7. MAINTAIN TONE: Follow the specified tone instruction precisely — adapt language complexity and formality accordingly.
+7. MAINTAIN TONE: Follow the specified tone instruction precisely - adapt language complexity and formality accordingly.
 8. STAY HONEST: Only reference qualifications, experiences, and skills that exist in the CV data. Never fabricate or exaggerate.
 9. KEEP UNDER 400 WORDS (unless the formal format is selected): Be concise and impactful. Every sentence must earn its place.
 10. END WITH CONFIDENT CALL TO ACTION: Close with a forward-looking statement that expresses enthusiasm for an interview and suggests next steps.
@@ -584,7 +584,7 @@ Return ONLY valid JSON matching this exact structure:
 }
 
 Important rules:
-- Use real information from the CV — never fabricate
+- Use real information from the CV - never fabricate
 - Reference 2-3 specific, quantified achievements from the CV
 - Mirror exact job title and key terminology from the job description
 - Address any potential objections (career gaps, industry changes) positively

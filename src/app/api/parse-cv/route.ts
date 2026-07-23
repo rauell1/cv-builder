@@ -98,7 +98,7 @@ function fixCommonJSONIssues(json: string): string {
 
 /**
  * Fix unescaped newlines/CR/TAB inside JSON string values using
- * character-level scanning (safe — does NOT use destructive regex).
+ * character-level scanning (safe - does NOT use destructive regex).
  *
  * This avoids the original implementation's bug where a lazy [\s\S]*? regex
  * could match across multiple string fields and corrupt the JSON.
@@ -694,7 +694,7 @@ export async function POST(request: NextRequest) {
     // --- Cache the result ---
     parsingCache.set(cacheKey, { parsedCv, usedModel });
 
-    // Save/update session in Prisma (non-blocking — DB failure should not block response)
+    // Save/update session in Prisma (non-blocking - DB failure should not block response)
     let sessionIdResponse: string | undefined;
     try {
       let session;
@@ -756,7 +756,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error:
-            'Request timed out. The server may be busy — please try again in a few seconds.',
+            'Request timed out. The server may be busy - please try again in a few seconds.',
         },
         { status: 504 }
       );

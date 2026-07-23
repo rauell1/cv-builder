@@ -1,5 +1,5 @@
 // =============================================================================
-// Request Queue — Lightweight in-memory concurrency limiter
+// Request Queue - Lightweight in-memory concurrency limiter
 // =============================================================================
 
 /**
@@ -74,7 +74,7 @@ interface InternalQueueEntry {
  * A generic, in-memory request queue that limits concurrency to prevent
  * resource exhaustion under high load.
  *
- * @typeParam T — The return type of queued functions (inferred per-call).
+ * @typeParam T - The return type of queued functions (inferred per-call).
  *
  * @example
  * ```ts
@@ -91,7 +91,7 @@ interface InternalQueueEntry {
  * - Configurable max concurrency and per-request timeout.
  * - Three priority levels (`high` > `normal` > `low`).
  * - Real-time metrics via `getMetrics()`.
- * - Fully Promise-driven — no polling required.
+ * - Fully Promise-driven - no polling required.
  */
 export class RequestQueue {
   // ---------------------------------------------------------------------------
@@ -164,7 +164,7 @@ export class RequestQueue {
         started: false,
       };
 
-      // Arm the timeout timer — covers the entire lifecycle (wait + execute).
+      // Arm the timeout timer - covers the entire lifecycle (wait + execute).
       entry.timer = setTimeout(
         () => this.handleTimeout(entry),
         effectiveTimeout,
@@ -219,7 +219,7 @@ export class RequestQueue {
         continue;
       }
 
-      // NOTE: the timer is intentionally NOT cleared here — the timeout covers
+      // NOTE: the timer is intentionally NOT cleared here - the timeout covers
       // the entire lifecycle (wait + execute) as documented on enqueue().
       // Clearing it on start left running tasks unbounded, so a slow AI chain
       // ran until Vercel killed the function at maxDuration instead of the
@@ -232,7 +232,7 @@ export class RequestQueue {
       this._totalWaitMs += waitMs;
       this._waitSamples++;
 
-      // Fire-and-forget — the entry's resolve/reject settles the caller's
+      // Fire-and-forget - the entry's resolve/reject settles the caller's
       // Promise; `this.drain()` is called in the finally block to fill freed
       // slots.
       this.execute(entry).catch(() => {

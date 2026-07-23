@@ -266,7 +266,7 @@ function InsightCard({
         </div>
       )}
 
-      {/* Apply Improvement — more prominent with gradient */}
+      {/* Apply Improvement - more prominent with gradient */}
       {insight.improved && insight.improvedContent && (
         <Button
           size="sm"

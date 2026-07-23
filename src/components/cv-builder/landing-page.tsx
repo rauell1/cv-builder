@@ -605,7 +605,7 @@ export function LandingPage() {
               Multi-Model AI Power
             </h2>
             <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-              {getModelCount()}. GLM models are built-in and free — others work with your own API key.
+              {getModelCount()}. GLM models are built-in and free - others work with your own API key.
             </p>
           </m.div>
 

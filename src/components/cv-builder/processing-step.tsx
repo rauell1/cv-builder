@@ -160,7 +160,7 @@ export function ProcessingStep() {
 
       try {
         const result = await restructureCv(parsedCv, analyzedJob, jobDescText, modelId);
-        if (cancelledRef.current) return; // user cancelled — discard the late result
+        if (cancelledRef.current) return; // user cancelled - discard the late result
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
@@ -179,7 +179,7 @@ export function ProcessingStep() {
           setStep('output');
         }, 1200);
       } catch (err) {
-        if (cancelledRef.current) return; // user cancelled — swallow the error
+        if (cancelledRef.current) return; // user cancelled - swallow the error
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
@@ -399,7 +399,7 @@ export function ProcessingStep() {
                 ))}
               </div>
 
-              {/* API key warning — visually distinct with left accent border */}
+              {/* API key warning - visually distinct with left accent border */}
               {activeModelConfig.requiresApiKey && (
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
@@ -458,7 +458,7 @@ export function ProcessingStep() {
               <Card className="border-border rounded-[8px] shadow-stripe">
                 <CardContent className="py-10">
                   <div className="flex flex-col items-center text-center">
-                    {/* Animated AI icon — rotating gradient border */}
+                    {/* Animated AI icon - rotating gradient border */}
                     <div className="relative mb-6">
                       <motion.div
                         className="p-[3px] rounded-[8px]"
@@ -493,7 +493,7 @@ export function ProcessingStep() {
                       {restructureProgress}
                     </motion.p>
 
-                    {/* Progress bar — with shimmer overlay */}
+                    {/* Progress bar - with shimmer overlay */}
                     <div className="w-full max-w-xs">
                       <div className="h-2 rounded-[4px] bg-border overflow-hidden relative">
                         <motion.div
@@ -511,7 +511,7 @@ export function ProcessingStep() {
                       </div>
                     </div>
 
-                    {/* Slow-run reassurance — shown after 20s so users don't abandon */}
+                    {/* Slow-run reassurance - shown after 20s so users don't abandon */}
                     {elapsedSec > 20 && (
                       <motion.p
                         initial={{ opacity: 0, y: 4 }}
@@ -522,7 +522,7 @@ export function ProcessingStep() {
                       </motion.p>
                     )}
 
-                    {/* Cancel — keeps parsed CV and job analysis intact */}
+                    {/* Cancel - keeps parsed CV and job analysis intact */}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -726,7 +726,7 @@ export function ProcessingStep() {
                 </CardContent>
               </Card>
 
-              {/* Fallback suggestion — improved visual hierarchy */}
+              {/* Fallback suggestion - improved visual hierarchy */}
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}

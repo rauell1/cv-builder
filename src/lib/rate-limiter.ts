@@ -1,5 +1,5 @@
 // =============================================================================
-// Rate Limiter — Lightweight in-memory IP-based rate limiter
+// Rate Limiter - Lightweight in-memory IP-based rate limiter
 // =============================================================================
 
 interface RateLimitEntry {

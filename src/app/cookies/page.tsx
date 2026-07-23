@@ -53,7 +53,7 @@ export default function CookiePolicyPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Your cookie preference choice, stored in local storage so the banner doesn&apos;t reappear
-                  every visit. Nothing else — there is no login, so no session/auth cookie exists.
+                  every visit. Nothing else - there is no login, so no session/auth cookie exists.
                 </p>
               </div>
 
@@ -74,7 +74,7 @@ export default function CookiePolicyPage() {
                   <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded font-mono">Always on</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  <strong>Vercel Analytics</strong> — aggregate page views and load-time metrics. It is
+                  <strong>Vercel Analytics</strong> - aggregate page views and load-time metrics. It is
                   cookie-less and does not identify you or track you across other sites, so it runs
                   regardless of your preference choice below.
                 </p>

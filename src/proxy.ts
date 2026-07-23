@@ -3,7 +3,7 @@ import { checkRateLimit, resolveClientIp } from '@/lib/rate-limit';
 import { AI_RATE_LIMIT_PATHS } from '@/lib/ai-rate-limit-paths';
 
 // ---------------------------------------------------------------------------
-// Route categories — must match the keys in RATE_LIMITS (src/lib/rate-limit.ts)
+// Route categories - must match the keys in RATE_LIMITS (src/lib/rate-limit.ts)
 // ---------------------------------------------------------------------------
 
 const FILE_UPLOAD_PATHS = ['/api/extract-file'];
@@ -29,7 +29,7 @@ function categoryForPath(pathname: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Security headers — applied to every response
+// Security headers - applied to every response
 // ---------------------------------------------------------------------------
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -46,7 +46,7 @@ function attachSecurityHeaders(response: NextResponse): void {
 }
 
 // ---------------------------------------------------------------------------
-// Proxy (formerly "middleware" — renamed per Next.js 16 convention)
+// Proxy (formerly "middleware" - renamed per Next.js 16 convention)
 // ---------------------------------------------------------------------------
 
 export function proxy(request: NextRequest): NextResponse {

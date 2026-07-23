@@ -45,7 +45,7 @@ export interface CacheStats {
 }
 
 // ---------------------------------------------------------------------------
-// Utility – content hashing
+// Utility - content hashing
 // ---------------------------------------------------------------------------
 
 /**
@@ -272,5 +272,5 @@ export const extractionCache = new ResponseCache<unknown>(
  */
 export const parsingCache = new ResponseCache<unknown>(
   /* maxSize    */ 1000,  // Scaled for 1000+ users
-  /* defaultTtl */ 30 * 60 * 1000, // 30 minutes (parsing is deterministic — longer cache)
+  /* defaultTtl */ 30 * 60 * 1000, // 30 minutes (parsing is deterministic - longer cache)
 );

@@ -4,8 +4,8 @@
  * Provides a single `callAI()` gateway for all LLM interactions.
  *
  * GLM models are supported via two methods (in priority order):
- *   1. z-ai-web-dev-sdk  — works automatically in the Z.ai development environment.
- *   2. Zhipu AI REST API — used when ZHIPU_API_KEY env var is set (for Vercel / external deployments).
+ *   1. z-ai-web-dev-sdk  - works automatically in the Z.ai development environment.
+ *   2. Zhipu AI REST API - used when ZHIPU_API_KEY env var is set (for Vercel / external deployments).
  *
  * Usage:
  *   import { callAI } from '@/lib/ai-provider';
@@ -189,7 +189,7 @@ export function getProviderCredentialDetails(): {
 
 export function getProvider(modelId: string): AIProvider {
   // Prefixes match the NVIDIA NIM catalog ids actually in use (see
-  // NVIDIA_TEXT_MODELS / OCR_MODEL below) — trimmed to only what's used so
+  // NVIDIA_TEXT_MODELS / OCR_MODEL below) - trimmed to only what's used so
   // this stays a reliable map, not a list of hypothetical future models.
   if (
     modelId.startsWith('nvidia/') || modelId.startsWith('meta/') || modelId.startsWith('mistralai/')
@@ -567,7 +567,7 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
   const body: Record<string, unknown> = {
     contents,
     // maxOutputTokens bounds generation time, mirroring the max_tokens cap
-    // applied to NVIDIA calls — keeps this last-resort path fast and cheap.
+    // applied to NVIDIA calls - keeps this last-resort path fast and cheap.
     generationConfig: { temperature, maxOutputTokens: 4096 },
   };
   if (systemInstruction) {
@@ -591,7 +591,7 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
         }
       );
 
-      // Do NOT clear the abort timer until the body is fully read — the same
+      // Do NOT clear the abort timer until the body is fully read - the same
       // fetch()-resolves-on-headers pitfall that hung NVIDIA calls applies here.
       if (!res.ok) {
         const errText = await res.text();
@@ -600,10 +600,10 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
 
         // Rotate to the next key on auth/quota errors. Unlike NVIDIA (401/403),
         // Google's Generative Language API returns HTTP 400 with an
-        // API_KEY_INVALID reason for a bad key — confirmed directly against
+        // API_KEY_INVALID reason for a bad key - confirmed directly against
         // the live API (a real 401/403/429 is also treated as key-level).
         // A *different* 400 (e.g. malformed request) is a real bug, not a key
-        // problem, so it's deliberately NOT treated as rotatable — retrying
+        // problem, so it's deliberately NOT treated as rotatable - retrying
         // that with another key would just waste time and mask the bug.
         const isKeyError =
           res.status === 401 || res.status === 403 || res.status === 429 ||
@@ -633,7 +633,7 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
         message: err instanceof Error ? err.message : String(err),
       });
 
-      if (isTimeout) throw lastError; // fail fast — see NVIDIA's identical rule
+      if (isTimeout) throw lastError; // fail fast - see NVIDIA's identical rule
       if (i < apiKeys.length - 1) {
         console.warn(`[AI] Google key ${i + 1}/${apiKeys.length} network error. Trying next key...`);
         continue;
@@ -647,7 +647,7 @@ async function callGemini(messages: AIMessage[], modelId: string, temperature = 
 
 const NVIDIA_CHAT_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
-// All model ids used in this app are real NVIDIA NIM catalog ids sent as-is —
+// All model ids used in this app are real NVIDIA NIM catalog ids sent as-is -
 // no alias/translation layer. (A previous version routed through fictional
 // "marketing" ids like 'deepseek/deepseek-v4-pro' translated to a real id at
 // call time; that indirection let the UI/logs claim one model while a
@@ -683,14 +683,14 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        // max_tokens bounds generation time — without it, long restructure
+        // max_tokens bounds generation time - without it, long restructure
         // outputs can generate past every timeout on the free NIM tier.
         body: JSON.stringify({ model: modelId, messages, temperature, max_tokens: 4096 }),
         signal: controller.signal,
       });
 
       // IMPORTANT: do NOT clear the abort timer here. fetch() resolves when
-      // response HEADERS arrive, but NIM streams the body as it generates —
+      // response HEADERS arrive, but NIM streams the body as it generates -
       // res.json() below can take far longer than the headers. Clearing the
       // timer here made the body read unbounded, hanging routes for minutes.
 
@@ -743,11 +743,11 @@ async function callNvidia(messages: AIMessage[], modelId: string, temperature = 
         message: err instanceof Error ? err.message : String(err),
       });
 
-      // A timeout is a model/endpoint problem, not a key problem — rotating
+      // A timeout is a model/endpoint problem, not a key problem - rotating
       // keys would silently burn N x timeoutMs inside a single model attempt
       // and starve the fallback chain. Fail fast so the chain moves on.
       if (isTimeout) {
-        console.warn(`[AI] NVIDIA ${modelId} timed out after ${timeoutMs}ms on key ${i + 1}/${apiKeys.length} — not rotating keys`);
+        console.warn(`[AI] NVIDIA ${modelId} timed out after ${timeoutMs}ms on key ${i + 1}/${apiKeys.length} - not rotating keys`);
         throw lastError;
       }
 
@@ -809,7 +809,7 @@ export async function callAIVision(
   return callOpenAIVision(messages, 'gpt-4o-mini', timeoutMs);
 }
 
-// Single source of truth for NVIDIA text models — one flat, priority-ordered
+// Single source of truth for NVIDIA text models - one flat, priority-ordered
 // list instead of three near-duplicate constants that had to be hand-kept in
 // sync. Order = try Mistral first (best quality), then Nemotron, then the
 // small/fast Llama as last resort. All verified reachable from inside Vercel
@@ -826,12 +826,12 @@ export const DEFAULT_TEXT_MODEL: string = NVIDIA_TEXT_MODELS[0];
 export const OCR_MODEL = 'meta/llama-3.2-90b-vision-instruct';
 
 // Cross-provider redundancy safety net. Gemini 2.5 Flash has a genuine free
-// tier via Google AI Studio (aistudio.google.com/apikey — NOT a billed Vertex
+// tier via Google AI Studio (aistudio.google.com/apikey - NOT a billed Vertex
 // AI project). Deliberately kept OUT of NVIDIA_TEXT_MODELS and appended only
 // inside callAIWithFallback() (not buildFallbackChain()), so it never becomes
 // a *starting* model via getNextRotatingModel(). That keeps it purely as a
-// last-resort fallback for a full NVIDIA outage — like the one this app
-// already hit once — instead of spending its low free-tier quota (RPM/RPD
+// last-resort fallback for a full NVIDIA outage - like the one this app
+// already hit once - instead of spending its low free-tier quota (RPM/RPD
 // limits) on ordinary traffic.
 const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash';
 
@@ -884,7 +884,7 @@ export async function callAIWithFallback(
 ): Promise<AIResponse> {
   const candidates = buildFallbackChain(modelId);
 
-  // Last-resort cross-provider redundancy — see GEMINI_FALLBACK_MODEL comment.
+  // Last-resort cross-provider redundancy - see GEMINI_FALLBACK_MODEL comment.
   // Appended here (not in buildFallbackChain) so getNextRotatingModel() never
   // picks it as a starting model.
   if (!candidates.includes(GEMINI_FALLBACK_MODEL)) {
@@ -929,7 +929,7 @@ export async function callAIWithFallback(
     // (including this one) instead of letting each candidate greedily take
     // up to its full per-model timeout. Without this, 1-2 slow/timed-out
     // models could exhaust the entire budget, silently starving out the
-    // Gemini last-resort fallback appended at the end of the chain — which
+    // Gemini last-resort fallback appended at the end of the chain - which
     // defeats the whole point of having it. Every remaining candidate
     // (Gemini included) is now guaranteed a fair, non-zero shot.
     const remainingCandidateCount = candidates

@@ -182,7 +182,7 @@ export function JobDescStep() {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.3 }}
     >
-      {/* Header — font-medium to match Step 1 */}
+      {/* Header - font-medium to match Step 1 */}
       <div className="flex items-center justify-between mb-6">
         <Button variant="ghost" size="sm" onClick={() => setStep('cv-input')} className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-4 h-4 mr-1" />
@@ -478,7 +478,7 @@ export function JobDescStep() {
                     <Separator />
                   </motion.div>
 
-                  {/* Next step — with hover glow */}
+                  {/* Next step - with hover glow */}
                   <motion.div variants={staggerItem}>
                     <div className="flex justify-end">
                       <Button onClick={() => setStep('processing')} className="bg-primary hover:bg-[#4434d4] rounded-xl shadow-stripe-sm hover:shadow-[0_0_20px_rgba(83,58,253,0.3)] transition-shadow">

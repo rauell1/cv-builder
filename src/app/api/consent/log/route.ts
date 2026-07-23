@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid consent log payload" }, { status: 400 });
     }
 
-    // Pseudonymize the IP with a one-way hash — NOT base64 (which is trivially
+    // Pseudonymize the IP with a one-way hash - NOT base64 (which is trivially
     // reversible encoding, not anonymization; a prior version incorrectly used
     // base64 here while claiming it was "anonymized"). SHA-256 cannot be
     // decoded back to the original IP. Note this is "pseudonymization" in the

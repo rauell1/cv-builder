@@ -44,7 +44,7 @@ export default function TermsPage() {
             <p>
               You upload a CV and a job description; AI parses, restructures, and scores your CV against
               the job, and can generate a matching cover letter. Your CV content is sent to third-party AI
-              providers (NVIDIA and, as a backup, Google) to produce these results — see the{" "}
+              providers (NVIDIA and, as a backup, Google) to produce these results - see the{" "}
               <Link href="/privacy" className="text-primary underline underline-offset-2">Privacy Policy</Link>{" "}
               for details.
             </p>
@@ -53,8 +53,8 @@ export default function TermsPage() {
           <section className="space-y-2">
             <h2 className="text-lg font-semibold text-foreground">3. AI Output Is Not Guaranteed Accurate</h2>
             <p>
-              AI-generated content — including restructured CV text, ATS scores, insights, and cover
-              letters — may contain errors, omissions, or inaccurate claims about your experience. You are
+              AI-generated content - including restructured CV text, ATS scores, insights, and cover
+              letters - may contain errors, omissions, or inaccurate claims about your experience. You are
               solely responsible for reviewing and correcting all AI output before using it to apply for a
               job, sending it to an employer, or relying on it in any other way. We make no warranty that
               any AI output is accurate, complete, or will improve your chances of employment.

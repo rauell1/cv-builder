@@ -8,7 +8,7 @@ export const maxDuration = 30;
 
 /**
  * Daily cron (see vercel.json) that deletes CV session rows past their
- * retention window. Enforces the promise made on the landing page — CV
+ * retention window. Enforces the promise made on the landing page - CV
  * data is not kept indefinitely.
  *
  * Vercel signs cron-triggered requests with `Authorization: Bearer $CRON_SECRET`.

@@ -103,7 +103,7 @@ export async function withRetry<T>(
         );
         throw new Error(
           `AI service is temporarily unavailable after ${config.maxRetries + 1} attempts. ` +
-          `This is usually a transient network issue. Please try again in 30–60 seconds.`
+          `This is usually a transient network issue. Please try again in 30-60 seconds.`
         );
       }
 

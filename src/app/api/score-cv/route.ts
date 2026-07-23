@@ -16,9 +16,9 @@ SCORING CRITERIA (weighted):
 6. EDUCATION (5%): Does the candidate meet minimum educational requirements?
 
 EVALUATION RULES:
-- Be objective and data-driven — score based on evidence, not assumptions
+- Be objective and data-driven - score based on evidence, not assumptions
 - overallScore: Weighted composite of all criteria (0-100)
-- atsScore: Simulated ATS pass probability (0-100) — how likely this CV passes automated screening
+- atsScore: Simulated ATS pass probability (0-100) - how likely this CV passes automated screening
 - keywordMatch: Split job keywords into matched (found in CV) and missing (not found)
 - sectionScores: Score each major CV section individually with specific feedback
 - weakBullets: Identify specific bullet points that are vague, passive, or unquantified (quote the actual bullet text)

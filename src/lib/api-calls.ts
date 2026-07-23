@@ -66,7 +66,7 @@ export async function parseCv(cvText: string, sessionId?: string): Promise<Parse
   } catch (err) {
     clearTimeout(timeoutId);
     if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('CV parsing timed out. The server may be busy — please try again.');
+      throw new Error('CV parsing timed out. The server may be busy - please try again.');
     }
     throw err;
   }
@@ -108,7 +108,7 @@ export async function analyzeJob(jobDescText: string): Promise<JobAnalysis> {
   } catch (err) {
     clearTimeout(timeoutId);
     if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('Job analysis timed out. The server may be busy — please try again.');
+      throw new Error('Job analysis timed out. The server may be busy - please try again.');
     }
     throw err;
   }
@@ -144,7 +144,7 @@ export async function restructureCv(
   } catch (err) {
     clearTimeout(timeoutId);
     if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('CV restructuring timed out. The server may be busy — please try again.');
+      throw new Error('CV restructuring timed out. The server may be busy - please try again.');
     }
     throw err;
   }
@@ -291,7 +291,7 @@ export async function extractFile(file: File, options: ExtractFileOptions = {}):
   const timeoutMs = options.timeoutMs ?? 45_000;
 
   const MAX_RETRIES = 2;
-  const RETRY_DELAYS = [1000, 3000]; // 1s, 3s — fast retries
+  const RETRY_DELAYS = [1000, 3000]; // 1s, 3s - fast retries
 
   let lastError: Error | null = null;
 
@@ -347,7 +347,7 @@ export async function extractFile(file: File, options: ExtractFileOptions = {}):
         throw new Error('Upload timed out. The file may be too large or the server is busy. Please try pasting your CV text directly.');
       }
 
-      // Network-level error (server unreachable, connection refused) — retry with backoff
+      // Network-level error (server unreachable, connection refused) - retry with backoff
       if (isNetworkError(err) && attempt < MAX_RETRIES) {
         const delay = RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)];
         console.warn(`[extractFile] Network error on attempt ${attempt + 1}. Retry in ${delay / 1000}s...`);
@@ -366,7 +366,7 @@ export async function extractFile(file: File, options: ExtractFileOptions = {}):
         continue;
       }
 
-      // Non-retryable error — throw immediately
+      // Non-retryable error - throw immediately
       throw err;
     }
   }

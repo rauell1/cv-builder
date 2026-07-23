@@ -2,7 +2,7 @@
  * Centralized configuration constants for the AI CV Builder application.
  *
  * All tunable values live here. If you need to change a limit, timeout,
- * or threshold, do it here — not scattered across the codebase.
+ * or threshold, do it here - not scattered across the codebase.
  */
 
 export const AI_CONFIG = {
@@ -16,7 +16,7 @@ export const AI_CONFIG = {
   MAX_TOKENS_RESTRUCTURE: 8192,
   /** Timeout in ms for AI API calls (covers GLM, OpenAI, Anthropic, Google) */
   AI_CALL_TIMEOUT_MS: 60_000,
-  /** Timeout in ms for VLM file extraction (PDF/image OCR) — can be slower */
+  /** Timeout in ms for VLM file extraction (PDF/image OCR) - can be slower */
   VLM_CALL_TIMEOUT_MS: 90_000,
 } as const;
 
@@ -30,7 +30,7 @@ export const INPUT_LIMITS = {
 } as const;
 
 /**
- * Rate limit tiers — each defines max requests per time window.
+ * Rate limit tiers - each defines max requests per time window.
  * Used by `src/lib/api-rate-limit.ts` → `checkRateLimit()`.
  */
 export const RATE_LIMIT = {
@@ -45,7 +45,7 @@ export const RATE_LIMIT = {
 } as const;
 
 /**
- * Data retention — how long to keep session data before auto-cleanup.
+ * Data retention - how long to keep session data before auto-cleanup.
  */
 export const DATA_RETENTION = {
   /** Auto-delete sessions older than this (in days) */

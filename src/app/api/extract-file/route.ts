@@ -1,5 +1,5 @@
 /**
- * extract-file/route.ts — Upload CV File → Extract Text → Parse to Structured CV Data
+ * extract-file/route.ts - Upload CV File → Extract Text → Parse to Structured CV Data
  *
  * Supports: PDF (native text + OCR fallback), DOCX (mammoth), PNG/JPG (VLM OCR)
  *
@@ -78,7 +78,7 @@ const MIN_PDF_NATIVE_FALLBACK_LEN = MIN_TEXT_LENGTH;
 // =============================================================================
 
 /**
- * Returns a readability score 0–1. Scores < 0.2 indicate garbled text.
+ * Returns a readability score 0-1. Scores < 0.2 indicate garbled text.
  * Multi-language aware (CJK, Cyrillic, Arabic, Latin).
  */
 function textReadabilityScore(text: string): number {
@@ -145,7 +145,7 @@ function hasCvSignal(text: string): boolean {
 
 /**
  * Validate extracted text before sending to LLM.
- * Returns { valid, reason } — valid=false means the text should NOT go to LLM.
+ * Returns { valid, reason } - valid=false means the text should NOT go to LLM.
  */
 function validateExtractedText(text: string): { valid: boolean; reason?: string } {
   const trimmed = normalizeExtractedText(text);
@@ -265,7 +265,7 @@ function validateAndNormalize(obj: unknown): ParsedCV {
 }
 
 // =============================================================================
-// PDF Text Extraction — Full operator-based parser (pdf-lib internals)
+// PDF Text Extraction - Full operator-based parser (pdf-lib internals)
 // =============================================================================
 
 function decodePDFString(raw: string): string {
@@ -550,7 +550,7 @@ async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
 }
 
 // =============================================================================
-// PDF OCR Fallback — pdftoppm + VLM
+// PDF OCR Fallback - pdftoppm + VLM
 // =============================================================================
 
 async function ocrFallbackForPDF(buffer: ArrayBuffer, pageCount: number): Promise<string> {
@@ -897,7 +897,7 @@ function buildQualityReport(text: string): QualityReport {
   if (!hasEducation) missingSections.push('education');
   if (!hasSkills) missingSections.push('skills');
 
-  // Compute quality score (0–100)
+  // Compute quality score (0-100)
   let score = 0;
   if (hasEmail) score += 15;
   if (hasPhone) score += 10;
@@ -911,13 +911,13 @@ function buildQualityReport(text: string): QualityReport {
 
   // Build suggestions
   const suggestions: string[] = [];
-  if (!hasEmail) suggestions.push('Missing email address — add contact email for recruiter visibility.');
-  if (!hasPhone) suggestions.push('Missing phone number — include a contact number to improve reachability.');
-  if (!hasExperience) suggestions.push('Work experience section not detected — ensure it is clearly labelled.');
-  if (!hasEducation) suggestions.push('Education section not detected — add your academic background.');
-  if (!hasSkills) suggestions.push('Skills section not detected — list your technical and soft skills.');
+  if (!hasEmail) suggestions.push('Missing email address - add contact email for recruiter visibility.');
+  if (!hasPhone) suggestions.push('Missing phone number - include a contact number to improve reachability.');
+  if (!hasExperience) suggestions.push('Work experience section not detected - ensure it is clearly labelled.');
+  if (!hasEducation) suggestions.push('Education section not detected - add your academic background.');
+  if (!hasSkills) suggestions.push('Skills section not detected - list your technical and soft skills.');
   if (!hasProjects) suggestions.push('Consider adding a projects section to showcase your practical work.');
-  if (wordCount < 150) suggestions.push('CV text seems short — a detailed CV (150+ words) improves matching accuracy.');
+  if (wordCount < 150) suggestions.push('CV text seems short - a detailed CV (150+ words) improves matching accuracy.');
 
   return {
     hasEmail,

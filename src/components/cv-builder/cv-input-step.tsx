@@ -706,8 +706,8 @@ export function CvInputStep() {
                       {extractionResult.confidence >= 70
                         ? 'High confidence extraction'
                         : extractionResult.confidence >= 40
-                          ? 'Moderate confidence — review recommended'
-                          : 'Low confidence — consider pasting text directly'}
+                          ? 'Moderate confidence - review recommended'
+                          : 'Low confidence - consider pasting text directly'}
                     </p>
                   </div>
                 </div>
@@ -796,7 +796,7 @@ export function CvInputStep() {
                           : extractionResult.text.slice(0, 500) +
                             (extractionResult.text.length > 500 ? '...' : '')}
                       </pre>
-                      {/* Faded overlay when truncated — subtle gradient fade */}
+                      {/* Faded overlay when truncated - subtle gradient fade */}
                       {!showFullPreview && extractionResult.text.length > 500 && (
                         <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-muted via-muted/60 to-transparent pointer-events-none" />
                       )}
@@ -1002,7 +1002,7 @@ export function CvInputStep() {
                 })}
               </div>
 
-              {/* Phase description — visually distinct container */}
+              {/* Phase description - visually distinct container */}
               <AnimatePresence mode="wait">
                 <motion.div
                   key={extractionPhase}
@@ -1163,7 +1163,7 @@ export function CvInputStep() {
       </AnimatePresence>
 
       {/* ═══════════════════════════════════════════════════
-          Success State — Parsed Data (enhanced with quality)
+          Success State - Parsed Data (enhanced with quality)
           ═══════════════════════════════════════════════════ */}
       <AnimatePresence>
         {parsedCv && (

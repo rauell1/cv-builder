@@ -39,8 +39,8 @@ export default function PrivacyPolicyPage() {
             <p>
               AI CV Builder ("we", "us") lets you upload a CV and a job description so AI can restructure
               your experience, match keywords, and generate a tailored CV, insights, and cover letter. This
-              policy explains what data we collect, how it is processed — including by third-party AI
-              providers — how long it is kept, and the rights you have over it.
+              policy explains what data we collect, how it is processed - including by third-party AI
+              providers - how long it is kept, and the rights you have over it.
             </p>
             <p>
               No account or sign-up is required to use this service.
@@ -59,15 +59,15 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-lg font-semibold text-foreground">3. How Your CV Is Processed — Third-Party AI Providers</h2>
+            <h2 className="text-lg font-semibold text-foreground">3. How Your CV Is Processed - Third-Party AI Providers</h2>
             <p>
               This is the most important section of this policy: to parse, analyze, restructure, and score
               your CV, its content (including your name, contact details, and work history) is sent over an
               encrypted connection to one or more of the following third-party AI processors:
             </p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>NVIDIA</strong> (NVIDIA NIM inference API) — our primary AI provider for parsing, restructuring, scoring, and cover letter generation.</li>
-              <li><strong>Google</strong> (Gemini API, via Google AI Studio) — used only as a backup if NVIDIA is unavailable.</li>
+              <li><strong>NVIDIA</strong> (NVIDIA NIM inference API) - our primary AI provider for parsing, restructuring, scoring, and cover letter generation.</li>
+              <li><strong>Google</strong> (Gemini API, via Google AI Studio) - used only as a backup if NVIDIA is unavailable.</li>
             </ul>
             <p>
               These providers process your data solely to generate the response returned to you and, per
@@ -109,7 +109,7 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-lg font-semibold text-foreground">6. Cookie Consent Logging</h2>
             <p>
               When you make a cookie preference choice, a record of that choice (categories selected,
-              timestamp, browser type, and a one-way hashed version of your IP address — not the IP address
+              timestamp, browser type, and a one-way hashed version of your IP address - not the IP address
               itself) is temporarily kept in server memory for audit purposes. This log is not written to a
               persistent database and is cleared whenever the server restarts or redeploys.
             </p>
