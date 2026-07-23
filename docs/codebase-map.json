@@ -1,24 +1,21 @@
 {
   "version": {
-    "commit": "f2153e3880d86fdc97a8c6a1962f4f24afdee5c4",
-    "short": "f2153e3",
-    "generatedAt": "2026-07-23T16:30:34.863Z",
-    "baseCommit": "33b27c8261dc9488b68883e7693dd6172585b1ce",
+    "commit": "16cb368da40164fb20a08382a9a3f926c89fbd39",
+    "short": "16cb368",
+    "generatedAt": "2026-07-23T16:46:22.746Z",
+    "baseCommit": "f2153e3880d86fdc97a8c6a1962f4f24afdee5c4",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
       "M\tpackage-lock.json",
-      "M\tpackage.json",
-      "M\tsrc/app/api/extract-file/route.ts"
+      "M\tpackage.json"
     ],
-    "diffStat": " docs/codebase-map.json            | 282 +++++++++++++++++++------\n docs/codebase-map.md              |  80 +++++--\n package-lock.json                 | 430 +++++++++++++++++++++++---------------\n package.json                      |   5 +-\n src/app/api/extract-file/route.ts |   3 +-\n 5 files changed, 556 insertions(+), 244 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json |  72 ++------\n docs/codebase-map.md   |  44 +----\n package-lock.json      | 441 +++++++++++++++++++++++++++++++++++++++++++------\n package.json           |   3 +-\n 4 files changed, 410 insertions(+), 150 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": true,
-    "hashChangedFiles": [
-      "src/app/api/extract-file/route.ts"
-    ],
+    "incremental": false,
+    "hashChangedFiles": [],
     "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
@@ -1000,9 +997,7 @@
       "commitTouches": 9
     }
   ],
-  "affectedModules": [
-    "src/app/api/extract-file/route.ts"
-  ],
+  "affectedModules": [],
   "metrics": {
     "fileCount": 124,
     "edgeCount": 7
