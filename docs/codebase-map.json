@@ -1,18 +1,27 @@
 {
   "version": {
-    "commit": "3b454b780e67124562424e6c6bb46fb5a13628e4",
-    "short": "3b454b7",
-    "generatedAt": "2026-07-24T03:18:42.350Z",
+    "commit": "df1f4f166c4528374834f4be4ee5005ec00c3de7",
+    "short": "df1f4f1",
+    "generatedAt": "2026-07-24T03:21:37.037Z",
     "baseCommit": "3b454b780e67124562424e6c6bb46fb5a13628e4",
-    "changeSummary": [],
-    "diffStat": ""
+    "changeSummary": [
+      "M\tdocs/codebase-map.json",
+      "M\tdocs/codebase-map.md",
+      "M\tnext.config.ts",
+      "M\tpublic/llms.txt",
+      "M\tsrc/app/layout.tsx",
+      "D\tsrc/app/projects/[slug]/page.tsx",
+      "D\tsrc/app/projects/page.tsx",
+      "M\tsrc/app/robots.ts",
+      "M\tsrc/app/sitemap.ts",
+      "M\tsrc/components/cv-builder/landing-page.tsx"
+    ],
+    "diffStat": " docs/codebase-map.json                     |  45 +++---\n docs/codebase-map.md                       |  19 +--\n next.config.ts                             |  14 ++\n public/llms.txt                            |  52 +++---\n src/app/layout.tsx                         |  72 +++------\n src/app/projects/[slug]/page.tsx           | 247 -----------------------------\n src/app/projects/page.tsx                  | 106 -------------\n src/app/robots.ts                          |   9 --\n src/app/sitemap.ts                         |  17 +-\n src/components/cv-builder/landing-page.tsx |   8 -\n 10 files changed, 88 insertions(+), 501 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": true,
-    "hashChangedFiles": [
-      "src/app/robots.ts"
-    ],
+    "incremental": false,
+    "hashChangedFiles": [],
     "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
@@ -947,11 +956,15 @@
       "commitTouches": 14
     },
     {
+      "file": "src/app/layout.tsx",
+      "commitTouches": 13
+    },
+    {
       "file": "src/components/cv-builder/cv-input-step.tsx",
       "commitTouches": 13
     },
     {
-      "file": "src/app/layout.tsx",
+      "file": "src/components/cv-builder/landing-page.tsx",
       "commitTouches": 12
     },
     {
@@ -968,10 +981,6 @@
     },
     {
       "file": "src/components/cv-builder/processing-step.tsx",
-      "commitTouches": 11
-    },
-    {
-      "file": "src/components/cv-builder/landing-page.tsx",
       "commitTouches": 11
     },
     {
@@ -999,13 +1008,7 @@
       "commitTouches": 9
     }
   ],
-  "affectedModules": [
-    "next.config.ts",
-    "src/app/layout.tsx",
-    "src/app/robots.ts",
-    "src/app/sitemap.ts",
-    "src/components/cv-builder/landing-page.tsx"
-  ],
+  "affectedModules": [],
   "metrics": {
     "fileCount": 125,
     "edgeCount": 7
