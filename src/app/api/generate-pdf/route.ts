@@ -45,9 +45,8 @@ async function loadFonts(doc: PDFDocument): Promise<Fonts> {
 
 // All body text and bullets are left-aligned, not justified. Justified text
 // at CV-column widths reads worse (uneven "rivers" of whitespace between
-// words - see e.g. https://www.dayjob.com/should-text-be-justified-in-a-cv-425/
-// and https://www.jobscan.co/blog/how-to-set-resume-margins/, both of which
-// recommend left alignment as the professional/ATS-safe default), and the
+// words - see https://www.dayjob.com/should-text-be-justified-in-a-cv-425/,
+// which recommends left alignment as the professional/ATS-safe default), and the
 // previous justified renderer positioned each word with a separate drawText
 // call and no literal space glyph between them - text extractors (ATS
 // parsers, copy-paste, this app's own OCR pipeline) can read that back with

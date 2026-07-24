@@ -179,7 +179,6 @@ Allow: /
 Allow: /about
 Allow: /services
 Allow: /contact
-Allow: /blog
 
 # Block admin and development paths
 Disallow: /admin/
