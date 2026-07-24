@@ -15,6 +15,7 @@ import { resolveClientIp } from '@/lib/rate-limit';
 import { getVisitorIdFromRequest } from '@/lib/visitor';
 import { getRequestGeo } from '@/lib/geo';
 import { logGenerationEvent } from '@/lib/generation-log';
+import { cleanPlainText, parseOptionalSessionId } from '@/lib/request-validation';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -67,7 +68,11 @@ export async function POST(request: NextRequest) {
   const geo = getRequestGeo(request);
   try {
     const body = await request.json();
-    const { parsedCv, jobAnalysis, jobDescText, sessionId, modelId } = body;
+    const { parsedCv, jobAnalysis, modelId } = body;
+    const sessionId = parseOptionalSessionId(body.sessionId);
+    const jobDescText = typeof body.jobDescText === 'string'
+      ? cleanPlainText(body.jobDescText)
+      : body.jobDescText;
 
     if (!parsedCv || !parsedCv.personalInfo) {
       return NextResponse.json(
@@ -151,21 +156,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update session if sessionId provided (use upsert to avoid RecordNotFound)
+    // Anonymous sessions may only be updated by the visitor that created them.
     if (sessionId) {
       try {
-        await db.cVSession.upsert({
-          where: { id: sessionId },
-          update: {
+        await db.cVSession.updateMany({
+          where: { id: sessionId, visitorId },
+          data: {
             tailoredCv: JSON.stringify(restructuredCv),
             modelUsed: usedModel,
             step: 4,
             updatedAt: new Date(),
-          },
-          create: {
-            tailoredCv: JSON.stringify(restructuredCv),
-            modelUsed: usedModel,
-            step: 4,
           },
         });
       } catch (dbError) {

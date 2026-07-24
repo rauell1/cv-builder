@@ -7,7 +7,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     {
       url: baseUrl,
       lastModified: new Date(),
-      changeFrequency: 'daily' as const,
+      changeFrequency: 'weekly' as const,
       priority: 1.0,
     },
     {
@@ -22,12 +22,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly' as const,
       priority: 0.9,
     },
-    {
-      url: `${baseUrl}/blog`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly' as const,
-      priority: 0.7,
-    },
+    { url: `${baseUrl}/privacy`, lastModified: new Date(), changeFrequency: 'yearly' as const, priority: 0.2 },
+    { url: `${baseUrl}/cookies`, lastModified: new Date(), changeFrequency: 'yearly' as const, priority: 0.2 },
+    { url: `${baseUrl}/terms`, lastModified: new Date(), changeFrequency: 'yearly' as const, priority: 0.2 },
   ];
 
   // Tailored portfolio project URLs
@@ -39,20 +36,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  // Tailored sustainability and tech blog URLs (Kenya / Africa focus)
-  const blogPosts = [
-    'kenya-ev-charging-infrastructure-challenges',
-    'scaling-electric-mobility-in-nairobi',
-    'solar-mini-grids-powering-rural-east-africa',
-    'building-sustainable-tech-stacks-green-computing',
-    'impact-of-roam-rapid-on-public-transport',
-  ];
-  const blogRoutes = blogPosts.map((slug) => ({
-    url: `${baseUrl}/blog/${slug}`,
-    lastModified: new Date(),
-    changeFrequency: 'monthly' as const,
-    priority: 0.6,
-  }));
-
-  return [...baseRoutes, ...projectRoutes, ...blogRoutes];
+  return [...baseRoutes, ...projectRoutes];
 }

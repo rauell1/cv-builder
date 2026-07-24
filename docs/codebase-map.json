@@ -1,16 +1,34 @@
 {
   "version": {
-    "commit": "16cb368da40164fb20a08382a9a3f926c89fbd39",
-    "short": "16cb368",
-    "generatedAt": "2026-07-23T16:46:22.746Z",
-    "baseCommit": "f2153e3880d86fdc97a8c6a1962f4f24afdee5c4",
+    "commit": "53bcebea5f44258e294b5c6755c171fbc0453f35",
+    "short": "53bcebe",
+    "generatedAt": "2026-07-24T02:29:34.961Z",
+    "baseCommit": "90566a8cc42dbcbd529e0342163c3ba969e269cd",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
+      "M\tnext.config.ts",
       "M\tpackage-lock.json",
-      "M\tpackage.json"
+      "M\tpackage.json",
+      "A\tprisma/migrations/20260723120000_bind_cv_sessions_to_visitors/migration.sql",
+      "M\tprisma/schema.prisma",
+      "M\tsrc/app/api/ai-chat/route.ts",
+      "M\tsrc/app/api/analyze-job/route.ts",
+      "M\tsrc/app/api/parse-cv/route.ts",
+      "M\tsrc/app/api/restructure-cv/route.ts",
+      "A\tsrc/app/builder/layout.tsx",
+      "M\tsrc/app/builder/page.tsx",
+      "M\tsrc/app/layout.tsx",
+      "M\tsrc/app/projects/[slug]/page.tsx",
+      "M\tsrc/app/robots.ts",
+      "M\tsrc/app/sitemap.ts",
+      "A\tsrc/components/analytics/consent-analytics.tsx",
+      "M\tsrc/components/cv-builder/processing-step.tsx",
+      "M\tsrc/lib/cookie-consent-context.tsx",
+      "A\tsrc/lib/request-validation.ts",
+      "M\tsrc/lib/script-auto-blocker.ts"
     ],
-    "diffStat": " docs/codebase-map.json |  72 ++------\n docs/codebase-map.md   |  44 +----\n package-lock.json      | 441 +++++++++++++++++++++++++++++++++++++++++++------\n package.json           |   3 +-\n 4 files changed, 410 insertions(+), 150 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json                             | 66 ++++++++++++++----\n docs/codebase-map.md                               | 21 +++---\n next.config.ts                                     |  2 +-\n package-lock.json                                  | 20 ++++++\n package.json                                       |  1 +\n .../migration.sql                                  |  3 +\n prisma/schema.prisma                               |  3 +\n src/app/api/ai-chat/route.ts                       |  5 +-\n src/app/api/analyze-job/route.ts                   | 28 ++++----\n src/app/api/parse-cv/route.ts                      | 64 ++++++++++-------\n src/app/api/restructure-cv/route.ts                | 20 +++---\n src/app/builder/layout.tsx                         | 18 +++++\n src/app/builder/page.tsx                           |  2 +-\n src/app/layout.tsx                                 | 80 +++++++++-------------\n src/app/projects/[slug]/page.tsx                   | 19 ++++-\n src/app/robots.ts                                  |  4 +-\n src/app/sitemap.ts                                 | 28 ++------\n src/components/analytics/consent-analytics.tsx     | 22 ++++++\n src/components/cv-builder/processing-step.tsx      |  2 +-\n src/lib/cookie-consent-context.tsx                 | 27 ++++----\n src/lib/request-validation.ts                      | 14 ++++\n src/lib/script-auto-blocker.ts                     |  4 +-\n 22 files changed, 287 insertions(+), 166 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
@@ -74,6 +92,7 @@
     "      score-cv/",
     "        route.ts",
     "    builder/",
+    "      layout.tsx",
     "      page.tsx",
     "    cookies/",
     "      page.tsx",
@@ -92,6 +111,8 @@
     "    terms/",
     "      page.tsx",
     "  components/",
+    "    analytics/",
+    "      consent-analytics.tsx",
     "    cv-builder/",
     "      cv-input-step.tsx",
     "      job-desc-step.tsx",
@@ -176,6 +197,7 @@
     "    pdf-utils.ts",
     "    rate-limit.ts",
     "    request-queue.ts",
+    "    request-validation.ts",
     "    resend.ts",
     "    response-cache.ts",
     "    script-auto-blocker.ts",
@@ -313,6 +335,11 @@
       "risk": "medium"
     },
     {
+      "id": "src/app/builder/layout.tsx",
+      "path": "src/app/builder/layout.tsx",
+      "risk": "low"
+    },
+    {
       "id": "src/app/builder/page.tsx",
       "path": "src/app/builder/page.tsx",
       "risk": "low"
@@ -370,6 +397,11 @@
     {
       "id": "src/app/terms/page.tsx",
       "path": "src/app/terms/page.tsx",
+      "risk": "low"
+    },
+    {
+      "id": "src/components/analytics/consent-analytics.tsx",
+      "path": "src/components/analytics/consent-analytics.tsx",
       "risk": "low"
     },
     {
@@ -763,6 +795,11 @@
       "risk": "low"
     },
     {
+      "id": "src/lib/request-validation.ts",
+      "path": "src/lib/request-validation.ts",
+      "risk": "low"
+    },
+    {
       "id": "src/lib/resend.ts",
       "path": "src/lib/resend.ts",
       "risk": "low"
@@ -922,7 +959,7 @@
     },
     {
       "file": "src/app/api/parse-cv/route.ts",
-      "commitTouches": 27
+      "commitTouches": 28
     },
     {
       "file": "src/app/api/extract-file/route.ts",
@@ -930,23 +967,27 @@
     },
     {
       "file": "src/app/api/analyze-job/route.ts",
-      "commitTouches": 22
+      "commitTouches": 23
     },
     {
       "file": "src/lib/cv-types.ts",
       "commitTouches": 15
     },
     {
+      "file": "src/app/api/restructure-cv/route.ts",
+      "commitTouches": 14
+    },
+    {
       "file": "src/app/api/generate-cover-letter/route.ts",
       "commitTouches": 14
     },
     {
-      "file": "src/app/api/restructure-cv/route.ts",
+      "file": "src/components/cv-builder/cv-input-step.tsx",
       "commitTouches": 13
     },
     {
-      "file": "src/components/cv-builder/cv-input-step.tsx",
-      "commitTouches": 13
+      "file": "src/app/layout.tsx",
+      "commitTouches": 12
     },
     {
       "file": "src/app/api/enhance-achievements/route.ts",
@@ -957,7 +998,11 @@
       "commitTouches": 12
     },
     {
-      "file": "src/app/layout.tsx",
+      "file": "src/app/api/ai-chat/route.ts",
+      "commitTouches": 11
+    },
+    {
+      "file": "src/components/cv-builder/processing-step.tsx",
       "commitTouches": 11
     },
     {
@@ -967,14 +1012,6 @@
     {
       "file": "src/lib/api-calls.ts",
       "commitTouches": 11
-    },
-    {
-      "file": "src/components/cv-builder/processing-step.tsx",
-      "commitTouches": 10
-    },
-    {
-      "file": "src/app/api/ai-chat/route.ts",
-      "commitTouches": 10
     },
     {
       "file": "src/app/api/generate-cover-letter-pdf/route.ts",
@@ -999,7 +1036,7 @@
   ],
   "affectedModules": [],
   "metrics": {
-    "fileCount": 124,
+    "fileCount": 127,
     "edgeCount": 7
   }
 }

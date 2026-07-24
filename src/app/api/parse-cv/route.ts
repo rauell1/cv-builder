@@ -9,6 +9,7 @@ import { resolveClientIp } from '@/lib/rate-limit';
 import { getVisitorIdFromRequest } from '@/lib/visitor';
 import { getRequestGeo } from '@/lib/geo';
 import { logGenerationEvent } from '@/lib/generation-log';
+import { cleanPlainText, parseOptionalSessionId } from '@/lib/request-validation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -585,7 +586,7 @@ export async function POST(request: NextRequest) {
     }
 
     const rawCvText = body.cvText;
-    const sessionId = body.sessionId as string | undefined;
+    const sessionId = parseOptionalSessionId(body.sessionId);
 
     // --- Input validation ---
     if (!rawCvText || typeof rawCvText !== 'string') {
@@ -600,9 +601,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Sanitize control characters (null bytes, etc.)
-    const cvText = rawCvText
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-      .trim();
+    const cvText = cleanPlainText(rawCvText);
 
     if (cvText.length < 20) {
       clearTimeout(timeoutTimer);
@@ -640,34 +639,45 @@ export async function POST(request: NextRequest) {
       );
       clearTimeout(timeoutTimer);
 
-      // Still persist to DB if sessionId provided
-      if (sessionId) {
-        try {
-          await db.cVSession.upsert({
-            where: { id: sessionId },
-            update: {
+      let cachedSessionId: string | undefined;
+      try {
+        if (sessionId && visitorId) {
+          const ownedUpdate = await db.cVSession.updateMany({
+            where: { id: sessionId, visitorId },
+            data: {
+              rawCvText: cvText,
               parsedCv: JSON.stringify(cached.parsedCv),
               modelUsed: cached.usedModel,
               step: 2,
               updatedAt: new Date(),
             },
-            create: {
+          });
+          if (ownedUpdate.count) {
+            cachedSessionId = sessionId;
+          }
+        }
+
+        if (!cachedSessionId) {
+          const created = await db.cVSession.create({
+            data: {
+              visitorId,
               rawCvText: cvText,
               parsedCv: JSON.stringify(cached.parsedCv),
               modelUsed: cached.usedModel,
               step: 2,
             },
           });
-        } catch {
-          // DB save failure should not block cached response
+          cachedSessionId = created.id;
         }
+      } catch {
+        // DB save failure should not block cached response
       }
 
       return NextResponse.json({
         success: true,
         data: cached.parsedCv,
         model: cached.usedModel,
-        sessionId: sessionId || undefined,
+        sessionId: cachedSessionId,
         cached: true,
         parseTimeMs: Date.now() - requestStart,
       });
@@ -716,26 +726,32 @@ export async function POST(request: NextRequest) {
     let sessionIdResponse: string | undefined;
     try {
       let session;
-      if (sessionId) {
-        session = await db.cVSession.upsert({
-          where: { id: sessionId },
-          update: {
+      if (sessionId && visitorId) {
+        const ownedUpdate = await db.cVSession.updateMany({
+          where: { id: sessionId, visitorId },
+          data: {
             rawCvText: cvText,
             parsedCv: JSON.stringify(parsedCv),
             modelUsed: usedModel,
             step: 2,
             updatedAt: new Date(),
           },
-          create: {
-            rawCvText: cvText,
-            parsedCv: JSON.stringify(parsedCv),
-            modelUsed: usedModel,
-            step: 2,
-          },
         });
+        session = ownedUpdate.count
+          ? { id: sessionId }
+          : await db.cVSession.create({
+            data: {
+              visitorId,
+              rawCvText: cvText,
+              parsedCv: JSON.stringify(parsedCv),
+              modelUsed: usedModel,
+              step: 2,
+            },
+          });
       } else {
         session = await db.cVSession.create({
           data: {
+            visitorId,
             rawCvText: cvText,
             parsedCv: JSON.stringify(parsedCv),
             modelUsed: usedModel,

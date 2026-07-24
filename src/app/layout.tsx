@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-import { Analytics } from '@vercel/analytics/next';
 import { CookieConsentProvider } from "@/lib/cookie-consent-context";
 import { CookieBanner } from "@/components/privacy/cookie-banner";
 import { CookiePreferencesModal } from "@/components/privacy/cookie-preferences-modal";
 import { PrivacyFooterTrigger } from "@/components/privacy/privacy-footer-trigger";
+import { ConsentAnalytics } from "@/components/analytics/consent-analytics";
 
 const appSans = Space_Grotesk({
   subsets: ["latin"],
@@ -62,11 +62,24 @@ export const metadata: Metadata = {
     siteName: "Roy Okola Otieno Portfolio & Lab",
     type: "website",
     locale: "en_US",
+    images: [{ url: "/logo.svg", alt: "AI CV Builder" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Roy Okola Otieno | Software Architect & Clean-Energy Developer",
     description: "Software engineering meets electric mobility and clean-energy infrastructure in East Africa.",
+    images: ["/logo.svg"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
   },
 };
 
@@ -75,62 +88,41 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const orgJsonLd = {
+  const graphJsonLd = {
     "@context": "https://schema.org",
+    "@graph": [
+    {
     "@type": "Organization",
     "@id": "https://cv-builder.rauell.systems/#organization",
     "name": "Roy Okola Otieno Portfolio & Lab",
     "url": "https://cv-builder.rauell.systems",
     "logo": "https://cv-builder.rauell.systems/logo.svg",
-    "sameAs": [
-      "https://github.com/rauell1",
-      "https://x.com"
-    ]
-  };
-
-  const appJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "@id": "https://cv-builder.rauell.systems/#app",
-    "name": "AI CV Builder",
-    "url": "https://cv-builder.rauell.systems/builder",
-    "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Web",
-    "description": "Upload a CV and a job description; AI restructures your experience, matches keywords, and generates a tailored PDF CV plus cover letter. No account required.",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
+    "sameAs": ["https://github.com/rauell1"]
     },
-    "featureList": [
-      "AI CV parsing with OCR",
-      "Job description keyword matching",
-      "5 professional CV formats",
-      "Cover letter generation",
-      "ATS score insights"
-    ],
-    "publisher": { "@id": "https://cv-builder.rauell.systems/#organization" }
-  };
-
-  const personJsonLd = {
-    "@context": "https://schema.org",
+    {
+    "@type": "WebSite",
+    "@id": "https://cv-builder.rauell.systems/#website",
+    "name": "Roy Okola Otieno Portfolio & Lab",
+    "url": "https://cv-builder.rauell.systems",
+    "description": "Software architecture, clean-energy projects, and an AI-powered CV builder.",
+    "inLanguage": "en"
+    },
+    {
     "@type": "Person",
     "@id": "https://cv-builder.rauell.systems/#person",
     "name": "Roy Okola Otieno",
     "url": "https://cv-builder.rauell.systems",
-    "image": "https://cv-builder.rauell.systems/avatar.jpg",
     "jobTitle": "Senior Software Architect & Clean-Energy Tech Lead",
     "description": "Architecting electric vehicle charging software (Safaricharge), clean-energy systems (Greenwave), and AI-driven platforms.",
-    "sameAs": [
-      "https://github.com/rauell1",
-      "https://x.com"
-    ],
+    "sameAs": ["https://github.com/rauell1"],
     "knowsAbout": [
       "Software Engineering",
       "Clean Mobility",
       "Electric Vehicles",
       "AI Systems",
       "Next.js & Cloud Architecture"
+    ]
+    }
     ]
   };
 
@@ -139,15 +131,7 @@ export default function RootLayout({
       <head>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(appJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(graphJsonLd) }}
         />
       </head>
       <body
@@ -159,7 +143,7 @@ export default function RootLayout({
           <CookiePreferencesModal />
           <PrivacyFooterTrigger />
           <Toaster />
-          <Analytics />
+          <ConsentAnalytics />
         </CookieConsentProvider>
       </body>
     </html>

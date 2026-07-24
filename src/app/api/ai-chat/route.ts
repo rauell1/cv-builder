@@ -120,7 +120,10 @@ export async function POST(request: NextRequest) {
           success: false,
           error: message,
           providerStatus: getProviderCredentialStatus(),
-          diagnostics: (providerError as any)?.diagnostics,
+          diagnostics:
+            typeof providerError === 'object' && providerError !== null && 'diagnostics' in providerError
+              ? providerError.diagnostics
+              : undefined,
           providerDetails: getProviderCredentialDetails(),
         },
         { status: 503 }

@@ -18,7 +18,9 @@ export default function robots(): MetadataRoute.Robots {
           '/',
           '/builder',
           '/projects',
-          '/blog',
+          '/privacy',
+          '/cookies',
+          '/terms',
         ],
         disallow: [
           '/api/',

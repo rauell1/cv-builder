@@ -7,7 +7,7 @@ import { CvInputStep } from '@/components/cv-builder/cv-input-step';
 import { JobDescStep } from '@/components/cv-builder/job-desc-step';
 import { ProcessingStep } from '@/components/cv-builder/processing-step';
 import { OutputStep } from '@/components/cv-builder/output-step';
-import { Cpu, ArrowLeft, Heart } from 'lucide-react';
+import { ArrowLeft, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';

@@ -2,8 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, BatteryCharging, Leaf, Globe, Heart, Shield, Cpu, Zap } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ArrowLeft, BatteryCharging, Leaf, Globe, Heart, Shield, Cpu, Zap, type LucideIcon } from 'lucide-react';
 
 interface ProjectDetails {
   slug: string;
@@ -15,7 +14,7 @@ interface ProjectDetails {
   techStack: string[];
   features: string[];
   impact: string;
-  icon: any;
+  icon: LucideIcon;
   accent: string;
 }
 
@@ -139,11 +138,25 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
     }
   };
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://cv-builder.rauell.systems" },
+      { "@type": "ListItem", "position": 2, "name": "Projects", "item": "https://cv-builder.rauell.systems/projects" },
+      { "@type": "ListItem", "position": 3, "name": project.title },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(projectSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
 
       <header className="sticky top-0 z-50 glass-nav border-b border-border">

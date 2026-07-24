@@ -15,6 +15,7 @@ import { resolveClientIp } from '@/lib/rate-limit';
 import { getVisitorIdFromRequest } from '@/lib/visitor';
 import { getRequestGeo } from '@/lib/geo';
 import { logGenerationEvent } from '@/lib/generation-log';
+import { cleanPlainText, parseOptionalSessionId } from '@/lib/request-validation';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -59,7 +60,10 @@ export async function POST(request: NextRequest) {
   const geo = getRequestGeo(request);
   try {
     const body = await request.json();
-    const { jobDescText, sessionId } = body;
+    const sessionId = parseOptionalSessionId(body.sessionId);
+    const jobDescText = typeof body.jobDescText === 'string'
+      ? cleanPlainText(body.jobDescText)
+      : body.jobDescText;
 
     if (!jobDescText || typeof jobDescText !== 'string') {
       return NextResponse.json(
@@ -82,8 +86,8 @@ export async function POST(request: NextRequest) {
       console.warn('[analyze-job] Cache hit for job desc hash:', cacheKey.substring(0, 12));
       if (sessionId) {
         try {
-          await db.cVSession.update({
-            where: { id: sessionId },
+          await db.cVSession.updateMany({
+            where: { id: sessionId, visitorId },
             data: {
               jobDescText,
               analyzedJob: JSON.stringify(cached.jobAnalysis),
@@ -176,21 +180,16 @@ export async function POST(request: NextRequest) {
     // --- Cache the result ---
     parsingCache.set(cacheKey, { jobAnalysis, usedModel });
 
-    // Update session if sessionId provided (use upsert to avoid RecordNotFound)
+    // Anonymous sessions may only be updated by the visitor that created them.
     if (sessionId) {
       try {
-        await db.cVSession.upsert({
-          where: { id: sessionId },
-          update: {
+        await db.cVSession.updateMany({
+          where: { id: sessionId, visitorId },
+          data: {
             jobDescText,
             analyzedJob: JSON.stringify(jobAnalysis),
             step: 3,
             updatedAt: new Date(),
-          },
-          create: {
-            jobDescText,
-            analyzedJob: JSON.stringify(jobAnalysis),
-            step: 3,
           },
         });
       } catch (dbError) {
@@ -236,7 +235,10 @@ export async function POST(request: NextRequest) {
           success: false,
           error: error.message,
           providerStatus: getProviderCredentialStatus(),
-          diagnostics: (error as any)?.diagnostics,
+          diagnostics:
+            'diagnostics' in error
+              ? error.diagnostics
+              : undefined,
           providerDetails: getProviderCredentialDetails(),
         },
         { status: 503 }

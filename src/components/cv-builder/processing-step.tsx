@@ -120,7 +120,6 @@ export function ProcessingStep() {
   // Track elapsed seconds while processing so we can reassure users on slow runs
   useEffect(() => {
     if (!isRestructuring) {
-      setElapsedSec(0);
       return;
     }
     const t = setInterval(() => setElapsedSec((s) => s + 1), 1000);
@@ -137,6 +136,7 @@ export function ProcessingStep() {
     async (modelId: string) => {
       if (!parsedCv || !analyzedJob) return;
 
+      setElapsedSec(0);
       setIsRestructuring(true);
       setRestructureError(null);
       setModelUsed(modelId);

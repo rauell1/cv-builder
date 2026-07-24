@@ -905,8 +905,8 @@ export const CookieConsentProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // 1. Google Consent Mode v2
     window.dataLayer = window.dataLayer || [];
-    function gtag(...args: any[]) {
-      window.dataLayer.push(args);
+    function gtag(...args: unknown[]) {
+      window.dataLayer!.push(args);
     }
 
     const gcmState = {
@@ -927,8 +927,13 @@ export const CookieConsentProvider: React.FC<{ children: React.ReactNode }> = ({
     );
 
     // 2. IAB TCF v2.3 API stub
-    if (!(window as any).__tcfapi) {
-      (window as any).__tcfapi = function (command: string, version: number, callback: Function) {
+    const consentWindow = window as Window & { __tcfapi?: unknown };
+    if (!consentWindow.__tcfapi) {
+      consentWindow.__tcfapi = function (
+        command: string,
+        version: number,
+        callback: (data: unknown, success: boolean) => void,
+      ) {
         if (command === "addEventListener" || command === "getTCData") {
           callback({
             tcString: "CPx0123456789_TCF_v2.3_COMPLIANT_STUB",
@@ -978,7 +983,7 @@ export const CookieConsentProvider: React.FC<{ children: React.ReactNode }> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(record),
       }).catch(() => {});
-    } catch (_) {}
+    } catch {}
   }, [geoRegion]);
 
   // Load initial settings
@@ -988,6 +993,8 @@ export const CookieConsentProvider: React.FC<{ children: React.ReactNode }> = ({
     // Detect browser language if supported
     const userLang = navigator.language.slice(0, 2).toLowerCase() as LanguageCode;
     if (SUPPORTED_LANGUAGES.some((l) => l.code === userLang)) {
+      // Initializing client-only preferences after hydration is intentional.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLanguage(userLang);
     }
 
@@ -999,7 +1006,7 @@ export const CookieConsentProvider: React.FC<{ children: React.ReactNode }> = ({
       } else if (tz.includes("Los_Angeles") || tz.includes("America/Tijuana") || tz.includes("California")) {
         setGeoRegion("US-CA");
       }
-    } catch (_) {}
+    } catch {}
 
     // Load saved consent
     try {
@@ -1082,7 +1089,7 @@ export const CookieConsentProvider: React.FC<{ children: React.ReactNode }> = ({
   const resetConsent = () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
-    } catch (_) {}
+    } catch {}
     setHasConsented(false);
     setConsent({
       necessary: true,
@@ -1163,9 +1170,3 @@ export const useCookieConsent = () => {
   }
   return context;
 };
-
-declare global {
-  interface Window {
-    dataLayer: any[];
-  }
-}

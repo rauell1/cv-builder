@@ -79,7 +79,7 @@ export function scanActiveTrackers(): DetectedTracker[] {
         description: desc,
       });
     }
-  } catch (_) {}
+  } catch {}
 
   // 3. Scan Loaded Script Elements
   try {
@@ -113,7 +113,7 @@ export function scanActiveTrackers(): DetectedTracker[] {
         description: desc,
       });
     });
-  } catch (_) {}
+  } catch {}
 
   return trackers;
 }
