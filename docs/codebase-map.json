@@ -1,22 +1,22 @@
 {
   "version": {
-    "commit": "be12bf4c3c025f397dfc6865d797df46971ec265",
-    "short": "be12bf4",
-    "generatedAt": "2026-07-24T03:37:53.718Z",
-    "baseCommit": "df1f4f166c4528374834f4be4ee5005ec00c3de7",
+    "commit": "76943e1914412e2ee49e1d8fc9a9be830f12415f",
+    "short": "76943e1",
+    "generatedAt": "2026-07-24T03:44:39.536Z",
+    "baseCommit": "be12bf4c3c025f397dfc6865d797df46971ec265",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
-      "M\tdocs/codebase-map.md"
+      "M\tdocs/codebase-map.md",
+      "M\tdocs/seo-guide.md",
+      "M\tnext.config.ts",
+      "M\tsrc/app/api/generate-pdf/route.ts"
     ],
-    "diffStat": " docs/codebase-map.json | 45 ++++++++++++++++++++++++---------------------\n docs/codebase-map.md   | 19 ++++++++++++++-----\n 2 files changed, 38 insertions(+), 26 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json            | 32 +++++++++++++++-----------------\n docs/codebase-map.md              | 18 +++++-------------\n docs/seo-guide.md                 |  1 -\n next.config.ts                    | 14 --------------\n src/app/api/generate-pdf/route.ts |  5 ++---\n 5 files changed, 22 insertions(+), 48 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": true,
-    "hashChangedFiles": [
-      "next.config.ts",
-      "src/app/api/generate-pdf/route.ts"
-    ],
+    "incremental": false,
+    "hashChangedFiles": [],
     "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
@@ -983,11 +983,11 @@
       "commitTouches": 11
     },
     {
-      "file": "src/app/api/generate-cover-letter-pdf/route.ts",
-      "commitTouches": 9
+      "file": "src/app/api/generate-pdf/route.ts",
+      "commitTouches": 10
     },
     {
-      "file": "src/app/api/generate-pdf/route.ts",
+      "file": "src/app/api/generate-cover-letter-pdf/route.ts",
       "commitTouches": 9
     },
     {
@@ -1003,10 +1003,7 @@
       "commitTouches": 9
     }
   ],
-  "affectedModules": [
-    "next.config.ts",
-    "src/app/api/generate-pdf/route.ts"
-  ],
+  "affectedModules": [],
   "metrics": {
     "fileCount": 125,
     "edgeCount": 7
