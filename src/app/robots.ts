@@ -5,19 +5,10 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
-        userAgent: 'Googlebot',
-        allow: '/',
-      },
-      {
-        userAgent: 'Bingbot',
-        allow: '/',
-      },
-      {
         userAgent: '*',
         allow: [
           '/',
           '/builder',
-          '/projects',
           '/privacy',
           '/cookies',
           '/terms',

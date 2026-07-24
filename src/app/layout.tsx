@@ -24,21 +24,17 @@ const appMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://cv-builder.rauell.systems"),
   title: {
-    default: "Roy Okola Otieno | Software Architect & Clean-Energy Developer",
-    template: "%s | Roy Okola Otieno",
+    default: "AI CV Builder | Free ATS Resume Optimizer",
+    template: "%s | AI CV Builder",
   },
-  description: "Personal portfolio of Roy Okola Otieno, featuring e-mobility, EV charging networks (Safaricharge), sustainability platforms (Greenwave), and AI-powered engineering tools (AI CV Builder).",
+  description: "Build a tailored, ATS-friendly CV and cover letter with AI. Match job-description keywords, improve your resume, and export polished PDFs for free.",
   keywords: [
-    "Roy Okola Otieno",
-    "Software Architect Kenya",
-    "Safaricharge",
-    "Greenwave",
-    "Roam Energy",
     "AI CV Builder",
-    "E-mobility Africa",
-    "Electric Vehicle Charging Kenya",
-    "Clean Tech Software Engineer",
-    "ATS Resume Optimizer"
+    "ATS Resume Optimizer",
+    "CV Tailoring Tool",
+    "Resume Keyword Matcher",
+    "AI Cover Letter Generator",
+    "Free Resume Builder",
   ],
   authors: [{ name: "Roy Okola Otieno" }],
   alternates: {
@@ -56,18 +52,18 @@ export const metadata: Metadata = {
     apple: "/logo.svg",
   },
   openGraph: {
-    title: "Roy Okola Otieno | Software Architect & Clean-Energy Developer",
-    description: "Discover clean-energy platforms, e-mobility systems like Safaricharge, and engineering productivity tools.",
+    title: "AI CV Builder | Free ATS Resume Optimizer",
+    description: "Tailor your CV to a job description, improve ATS keyword alignment, and generate a polished CV and cover letter for free.",
     url: "https://cv-builder.rauell.systems",
-    siteName: "Roy Okola Otieno Portfolio & Lab",
+    siteName: "AI CV Builder",
     type: "website",
     locale: "en_US",
     images: [{ url: "/logo.svg", alt: "AI CV Builder" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Roy Okola Otieno | Software Architect & Clean-Energy Developer",
-    description: "Software engineering meets electric mobility and clean-energy infrastructure in East Africa.",
+    title: "AI CV Builder | Free ATS Resume Optimizer",
+    description: "Tailor your CV to a job description and generate a polished CV and cover letter for free.",
     images: ["/logo.svg"],
   },
   robots: {
@@ -91,39 +87,15 @@ export default function RootLayout({
   const graphJsonLd = {
     "@context": "https://schema.org",
     "@graph": [
-    {
-    "@type": "Organization",
-    "@id": "https://cv-builder.rauell.systems/#organization",
-    "name": "Roy Okola Otieno Portfolio & Lab",
-    "url": "https://cv-builder.rauell.systems",
-    "logo": "https://cv-builder.rauell.systems/logo.svg",
-    "sameAs": ["https://github.com/rauell1"]
-    },
-    {
-    "@type": "WebSite",
-    "@id": "https://cv-builder.rauell.systems/#website",
-    "name": "Roy Okola Otieno Portfolio & Lab",
-    "url": "https://cv-builder.rauell.systems",
-    "description": "Software architecture, clean-energy projects, and an AI-powered CV builder.",
-    "inLanguage": "en"
-    },
-    {
-    "@type": "Person",
-    "@id": "https://cv-builder.rauell.systems/#person",
-    "name": "Roy Okola Otieno",
-    "url": "https://cv-builder.rauell.systems",
-    "jobTitle": "Senior Software Architect & Clean-Energy Tech Lead",
-    "description": "Architecting electric vehicle charging software (Safaricharge), clean-energy systems (Greenwave), and AI-driven platforms.",
-    "sameAs": ["https://github.com/rauell1"],
-    "knowsAbout": [
-      "Software Engineering",
-      "Clean Mobility",
-      "Electric Vehicles",
-      "AI Systems",
-      "Next.js & Cloud Architecture"
-    ]
-    }
-    ]
+      {
+        "@type": "WebSite",
+        "@id": "https://cv-builder.rauell.systems/#website",
+        "name": "AI CV Builder",
+        "url": "https://cv-builder.rauell.systems",
+        "description": "A free AI tool for tailoring ATS-friendly CVs and cover letters to job descriptions.",
+        "inLanguage": "en",
+      },
+    ],
   };
 
   return (

@@ -21,6 +21,20 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['pdf-lib', 'mammoth', 'sharp', 'child_process', 'z-ai-web-dev-sdk'],
   // Empty turbopack config to silence warning (we don't need custom bundling)
   turbopack: {},
+  async redirects() {
+    return [
+      {
+        source: '/projects',
+        destination: '/builder',
+        permanent: true,
+      },
+      {
+        source: '/projects/:path*',
+        destination: '/builder',
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

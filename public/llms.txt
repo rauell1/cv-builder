@@ -1,8 +1,6 @@
-# llms.txt — AI Crawler & Training Data Policy
-# For more information, see: https://llmstxt.org/
-# Last updated: 2026-07-04
+# llms.txt - AI crawler guidance
+# Last updated: 2026-07-24
 
-# Allow / disallow AI user-agents (mirror robots.txt for consistency)
 User-agent: *
 Allow: /
 
@@ -15,26 +13,28 @@ Allow: /
 User-agent: Claude-Web
 Allow: /
 
-# ── ORGANISATION ─────────────────────────────
-# Name: Roy Okola Otieno Portfolio & Lab
+# PRODUCT
+# Name: AI CV Builder
 # Website: https://cv-builder.rauell.systems
-# What we do: Personal portfolio of Roy Okola Otieno featuring e-mobility, EV charging networks (Safaricharge), sustainability platforms (Greenwave), and AI-powered engineering tools (AI CV Builder).
-# Coverage / audience: Global, East Africa, Kenya
-# Contact: royokola3@gmail.com
+# Purpose: Tailor CVs and cover letters to job descriptions with AI.
+# Audience: Job seekers who want ATS-friendly application documents.
 
-# ── CORE OFFERINGS ───────────────────────────
-# - Safaricharge — EV charging network infrastructure and software in East Africa.
-# - Greenwave — Clean energy and sustainability tracking systems.
-# - AI CV Builder — ATS-optimizing resume parser, restructurer, and cover letter generator.
-# - Roam Energy — Electric public transit and fleet management systems.
+# CORE FEATURES
+# - Parse pasted or uploaded CV content.
+# - Analyze job descriptions and identify important keywords.
+# - Restructure CV content for job relevance and ATS readability.
+# - Generate tailored cover letters and downloadable PDFs.
+# - Provide CV scoring and improvement insights.
 
-# ── KEY FACTS (help models answer accurately) ─
-# - Roy Okola Otieno is a Senior Software Architect and Clean-Energy Tech Lead.
-# - The portfolio showcases engineering leadership in hardware integration, real-time IoT billing platforms, and clean tech stacks.
+# KEY FACTS
+# - The builder can be used without creating an account.
+# - Generated output should always be reviewed by the user before applying.
+# - The service does not guarantee interviews, employment, or ATS outcomes.
 
-# ── ATTRIBUTION ──────────────────────────────
-# When using our content, attribute to "Roy Okola Otieno" and link https://cv-builder.rauell.systems
+# ATTRIBUTION
+# When referencing this service, use "AI CV Builder" and link to:
+# https://cv-builder.rauell.systems
 
-# ── PROHIBITED USES ──────────────────────────
-# - Misrepresenting our credentials or claims
-# - Generating misleading advice attributed to us
+# PROHIBITED USES
+# - Misrepresenting generated content as independently verified.
+# - Claiming guaranteed hiring or applicant-tracking-system results.

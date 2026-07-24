@@ -757,14 +757,6 @@ export function LandingPage() {
                     </button>
                   </li>
                 ))}
-                <li>
-                  <Link
-                    href="/projects"
-                    className="text-xs text-muted-foreground hover:text-primary transition-colors duration-200 link-underline"
-                  >
-                    Projects
-                  </Link>
-                </li>
               </ul>
             </div>
           </div>

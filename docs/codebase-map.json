@@ -1,19 +1,18 @@
 {
   "version": {
-    "commit": "d6975277033bf2c320e6e7aa48f7851aa4dbece4",
-    "short": "d697527",
-    "generatedAt": "2026-07-24T02:31:00.392Z",
-    "baseCommit": "53bcebea5f44258e294b5c6755c171fbc0453f35",
-    "changeSummary": [
-      "M\tdocs/codebase-map.json",
-      "M\tdocs/codebase-map.md"
-    ],
-    "diffStat": " docs/codebase-map.json | 89 +++++++++++++++++++++++++-------------------------\n docs/codebase-map.md   | 31 +++++++++++++++---\n 2 files changed, 71 insertions(+), 49 deletions(-)\n"
+    "commit": "3b454b780e67124562424e6c6bb46fb5a13628e4",
+    "short": "3b454b7",
+    "generatedAt": "2026-07-24T03:18:42.350Z",
+    "baseCommit": "3b454b780e67124562424e6c6bb46fb5a13628e4",
+    "changeSummary": [],
+    "diffStat": ""
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": false,
-    "hashChangedFiles": [],
+    "incremental": true,
+    "hashChangedFiles": [
+      "src/app/robots.ts"
+    ],
     "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
@@ -81,10 +80,6 @@
     "    not-found.tsx",
     "    page.tsx",
     "    privacy/",
-    "      page.tsx",
-    "    projects/",
-    "      [slug]/",
-    "        page.tsx",
     "      page.tsx",
     "    robots.ts",
     "    sitemap.ts",
@@ -352,16 +347,6 @@
     {
       "id": "src/app/privacy/page.tsx",
       "path": "src/app/privacy/page.tsx",
-      "risk": "low"
-    },
-    {
-      "id": "src/app/projects/[slug]/page.tsx",
-      "path": "src/app/projects/[slug]/page.tsx",
-      "risk": "low"
-    },
-    {
-      "id": "src/app/projects/page.tsx",
-      "path": "src/app/projects/page.tsx",
       "risk": "low"
     },
     {
@@ -1014,9 +999,15 @@
       "commitTouches": 9
     }
   ],
-  "affectedModules": [],
+  "affectedModules": [
+    "next.config.ts",
+    "src/app/layout.tsx",
+    "src/app/robots.ts",
+    "src/app/sitemap.ts",
+    "src/components/cv-builder/landing-page.tsx"
+  ],
   "metrics": {
-    "fileCount": 127,
+    "fileCount": 125,
     "edgeCount": 7
   }
 }
