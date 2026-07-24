@@ -1,34 +1,14 @@
 {
   "version": {
-    "commit": "53bcebea5f44258e294b5c6755c171fbc0453f35",
-    "short": "53bcebe",
-    "generatedAt": "2026-07-24T02:29:34.961Z",
-    "baseCommit": "90566a8cc42dbcbd529e0342163c3ba969e269cd",
+    "commit": "d6975277033bf2c320e6e7aa48f7851aa4dbece4",
+    "short": "d697527",
+    "generatedAt": "2026-07-24T02:31:00.392Z",
+    "baseCommit": "53bcebea5f44258e294b5c6755c171fbc0453f35",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
-      "M\tdocs/codebase-map.md",
-      "M\tnext.config.ts",
-      "M\tpackage-lock.json",
-      "M\tpackage.json",
-      "A\tprisma/migrations/20260723120000_bind_cv_sessions_to_visitors/migration.sql",
-      "M\tprisma/schema.prisma",
-      "M\tsrc/app/api/ai-chat/route.ts",
-      "M\tsrc/app/api/analyze-job/route.ts",
-      "M\tsrc/app/api/parse-cv/route.ts",
-      "M\tsrc/app/api/restructure-cv/route.ts",
-      "A\tsrc/app/builder/layout.tsx",
-      "M\tsrc/app/builder/page.tsx",
-      "M\tsrc/app/layout.tsx",
-      "M\tsrc/app/projects/[slug]/page.tsx",
-      "M\tsrc/app/robots.ts",
-      "M\tsrc/app/sitemap.ts",
-      "A\tsrc/components/analytics/consent-analytics.tsx",
-      "M\tsrc/components/cv-builder/processing-step.tsx",
-      "M\tsrc/lib/cookie-consent-context.tsx",
-      "A\tsrc/lib/request-validation.ts",
-      "M\tsrc/lib/script-auto-blocker.ts"
+      "M\tdocs/codebase-map.md"
     ],
-    "diffStat": " docs/codebase-map.json                             | 66 ++++++++++++++----\n docs/codebase-map.md                               | 21 +++---\n next.config.ts                                     |  2 +-\n package-lock.json                                  | 20 ++++++\n package.json                                       |  1 +\n .../migration.sql                                  |  3 +\n prisma/schema.prisma                               |  3 +\n src/app/api/ai-chat/route.ts                       |  5 +-\n src/app/api/analyze-job/route.ts                   | 28 ++++----\n src/app/api/parse-cv/route.ts                      | 64 ++++++++++-------\n src/app/api/restructure-cv/route.ts                | 20 +++---\n src/app/builder/layout.tsx                         | 18 +++++\n src/app/builder/page.tsx                           |  2 +-\n src/app/layout.tsx                                 | 80 +++++++++-------------\n src/app/projects/[slug]/page.tsx                   | 19 ++++-\n src/app/robots.ts                                  |  4 +-\n src/app/sitemap.ts                                 | 28 ++------\n src/components/analytics/consent-analytics.tsx     | 22 ++++++\n src/components/cv-builder/processing-step.tsx      |  2 +-\n src/lib/cookie-consent-context.tsx                 | 27 ++++----\n src/lib/request-validation.ts                      | 14 ++++\n src/lib/script-auto-blocker.ts                     |  4 +-\n 22 files changed, 287 insertions(+), 166 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json | 89 +++++++++++++++++++++++++-------------------------\n docs/codebase-map.md   | 31 +++++++++++++++---\n 2 files changed, 71 insertions(+), 49 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
