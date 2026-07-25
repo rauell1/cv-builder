@@ -282,7 +282,7 @@ export function LandingPage() {
               className="text-4xl sm:text-5xl md:text-6xl font-semibold text-center mb-6 tracking-tight max-w-3xl"
               variants={itemVariants}
             >
-              <span className="text-gradient">Upload your CV. Get it tailored to the job.</span>
+              <span className="text-gradient">Free AI CV Builder for Every Job Search</span>
             </m.h1>
 
             {/* Subtitle with reveal feel */}
@@ -290,9 +290,9 @@ export function LandingPage() {
               className="text-base sm:text-lg text-muted-foreground text-center max-w-lg mb-12 font-normal leading-relaxed"
               variants={itemVariants}
             >
-              Drop your CV and a job description. AI restructures your experience,
-              matches the keywords, and hands you a polished PDF in under a minute.
-              No account required.
+              Create an ATS-friendly CV from anywhere in the world. Upload your CV
+              and a job description, then let AI match keywords and produce a polished
+              PDF. Free to use, with no account required.
             </m.p>
 
             {/* CTA Buttons */}

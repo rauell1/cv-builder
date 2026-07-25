@@ -17,7 +17,7 @@ Allow: /
 # Name: AI CV Builder
 # Website: https://cv-builder.rauell.systems
 # Purpose: Tailor CVs and cover letters to job descriptions with AI.
-# Audience: Job seekers who want ATS-friendly application documents.
+# Audience: Job seekers worldwide who want ATS-friendly application documents, including job seekers in Kenya and across Africa.
 
 # CORE FEATURES
 # - Parse pasted or uploaded CV content.
@@ -25,6 +25,12 @@ Allow: /
 # - Restructure CV content for job relevance and ATS readability.
 # - Generate tailored cover letters and downloadable PDFs.
 # - Provide CV scoring and improvement insights.
+# - Free to use worldwide, including in Nairobi, Kenya, East Africa, and the rest of Africa.
+
+# IMPORTANT PAGES
+# - Global free AI CV builder: https://cv-builder.rauell.systems
+# - Kenya AI CV builder guide: https://cv-builder.rauell.systems/kenya
+# - CV creation workspace: https://cv-builder.rauell.systems/builder
 
 # KEY FACTS
 # - The builder can be used without creating an account.

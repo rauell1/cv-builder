@@ -25,18 +25,25 @@ const appMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://cv-builder.rauell.systems"),
   title: {
-    default: "AI CV Builder | Free ATS Resume Optimizer",
-    template: "%s | AI CV Builder",
+    default: "Free AI CV Builder | Create an ATS-Friendly CV",
+    template: "%s | Free AI CV Builder",
   },
-  description: "Build a tailored, ATS-friendly CV and cover letter with AI. Match job-description keywords, improve your resume, and export polished PDFs for free.",
+  description: "Create a tailored, ATS-friendly CV for free with AI. Match job-description keywords, improve your resume, generate a cover letter, and export a polished PDF.",
   keywords: [
+    "Free AI CV Builder",
     "AI CV Builder",
+    "Free CV Builder",
+    "Free AI Resume Builder",
     "ATS Resume Optimizer",
     "CV Tailoring Tool",
     "Resume Keyword Matcher",
     "AI Cover Letter Generator",
-    "Free Resume Builder",
+    "CV Builder Kenya",
+    "AI CV Builder Kenya",
   ],
+  creator: "Roy Okola Otieno",
+  publisher: "AI CV Builder",
+  category: "career",
   authors: [{ name: "Roy Okola Otieno" }],
   alternates: {
     canonical: "/",
@@ -53,18 +60,19 @@ export const metadata: Metadata = {
     apple: "/logo.svg",
   },
   openGraph: {
-    title: "AI CV Builder | Free ATS Resume Optimizer",
-    description: "Tailor your CV to a job description, improve ATS keyword alignment, and generate a polished CV and cover letter for free.",
+    title: "Free AI CV Builder | Create an ATS-Friendly CV",
+    description: "Create and tailor an ATS-friendly CV with AI, generate a cover letter, and export a polished PDF for free.",
     url: "https://cv-builder.rauell.systems",
     siteName: "AI CV Builder",
     type: "website",
-    locale: "en_US",
+    locale: "en_KE",
+    alternateLocale: ["en_US", "en_GB"],
     images: [{ url: "/logo.svg", alt: "AI CV Builder" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "AI CV Builder | Free ATS Resume Optimizer",
-    description: "Tailor your CV to a job description and generate a polished CV and cover letter for free.",
+    title: "Free AI CV Builder | Create an ATS-Friendly CV",
+    description: "Tailor an ATS-friendly CV to any job, generate a cover letter, and export a polished PDF for free.",
     images: ["/logo.svg"],
   },
   robots: {
@@ -100,8 +108,32 @@ export default async function RootLayout({
         "@id": "https://cv-builder.rauell.systems/#website",
         "name": "AI CV Builder",
         "url": "https://cv-builder.rauell.systems",
-        "description": "A free AI tool for tailoring ATS-friendly CVs and cover letters to job descriptions.",
+        "description": "A free AI CV and resume builder for creating ATS-friendly, job-tailored CVs and cover letters worldwide.",
         "inLanguage": "en",
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://cv-builder.rauell.systems/#application",
+        "name": "AI CV Builder",
+        "url": "https://cv-builder.rauell.systems",
+        "applicationCategory": "BusinessApplication",
+        "applicationSubCategory": "CV and resume builder",
+        "operatingSystem": "Web",
+        "description": "A free AI CV builder that tailors CVs to job descriptions, improves ATS keyword alignment, generates cover letters, and exports PDFs.",
+        "areaServed": "Worldwide",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": [
+          "AI CV parsing",
+          "ATS keyword matching",
+          "Job-specific CV tailoring",
+          "AI cover letter generation",
+          "Professional PDF export"
+        ]
       },
     ],
   };
