@@ -1,22 +1,26 @@
 {
   "version": {
-    "commit": "76943e1914412e2ee49e1d8fc9a9be830f12415f",
-    "short": "76943e1",
-    "generatedAt": "2026-07-24T03:44:39.536Z",
-    "baseCommit": "be12bf4c3c025f397dfc6865d797df46971ec265",
+    "commit": "ff3eb2be8786694d579a977215ac6308179fbd17",
+    "short": "ff3eb2b",
+    "generatedAt": "2026-07-25T12:02:11.088Z",
+    "baseCommit": "76943e1914412e2ee49e1d8fc9a9be830f12415f",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
       "M\tdocs/codebase-map.md",
-      "M\tdocs/seo-guide.md",
-      "M\tnext.config.ts",
-      "M\tsrc/app/api/generate-pdf/route.ts"
+      "M\tsrc/app/layout.tsx",
+      "M\tsrc/components/privacy/cookie-preferences-modal.tsx",
+      "M\tsrc/lib/cookie-consent-context.tsx"
     ],
-    "diffStat": " docs/codebase-map.json            | 32 +++++++++++++++-----------------\n docs/codebase-map.md              | 18 +++++-------------\n docs/seo-guide.md                 |  1 -\n next.config.ts                    | 14 --------------\n src/app/api/generate-pdf/route.ts |  5 ++---\n 5 files changed, 22 insertions(+), 48 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json                             |  33 +++--\n docs/codebase-map.md                               |  13 +-\n src/app/layout.tsx                                 |  14 ++-\n .../privacy/cookie-preferences-modal.tsx           | 135 +++++++++++----------\n src/lib/cookie-consent-context.tsx                 |  12 +-\n 5 files changed, 114 insertions(+), 93 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": false,
-    "hashChangedFiles": [],
+    "incremental": true,
+    "hashChangedFiles": [
+      "src/app/layout.tsx",
+      "src/components/privacy/cookie-preferences-modal.tsx",
+      "src/lib/cookie-consent-context.tsx"
+    ],
     "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
@@ -943,16 +947,16 @@
       "commitTouches": 15
     },
     {
+      "file": "src/app/layout.tsx",
+      "commitTouches": 14
+    },
+    {
       "file": "src/app/api/restructure-cv/route.ts",
       "commitTouches": 14
     },
     {
       "file": "src/app/api/generate-cover-letter/route.ts",
       "commitTouches": 14
-    },
-    {
-      "file": "src/app/layout.tsx",
-      "commitTouches": 13
     },
     {
       "file": "src/components/cv-builder/cv-input-step.tsx",
@@ -1003,7 +1007,12 @@
       "commitTouches": 9
     }
   ],
-  "affectedModules": [],
+  "affectedModules": [
+    "src/app/layout.tsx",
+    "src/components/privacy/cookie-preferences-modal.tsx",
+    "src/lib/cookie-consent-context.tsx",
+    "src/lib/script-auto-blocker.ts"
+  ],
   "metrics": {
     "fileCount": 125,
     "edgeCount": 7

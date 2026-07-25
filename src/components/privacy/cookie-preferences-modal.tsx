@@ -29,6 +29,7 @@ export const CookiePreferencesModal: React.FC = () => {
     consentHistory,
     exportConsentLogs,
     resetConsent,
+    isAdmin,
   } = useCookieConsent();
 
   const [tempConsent, setTempConsent] = useState<ConsentCategories>(consent);
@@ -107,7 +108,7 @@ export const CookiePreferencesModal: React.FC = () => {
         </DialogHeader>
 
         <Tabs defaultValue="categories" className="w-full mt-2">
-          <TabsList className="grid grid-cols-3 w-full bg-muted/60 p-1 rounded-xl">
+          <TabsList className={`grid w-full bg-muted/60 p-1 rounded-xl ${isAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
             <TabsTrigger value="categories" className="gap-1.5 text-xs font-medium rounded-lg">
               <Cookie className="h-3.5 w-3.5" />
               Categories
@@ -116,10 +117,12 @@ export const CookiePreferencesModal: React.FC = () => {
               <Search className="h-3.5 w-3.5" />
               Tracker Audit ({activeTrackers.length})
             </TabsTrigger>
-            <TabsTrigger value="history" className="gap-1.5 text-xs font-medium rounded-lg">
-              <History className="h-3.5 w-3.5" />
-              Consent Logs ({consentHistory.length})
-            </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="history" className="gap-1.5 text-xs font-medium rounded-lg">
+                <History className="h-3.5 w-3.5" />
+                Consent Logs ({consentHistory.length})
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* TAB 1: CATEGORY TOGGLES */}
@@ -222,70 +225,72 @@ export const CookiePreferencesModal: React.FC = () => {
           </TabsContent>
 
           {/* TAB 3: CONSENT AUDIT HISTORY LOGS */}
-          <TabsContent value="history" className="space-y-3 py-3">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <h4 className="text-sm font-semibold text-foreground">Compliance Trail</h4>
-                <p className="text-xs text-muted-foreground">Download timestamped consent records.</p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => exportConsentLogs("json")}
-                  className="gap-1.5 text-xs h-8"
-                >
-                  <Download className="h-3 w-3" />
-                  JSON
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => exportConsentLogs("csv")}
-                  className="gap-1.5 text-xs h-8"
-                >
-                  <Download className="h-3 w-3" />
-                  CSV
-                </Button>
-              </div>
-            </div>
-
-            <div className="border border-border/60 rounded-xl overflow-hidden bg-muted/10 max-h-64 overflow-y-auto">
-              {consentHistory.length === 0 ? (
-                <div className="p-6 text-center text-xs text-muted-foreground">
-                  No consent history logged yet. Action taken will record an entry.
+          {isAdmin && (
+            <TabsContent value="history" className="space-y-3 py-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <h4 className="text-sm font-semibold text-foreground">Compliance Trail</h4>
+                  <p className="text-xs text-muted-foreground">Download timestamped consent records.</p>
                 </div>
-              ) : (
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-muted/50 font-semibold border-b border-border/40">
-                    <tr>
-                      <th className="p-2.5">Log ID</th>
-                      <th className="p-2.5">Timestamp</th>
-                      <th className="p-2.5">Region</th>
-                      <th className="p-2.5">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/30">
-                    {consentHistory.map((log) => (
-                      <tr key={log.id} className="hover:bg-muted/20">
-                        <td className="p-2.5 font-mono font-medium">{log.id}</td>
-                        <td className="p-2.5 text-muted-foreground">
-                          {new Date(log.timestamp).toLocaleString()}
-                        </td>
-                        <td className="p-2.5 font-mono">{log.geoRegion}</td>
-                        <td className="p-2.5">
-                          <span className="inline-flex items-center gap-1 text-[11px] font-mono">
-                            {log.categories.analytics ? "A✓" : "A✗"} {log.categories.marketing ? "M✓" : "M✗"} {log.categories.functional ? "F✓" : "F✗"}
-                          </span>
-                        </td>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportConsentLogs("json")}
+                    className="gap-1.5 text-xs h-8"
+                  >
+                    <Download className="h-3 w-3" />
+                    JSON
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportConsentLogs("csv")}
+                    className="gap-1.5 text-xs h-8"
+                  >
+                    <Download className="h-3 w-3" />
+                    CSV
+                  </Button>
+                </div>
+              </div>
+
+              <div className="border border-border/60 rounded-xl overflow-hidden bg-muted/10 max-h-64 overflow-y-auto">
+                {consentHistory.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-muted-foreground">
+                    No consent history logged yet. Action taken will record an entry.
+                  </div>
+                ) : (
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-muted/50 font-semibold border-b border-border/40">
+                      <tr>
+                        <th className="p-2.5">Log ID</th>
+                        <th className="p-2.5">Timestamp</th>
+                        <th className="p-2.5">Region</th>
+                        <th className="p-2.5">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </TabsContent>
+                    </thead>
+                    <tbody className="divide-y divide-border/30">
+                      {consentHistory.map((log) => (
+                        <tr key={log.id} className="hover:bg-muted/20">
+                          <td className="p-2.5 font-mono font-medium">{log.id}</td>
+                          <td className="p-2.5 text-muted-foreground">
+                            {new Date(log.timestamp).toLocaleString()}
+                          </td>
+                          <td className="p-2.5 font-mono">{log.geoRegion}</td>
+                          <td className="p-2.5">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-mono">
+                              {log.categories.analytics ? "A✓" : "A✗"} {log.categories.marketing ? "M✓" : "M✗"} {log.categories.functional ? "F✓" : "F✗"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
 
         <DialogFooter className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-border/60">

@@ -37,6 +37,7 @@ interface CookieConsentContextType {
   language: LanguageCode;
   isPreferencesOpen: boolean;
   consentHistory: ConsentRecord[];
+  isAdmin: boolean;
   setGeoRegion: (region: GeoRegion) => void;
   setBannerStyle: (style: BannerStyle) => void;
   setLanguage: (lang: LanguageCode) => void;
@@ -885,7 +886,15 @@ export const TRANSLATIONS: Record<LanguageCode, {
 
 const CookieConsentContext = createContext<CookieConsentContextType | undefined>(undefined);
 
-export const CookieConsentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export interface CookieConsentProviderProps {
+  children: React.ReactNode;
+  isAdmin?: boolean;
+}
+
+export const CookieConsentProvider: React.FC<CookieConsentProviderProps> = ({
+  children,
+  isAdmin = false,
+}) => {
   const [consent, setConsent] = useState<ConsentCategories>({
     necessary: true,
     functional: false,
@@ -1147,6 +1156,7 @@ export const CookieConsentProvider: React.FC<{ children: React.ReactNode }> = ({
         language,
         isPreferencesOpen,
         consentHistory,
+        isAdmin,
         setGeoRegion,
         setBannerStyle,
         setLanguage,

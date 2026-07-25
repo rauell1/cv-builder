@@ -7,6 +7,7 @@ import { CookieBanner } from "@/components/privacy/cookie-banner";
 import { CookiePreferencesModal } from "@/components/privacy/cookie-preferences-modal";
 import { PrivacyFooterTrigger } from "@/components/privacy/privacy-footer-trigger";
 import { ConsentAnalytics } from "@/components/analytics/consent-analytics";
+import { auth } from "@/lib/auth/server";
 
 const appSans = Space_Grotesk({
   subsets: ["latin"],
@@ -79,11 +80,18 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { data: session } = await auth.getSession();
+  const adminEmail = process.env.ADMIN_ALERT_EMAIL;
+  const isAdmin =
+    !!session?.user?.email &&
+    !!adminEmail &&
+    session.user.email.toLowerCase() === adminEmail.toLowerCase();
+
   const graphJsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -109,7 +117,7 @@ export default function RootLayout({
       <body
         className={`${appSans.variable} ${appMono.variable} antialiased bg-background text-foreground`}
       >
-        <CookieConsentProvider>
+        <CookieConsentProvider isAdmin={isAdmin}>
           {children}
           <CookieBanner />
           <CookiePreferencesModal />
@@ -121,5 +129,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-
