@@ -694,23 +694,12 @@ export async function POST(request: NextRequest) {
         const aiParsed = await aiQueue.enqueue(
           () => parseCvCore(cvText),
           'high',
-          50_000 // exceeds the 45s chain budget; on timeout we fall back to the built-in parser
+          40_000 // 40s queue timeout; cleanly falls back to built-in parser before gateway timeouts
         );
         parsedCv = aiParsed.parsedCv;
         usedModel = aiParsed.usedModel;
       } catch (aiErr) {
         console.warn('[parse-cv] AI parse failed, falling back to built-in parser:', aiErr instanceof Error ? aiErr.message : aiErr);
-        void logGenerationEvent({
-          type: 'parse-cv',
-          success: false,
-          errorMessage: aiErr instanceof Error ? aiErr.message : String(aiErr),
-          durationMs: Date.now() - requestStart,
-          ip,
-          visitorId,
-          country: geo.country,
-          region: geo.region,
-          city: geo.city,
-        });
         parsedCv = parseBuiltIn(cvText);
         usedModel = 'builtin-parser';
       }

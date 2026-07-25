@@ -1,26 +1,19 @@
 {
   "version": {
-    "commit": "ff3eb2be8786694d579a977215ac6308179fbd17",
-    "short": "ff3eb2b",
-    "generatedAt": "2026-07-25T12:02:11.088Z",
-    "baseCommit": "76943e1914412e2ee49e1d8fc9a9be830f12415f",
+    "commit": "99b7c98d3501d1d69083b651f7c48ef296bdf2c5",
+    "short": "99b7c98",
+    "generatedAt": "2026-07-25T12:02:38.511Z",
+    "baseCommit": "ff3eb2be8786694d579a977215ac6308179fbd17",
     "changeSummary": [
       "M\tdocs/codebase-map.json",
-      "M\tdocs/codebase-map.md",
-      "M\tsrc/app/layout.tsx",
-      "M\tsrc/components/privacy/cookie-preferences-modal.tsx",
-      "M\tsrc/lib/cookie-consent-context.tsx"
+      "M\tdocs/codebase-map.md"
     ],
-    "diffStat": " docs/codebase-map.json                             |  33 +++--\n docs/codebase-map.md                               |  13 +-\n src/app/layout.tsx                                 |  14 ++-\n .../privacy/cookie-preferences-modal.tsx           | 135 +++++++++++----------\n src/lib/cookie-consent-context.tsx                 |  12 +-\n 5 files changed, 114 insertions(+), 93 deletions(-)\n"
+    "diffStat": " docs/codebase-map.json | 39 ++++++++++++++++++++++++---------------\n docs/codebase-map.md   | 16 ++++++++--------\n 2 files changed, 32 insertions(+), 23 deletions(-)\n"
   },
   "significantChangeHints": {
     "description": "Significant: changes under src/, prisma/, middleware.ts, next.config.ts, package.json; API routes; shared types (cv-types); dependency/import graph changes.",
-    "incremental": true,
-    "hashChangedFiles": [
-      "src/app/layout.tsx",
-      "src/components/privacy/cookie-preferences-modal.tsx",
-      "src/lib/cookie-consent-context.tsx"
-    ],
+    "incremental": false,
+    "hashChangedFiles": [],
     "newFiles": [],
     "removedFiles": [],
     "packageJsonChanged": false,
@@ -1007,12 +1000,7 @@
       "commitTouches": 9
     }
   ],
-  "affectedModules": [
-    "src/app/layout.tsx",
-    "src/components/privacy/cookie-preferences-modal.tsx",
-    "src/lib/cookie-consent-context.tsx",
-    "src/lib/script-auto-blocker.ts"
-  ],
+  "affectedModules": [],
   "metrics": {
     "fileCount": 125,
     "edgeCount": 7
