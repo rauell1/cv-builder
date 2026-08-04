@@ -11,6 +11,12 @@ function safeTemplateStr(str: string): string {
   return escapePythonString(str).replace(/\$\{/g, '\\$\\{');
 }
 
+function normalizeUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -132,7 +138,21 @@ pdf.set_font('NotoSans', '', 9)
 pdf.set_text_color(0, 0, 0)
 ${pi.location ? `pdf.cell(0, 5, "Location: ${safeTemplateStr(pi.location)}", 0, 1)` : ''}
 ${pi.email ? `pdf.cell(0, 5, "Email: ${safeTemplateStr(pi.email)}${pi.phone ? ` | Phone: ${safeTemplateStr(pi.phone)}` : ''}", 0, 1)` : (pi.phone ? `pdf.cell(0, 5, "Phone: ${safeTemplateStr(pi.phone)}", 0, 1)` : '')}
-${pi.linkedin ? `pdf.cell(0, 5, "LinkedIn: ${safeTemplateStr(pi.linkedin)}${pi.github ? ` | GitHub: ${safeTemplateStr(pi.github)}` : ''}", 0, 1)` : (pi.github ? `pdf.cell(0, 5, "GitHub: ${safeTemplateStr(pi.github)}", 0, 1)` : '')}
+${pi.linkedin ? `pdf.set_font('NotoSans', 'U', 9)
+pdf.set_text_color(0, 0, 200)
+pdf.cell(0, 5, "LinkedIn: ${safeTemplateStr(pi.linkedin)}", link="${safeTemplateStr(normalizeUrl(pi.linkedin))}", ln=1)
+pdf.set_font('NotoSans', '', 9)
+pdf.set_text_color(0, 0, 0)` : ''}
+${pi.github ? `pdf.set_font('NotoSans', 'U', 9)
+pdf.set_text_color(0, 0, 200)
+pdf.cell(0, 5, "GitHub: ${safeTemplateStr(pi.github)}", link="${safeTemplateStr(normalizeUrl(pi.github))}", ln=1)
+pdf.set_font('NotoSans', '', 9)
+pdf.set_text_color(0, 0, 0)` : ''}
+${pi.website ? `pdf.set_font('NotoSans', 'U', 9)
+pdf.set_text_color(0, 0, 200)
+pdf.cell(0, 5, "Website: ${safeTemplateStr(pi.website)}", link="${safeTemplateStr(normalizeUrl(pi.website))}", ln=1)
+pdf.set_font('NotoSans', '', 9)
+pdf.set_text_color(0, 0, 0)` : ''}
 pdf.set_left_margin(15)
 
 # --- PERSONAL STATEMENT ---
